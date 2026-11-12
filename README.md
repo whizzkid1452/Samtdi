@@ -26,3 +26,5 @@ aws --endpoint-url "$AYOTBI_S3_ENDPOINT" s3 mb "s3://$AYOTBI_S3_BUCKET"
 `ops/verify-web.sh`는 격리 PostgreSQL로 실행합니다. API 형식은 `contracts/openapi.json`을 수정하고 `apps/web`에서 `pnpm generate:api`를 실행해 갱신합니다.
 
 미디어 처리에는 FFmpeg·FFprobe가 필요합니다. API와 같은 환경을 별도 터미널에 적용하고 `services/collaboration`에서 `go run ./cmd/ayotbi-collaboration media-worker`를 실행합니다. 처리 작업은 최대 8분, 임대는 10분입니다. 전송이나 저장 오류는 최대 세 번 시도하며, 형식 오류는 새 업로드가 필요합니다. 로컬 설정은 파일당 500 MB, 30분, 모노·스테레오를 허용합니다.
+
+[운영과 복원](docs/web-operations.md) · [MVP 검증 결과와 재현](docs/web-pilot-verification.md)

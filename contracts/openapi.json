@@ -10,6 +10,16 @@
         "responses": {
           "200": {
             "description": "Process alive"
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -22,6 +32,16 @@
           },
           "503": {
             "description": "Dependency unavailable"
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -41,6 +61,16 @@
           },
           "401": {
             "description": "Login required"
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -57,6 +87,16 @@
                   "items": {
                     "$ref": "#/components/schemas/Project"
                   }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -77,7 +117,14 @@
             }
           },
           "default": {
-            "description": "Request failed"
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -118,7 +165,14 @@
             "description": "Project archive state changed"
           },
           "default": {
-            "description": "Request failed"
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -149,7 +203,14 @@
             "description": "Session removed"
           },
           "default": {
-            "description": "Request failed"
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -169,10 +230,27 @@
         ],
         "responses": {
           "200": {
-            "description": "Project membership list"
+            "description": "Project membership list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Member"
+                  }
+                }
+              }
+            }
           },
           "default": {
-            "description": "Request failed"
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -204,7 +282,14 @@
             "description": "Membership role updated"
           },
           "default": {
-            "description": "Request failed"
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -252,7 +337,14 @@
             "description": "Member removed"
           },
           "default": {
-            "description": "Request failed"
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -272,10 +364,24 @@
         ],
         "responses": {
           "201": {
-            "description": "Invitation created"
+            "description": "Invitation created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Invitation"
+                }
+              }
+            }
           },
           "default": {
-            "description": "Request failed"
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -329,7 +435,14 @@
             "description": "Invitation revoked"
           },
           "default": {
-            "description": "Request failed"
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -351,7 +464,14 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -362,6 +482,13 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "type": "string"
             }
           }
         ]
@@ -379,7 +506,14 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -420,7 +554,14 @@
             "description": "Media archive changed"
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -480,7 +621,14 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -501,6 +649,13 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "type": "string"
+            }
           }
         ]
       }
@@ -519,7 +674,14 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -558,7 +720,14 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -622,7 +791,14 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -663,7 +839,20 @@
             "description": "Authorized audio or waveform bytes"
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "Authorized partial audio response"
+          },
+          "416": {
+            "description": "Invalid audio byte range"
           }
         },
         "parameters": [
@@ -691,7 +880,18 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid"
+              "enum": [
+                "original",
+                "playback",
+                "peaks"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "Range",
+            "schema": {
+              "type": "string"
             }
           }
         ]
@@ -711,7 +911,14 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -753,7 +960,14 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -774,6 +988,13 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "type": "string"
+            }
           }
         ]
       },
@@ -790,7 +1011,14 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -847,7 +1075,14 @@
             "description": "Note changed"
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -922,7 +1157,14 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -981,7 +1223,14 @@
             "description": "Reply changed"
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -1065,7 +1314,14 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -1076,6 +1332,13 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "schema": {
+              "type": "string"
             }
           }
         ]
@@ -1093,7 +1356,14 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -1178,7 +1448,14 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -1208,7 +1485,14 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -1306,7 +1590,14 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -1328,7 +1619,14 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -1339,6 +1637,20 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "schema": {
+              "type": "string"
             }
           }
         ]
@@ -1358,9 +1670,25 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
-        }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/v1/notifications/{notification}/read": {
@@ -1370,7 +1698,14 @@
             "description": "Marked read"
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -1405,7 +1740,14 @@
             }
           },
           "default": {
-            "description": "Request rejected"
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -1960,6 +2302,59 @@
           },
           "unread": {
             "type": "integer"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "Member": {
+        "type": "object",
+        "required": [
+          "account_id",
+          "email",
+          "role"
+        ],
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        }
+      },
+      "Invitation": {
+        "type": "object",
+        "required": [
+          "id",
+          "accept_url",
+          "expires_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accept_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }

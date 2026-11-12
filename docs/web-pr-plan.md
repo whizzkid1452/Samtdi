@@ -2,7 +2,7 @@
 
 기준일: 2026년 11월 12일. 기준 코드: `origin/main`의 `562f8d00221c003ca1224fa87edca2b061b8c586`.
 
-**[웹 구현 계획](web-implementation-plan.md)의 WEB-00부터 WEB-08까지를 검토·검증·되돌리기가 가능한 PR 단위로 나눈다.** 각 PR은 필요한 화면·API·데이터·검증을 함께 변경한다. `WEB-*`는 계획 ID이며 GitHub PR 번호가 아니다. 아래 PR은 아직 생성하지 않았다.
+**[웹 구현 계획](web-implementation-plan.md)의 WEB-00부터 WEB-08까지를 검토·검증·되돌리기가 가능한 PR 단위로 나눈다.** 각 PR은 필요한 화면·API·데이터·검증을 함께 변경한다. `WEB-*`는 계획 ID이며 GitHub PR 번호가 아니다. 실제 Draft PR은 아래 단계 표에서 확인할 수 있다.
 
 제품 범위·권한·데이터 의미·출시 기준은 구현 계획이 원본이다. 이 문서는 PR의 목적, 선행 관계, 계약 변경과 완료 조건을 관리한다. 고객·사업 가설은 [전략 문서](web-collaboration-strategy.md)를 참고한다.
 
@@ -18,24 +18,24 @@
 
 ## 2. PR 목록과 선행 관계
 
-| 계획 ID | PR 목적                                  | 대상 저장소 | 선행 조건                     | 상태                            |
-| ------- | ---------------------------------------- | ----------- | ----------------------------- | ------------------------------- |
-| WEB-00  | 문서 기준과 웹 항목 분리                 | Ayotbi·문서 | 없음                          | Markdown·Notion 작성, PR 미생성 |
-| WEB-01A | 기존 Go 서버와 검증 자산 이관            | Samtdi      | WEB-00의 Markdown 기준        | 미착수                          |
-| WEB-01B | 웹 실행에서 Git·네이티브 의존성 분리     | Samtdi      | WEB-01A                       | 미착수                          |
-| WEB-01C | Next.js·계약·개발 환경·웹 CI             | Samtdi      | WEB-01B                       | 미착수                          |
-| WEB-01D | 기존 저장소의 서버 소비 경로 전환        | Ayotbi      | WEB-01C의 고정 커밋·호환 검사 | 미착수                          |
-| WEB-02  | 로그인·프로젝트·멤버 관리 화면           | Samtdi      | WEB-01C·WEB-01D               | 미착수                          |
-| WEB-03A | 업로드 승인·완료와 불변 버전 등록        | Samtdi      | WEB-02                        | 미착수                          |
-| WEB-03B | 미디어 작업자·파형·재생본·복구           | Samtdi      | WEB-03A                       | 미착수                          |
-| WEB-04  | 플레이어·파형·버전 목록                  | Samtdi      | WEB-03B                       | 미착수                          |
-| WEB-05  | 타임코드 노트·답글·해결                  | Samtdi      | WEB-04                        | 미착수                          |
-| WEB-06  | 노트 연결 작업 카드·보드·검토            | Samtdi      | WEB-05                        | 미착수                          |
-| WEB-07A | 내 작업 대시보드·활동 이력               | Samtdi      | WEB-06                        | 미착수                          |
-| WEB-07B | 앱 내 알림·읽음 상태                     | Samtdi      | WEB-06                        | 미착수                          |
-| WEB-07C | 노트·작업 JSON/CSV 반출                  | Samtdi      | WEB-06                        | 미착수                          |
-| WEB-08A | 배포·백업·복원·운영 관측                 | Samtdi      | WEB-07A·WEB-07B·WEB-07C       | 미착수                          |
-| WEB-08B | 전체 여정·실제 브라우저·파일럿 검증 기록 | Samtdi      | WEB-08A                       | 미착수                          |
+| 계획 ID | PR 목적                                  | 대상 저장소 | 선행 조건                     | 상태                                                        |
+| ------- | ---------------------------------------- | ----------- | ----------------------------- | ----------------------------------------------------------- |
+| WEB-00  | 문서 기준과 웹 항목 분리                 | Ayotbi·문서 | 없음                          | [Draft #1](https://github.com/whizzkid1452/Samtdi/pull/1)   |
+| WEB-01A | 기존 Go 서버와 검증 자산 이관            | Samtdi      | WEB-00의 Markdown 기준        | [Draft #2](https://github.com/whizzkid1452/Samtdi/pull/2)   |
+| WEB-01B | 웹 실행에서 Git·네이티브 의존성 분리     | Samtdi      | WEB-01A                       | [Draft #3](https://github.com/whizzkid1452/Samtdi/pull/3)   |
+| WEB-01C | Next.js·계약·개발 환경·웹 CI             | Samtdi      | WEB-01B                       | [Draft #4](https://github.com/whizzkid1452/Samtdi/pull/4)   |
+| WEB-01D | 기존 저장소의 서버 소비 경로 전환        | Ayotbi      | WEB-01C의 고정 커밋·호환 검사 | [Draft #72](https://github.com/whizzkid1452/Ayotbi/pull/72) |
+| WEB-02  | 로그인·프로젝트·멤버 관리 화면           | Samtdi      | WEB-01C·WEB-01D               | [Draft #5](https://github.com/whizzkid1452/Samtdi/pull/5)   |
+| WEB-03A | 업로드 승인·완료와 불변 버전 등록        | Samtdi      | WEB-02                        | [Draft #6](https://github.com/whizzkid1452/Samtdi/pull/6)   |
+| WEB-03B | 미디어 작업자·파형·재생본·복구           | Samtdi      | WEB-03A                       | [Draft #7](https://github.com/whizzkid1452/Samtdi/pull/7)   |
+| WEB-04  | 플레이어·파형·버전 목록                  | Samtdi      | WEB-03B                       | [Draft #8](https://github.com/whizzkid1452/Samtdi/pull/8)   |
+| WEB-05  | 타임코드 노트·답글·해결                  | Samtdi      | WEB-04                        | [Draft #9](https://github.com/whizzkid1452/Samtdi/pull/9)   |
+| WEB-06  | 노트 연결 작업 카드·보드·검토            | Samtdi      | WEB-05                        | [Draft #10](https://github.com/whizzkid1452/Samtdi/pull/10) |
+| WEB-07A | 내 작업 대시보드·활동 이력               | Samtdi      | WEB-06                        | [Draft #11](https://github.com/whizzkid1452/Samtdi/pull/11) |
+| WEB-07B | 앱 내 알림·읽음 상태                     | Samtdi      | WEB-06                        | [Draft #12](https://github.com/whizzkid1452/Samtdi/pull/12) |
+| WEB-07C | 노트·작업 JSON/CSV 반출                  | Samtdi      | WEB-06                        | [Draft #13](https://github.com/whizzkid1452/Samtdi/pull/13) |
+| WEB-08A | 배포·백업·복원·운영 관측                 | Samtdi      | WEB-07A·WEB-07B·WEB-07C       | [Draft #14](https://github.com/whizzkid1452/Samtdi/pull/14) |
+| WEB-08B | 전체 여정·실제 브라우저·파일럿 검증 기록 | Samtdi      | WEB-08A                       | [로컬 검증 기록](web-pilot-verification.md)                 |
 
 WEB-07A/B/C는 선행 구현 후 독립적으로 진행할 수 있다. 한 사람이 개발하면 표 순서로 진행한다. Notion 동기화는 문서의 기준 위치를 연결하는 작업이며 웹 빌드의 의존성이 아니다.
 
@@ -202,4 +202,4 @@ flowchart LR
 - PR 생성 시 저장소 규칙과 세션 기록 규칙을 적용하고 실제 세션 ID를 확인한다. 이 계획에 가짜 PR 번호·URL·검증 로그를 채워 넣지 않는다.
 - 실제 PR을 생성한 뒤 목록에 저장소·번호·링크를 추가한다. `미착수 / 진행 / 로컬 검증 / 리뷰 / 병합 / 배포 / 파일럿 검증`을 구분하고 단계별 증거를 연결한다.
 
-최초 구현 시작점은 WEB-01A다. Markdown 계획과 [사맛디 Notion 구조도](https://app.notion.com/41673b56612a814884cdef5a60bd96d8)를 작성했다. 설계 판단과 이유는 Notion에서 관리한다. 저장소 생성, 서버 이관, 제품 구현, PR 생성과 배포는 실행하지 않았다.
+사맛디의 Draft PR은 선행 브랜치를 base로 쌓았다. 각 PR의 실제 변경과 로컬·원격 검사 결과를 확인한 뒤 선행 PR부터 검토한다. [사맛디 Notion 구조도](https://app.notion.com/41673b56612a814884cdef5a60bd96d8)는 설계 판단과 이유를 관리한다.
