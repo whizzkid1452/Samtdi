@@ -1385,6 +1385,53 @@
           }
         ]
       }
+    },
+    "/v1/projects/{project}/export/{format}": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Consistent note and task export",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "path",
+            "name": "format",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ]
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
