@@ -53,17 +53,25 @@
             "name": "return_to",
             "in": "query",
             "description": "Validated relative workspace or review URL to open after login",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "invite",
             "in": "query",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
-          "303": { "description": "Redirect to the identity provider" },
-          "400": { "description": "Invalid invitation or return URL" }
+          "303": {
+            "description": "Redirect to the identity provider"
+          },
+          "400": {
+            "description": "Invalid invitation or return URL"
+          }
         }
       }
     },
@@ -511,6 +519,25 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "archived",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
           }
         ]
       },
@@ -560,6 +587,11 @@
                 "properties": {
                   "title": {
                     "type": "string"
+                  },
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Optional client identifier for retrying the same audio item creation."
                   }
                 }
               }
@@ -623,6 +655,50 @@
             }
           }
         }
+      },
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Audio item and version summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaItem"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
       }
     },
     "/v1/projects/{project}/media/{item}/versions": {
@@ -1864,6 +1940,13 @@
           },
           "archived_at": {
             "type": "string"
+          },
+          "latest": {
+            "$ref": "#/components/schemas/MediaVersion"
+          },
+          "latest_ready_id": {
+            "type": "string",
+            "format": "uuid"
           }
         }
       },

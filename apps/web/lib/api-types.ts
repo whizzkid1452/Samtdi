@@ -595,6 +595,8 @@ export interface paths {
             parameters: {
                 query?: {
                     before?: string;
+                    q?: string;
+                    archived?: "true" | "false";
                 };
                 header?: never;
                 path: {
@@ -638,6 +640,11 @@ export interface paths {
                 content: {
                     "application/json": {
                         title: string;
+                        /**
+                         * Format: uuid
+                         * @description Optional client identifier for retrying the same audio item creation.
+                         */
+                        id?: string;
                     };
                 };
             };
@@ -675,7 +682,38 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                    item: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Audio item and version summary */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MediaItem"];
+                    };
+                };
+                /** @description Request rejected */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
         put?: never;
         post?: never;
         delete?: never;
@@ -1737,6 +1775,9 @@ export interface components {
             id: string;
             title: string;
             archived_at?: string;
+            latest?: components["schemas"]["MediaVersion"];
+            /** Format: uuid */
+            latest_ready_id?: string;
         };
         MediaVersion: {
             id: string;

@@ -20,9 +20,11 @@ const (
 )
 
 type webMediaItem struct {
-	ID         string     `json:"id"`
-	Title      string     `json:"title"`
-	ArchivedAt *time.Time `json:"archived_at,omitempty"`
+	ID            string      `json:"id"`
+	Title         string      `json:"title"`
+	ArchivedAt    *time.Time  `json:"archived_at,omitempty"`
+	Latest        *webVersion `json:"latest,omitempty"`
+	LatestReadyID string      `json:"latest_ready_id,omitempty"`
 }
 
 type webVersion struct {
@@ -48,6 +50,7 @@ func (s *Server) webUploadRoutes() {
 	base := "/v1/projects/{project}"
 	s.mux.HandleFunc("GET "+base+"/media", s.withSession(s.listWebMedia))
 	s.mux.HandleFunc("POST "+base+"/media", s.withSession(s.createWebMedia))
+	s.mux.HandleFunc("GET "+base+"/media/{item}", s.withSession(s.getWebMedia))
 	s.mux.HandleFunc("PATCH "+base+"/media/{item}", s.withSession(s.archiveWebMedia))
 	s.mux.HandleFunc("GET "+base+"/media/{item}/versions", s.withSession(s.listWebVersions))
 	s.mux.HandleFunc("GET "+base+"/versions/{version}", s.withSession(s.getWebVersion))
@@ -55,23 +58,63 @@ func (s *Server) webUploadRoutes() {
 	s.mux.HandleFunc("POST "+base+"/uploads/{upload}/complete", s.withSession(s.completeWebUpload))
 }
 
+const webMediaSummary = `SELECT m.id::text,m.title,m.archived_at,to_jsonb(latest),COALESCE(ready.id::text,'')
+ FROM web_media_items m
+ LEFT JOIN LATERAL (SELECT v.id,v.item_id,v.filename,v.description,v.state,v.duration_ms,v.failure,v.created_at
+ FROM web_media_versions v WHERE v.project_id=m.project_id AND v.item_id=m.id
+ ORDER BY v.created_at DESC,v.id DESC LIMIT 1) latest ON true
+ LEFT JOIN LATERAL (SELECT v.id FROM web_media_versions v
+ WHERE v.project_id=m.project_id AND v.item_id=m.id AND v.state='ready'
+ ORDER BY v.created_at DESC,v.id DESC LIMIT 1) ready ON true`
+
+func scanWebMedia(row pgx.Row) (webMediaItem, error) {
+	var item webMediaItem
+	err := row.Scan(&item.ID, &item.Title, &item.ArchivedAt, &item.Latest, &item.LatestReadyID)
+	return item, err
+}
+
+func (s *Server) getWebMedia(w http.ResponseWriter, r *http.Request, session Session) {
+	if !s.webRead(w, r, session) {
+		return
+	}
+	item := r.PathValue("item")
+	if !uuidPattern.MatchString(item) {
+		problem(w, 404, "resource_not_found")
+		return
+	}
+	value, err := scanWebMedia(s.pool.QueryRow(r.Context(), webMediaSummary+" WHERE m.project_id=$1 AND m.id=$2",
+		r.PathValue("project"), item))
+	if err != nil {
+		writeWebError(w, "read_web_media_item", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, value)
+}
+
 func (s *Server) listWebMedia(w http.ResponseWriter, r *http.Request, session Session) {
 	if !s.webRead(w, r, session) {
 		return
 	}
-	before := r.URL.Query().Get("before")
-	if before != "" && !uuidPattern.MatchString(before) {
-		problem(w, http.StatusBadRequest, "invalid_cursor")
+	query := r.URL.Query()
+	before, search, archived := query.Get("before"), strings.TrimSpace(query.Get("q")), query.Get("archived")
+	if (before != "" && !uuidPattern.MatchString(before)) ||
+		(search != "" && !webText(search, 200)) ||
+		(archived != "" && archived != "true" && archived != "false") {
+		problem(w, http.StatusBadRequest, "invalid_media_query")
 		return
 	}
-	rows, err := s.pool.Query(r.Context(), `SELECT id::text,title,archived_at FROM web_media_items
- WHERE project_id=$1 AND ($2='' OR (created_at,id)<(SELECT created_at,id FROM web_media_items
- WHERE project_id=$1 AND id=NULLIF($2,'')::uuid)) ORDER BY created_at DESC,id DESC LIMIT 100`, r.PathValue("project"), before)
+
+	rows, err := s.pool.Query(r.Context(), webMediaSummary+`
+ WHERE m.project_id=$1 AND ($2='' OR (m.created_at,m.id)<(SELECT created_at,id FROM web_media_items
+ WHERE project_id=$1 AND id=NULLIF($2,'')::uuid))
+ AND ($3='' OR strpos(lower(m.title),lower($3))>0)
+ AND ($4='' OR (m.archived_at IS NOT NULL)=NULLIF($4,'')::boolean)
+ ORDER BY m.created_at DESC,m.id DESC LIMIT 100`, r.PathValue("project"), before, search, archived)
 	if err != nil {
 		internal(w, "list_web_media", err)
 		return
 	}
-	items, err := pgx.CollectRows(rows, pgx.RowToStructByPos[webMediaItem])
+	items, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (webMediaItem, error) { return scanWebMedia(row) })
 	if err != nil {
 		internal(w, "read_web_media", err)
 		return
@@ -81,19 +124,31 @@ func (s *Server) listWebMedia(w http.ResponseWriter, r *http.Request, session Se
 
 func (s *Server) createWebMedia(w http.ResponseWriter, r *http.Request, session Session) {
 	var input struct {
+		ID    string `json:"id"`
 		Title string `json:"title"`
 	}
 	if !readJSON(w, r, &input) {
 		return
 	}
-	if !webText(input.Title, 160) {
+	if !webText(input.Title, 160) || (input.ID != "" && !uuidPattern.MatchString(input.ID)) {
 		problem(w, http.StatusBadRequest, "invalid_media_title")
 		return
 	}
+
 	projectID := r.PathValue("project")
 	s.webWrite(w, r, session, Editor, false, http.StatusCreated, func(ctx context.Context, tx pgx.Tx, _ Role) (any, error) {
 		item := webMediaItem{Title: strings.TrimSpace(input.Title)}
-		err := tx.QueryRow(ctx, "INSERT INTO web_media_items(project_id,title) VALUES ($1,$2) RETURNING id::text", projectID, item.Title).Scan(&item.ID)
+		err := tx.QueryRow(ctx, `INSERT INTO web_media_items(id,project_id,title)
+ VALUES (COALESCE(NULLIF($1,'')::uuid,gen_random_uuid()),$2,$3)
+ ON CONFLICT (id) DO NOTHING RETURNING id::text`, input.ID, projectID, item.Title).Scan(&item.ID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			existing, findErr := scanWebMedia(tx.QueryRow(ctx, webMediaSummary+" WHERE m.project_id=$1 AND m.id=$2 AND m.title=$3",
+				projectID, input.ID, item.Title))
+			if errors.Is(findErr, pgx.ErrNoRows) {
+				return nil, webProblem{409, "idempotency_conflict"}
+			}
+			return existing, findErr
+		}
 		if err != nil {
 			return nil, err
 		}

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { api, describeError } from "../lib/api";
 import { projectHref, type ProjectTab } from "../lib/routes";
-import { MediaLibrary } from "./media-library";
+import { MediaDetail, MediaLibrary } from "./media-library";
 import { ProjectMembers } from "./project-members";
 import { TaskBoard } from "./task-board";
 import { ProjectActivity } from "./workspace-activity";
@@ -66,7 +66,7 @@ export function ProjectIndex() {
   </main>;
 }
 
-export function ProjectScreen({ projectId, tab, versionId }: { projectId: string; tab: ProjectTab; versionId?: string }) {
+export function ProjectScreen({ projectId, tab, itemId, versionId }: { projectId: string; tab: ProjectTab; itemId?: string; versionId?: string }) {
   const { projects, session } = useWorkspace();
   const query = useSearchParams();
   const router = useRouter();
@@ -98,8 +98,10 @@ export function ProjectScreen({ projectId, tab, versionId }: { projectId: string
     </div>
     <main className="main-content">
       {project.archived_at && <p className="notice" role="status">보관된 프로젝트입니다. 기존 내용을 열 수 있습니다.</p>}
-      {tab === "media" && <MediaLibrary key={projectId + ":" + (versionId ?? "")} project={project} accountId={session.account_id}
-        initialVersion={versionId} initialNote={query.get("note") ?? undefined} initialAt={at === null ? undefined : Number(at)} />}
+      {tab === "media" && (itemId ?
+        <MediaDetail key={projectId + ":" + itemId + ":" + (versionId ?? "")} project={project} itemId={itemId} versionId={versionId}
+          accountId={session.account_id} initialNote={query.get("note") ?? undefined} initialAt={at === null ? undefined : Number(at)} /> :
+        <MediaLibrary key={projectId + ":" + query.toString()} project={project} />)}
       {tab === "tasks" && <TaskBoard key={projectId} project={project} initialNote={query.get("task_note") ?? undefined} />}
       {tab === "activity" && <ProjectActivity key={projectId} projectId={projectId} revision={0} />}
       {tab === "settings" && <ProjectSettings key={projectId} project={project} />}

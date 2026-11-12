@@ -11,8 +11,8 @@ export default async function Projects({ params }: { params: Promise<{ route?: s
   if (route.length === 2 && (tab === "media" || tab === "tasks" || tab === "activity" || tab === "settings")) {
     return <ProjectScreen projectId={projectId} tab={tab} />;
   }
-  if (route.length === 5 && tab === "media" && itemId && section === "versions") {
-    return <ProjectScreen projectId={projectId} tab={tab} versionId={versionId} />;
+  if (tab === "media" && itemId && (route.length === 3 || (route.length === 5 && section === "versions"))) {
+    return <ProjectScreen projectId={projectId} tab={tab} itemId={itemId} versionId={versionId} />;
   }
   notFound();
 }
