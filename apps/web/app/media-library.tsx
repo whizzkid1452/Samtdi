@@ -29,6 +29,7 @@ export function MediaLibrary({ project, initialVersion }: { project: Project; in
   const [progress, setProgress] = useState<number>();
   const [pendingCompletion, setPendingCompletion] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [pollRevision, setPollRevision] = useState(0);
   const uploadRequest = useRef<XMLHttpRequest | null>(null);
   const item = items.find((candidate) => candidate.id === itemId);
   const version = versions.find((candidate) => candidate.id === versionId);
@@ -75,7 +76,7 @@ export function MediaLibrary({ project, initialVersion }: { project: Project; in
     }
     void load();
     return () => { request.abort(); clearTimeout(timer); };
-  }, [base, itemId]);
+  }, [base, itemId, pollRevision]);
 
   async function run(change: () => Promise<void>) {
     setBusy(true);
@@ -110,6 +111,7 @@ export function MediaLibrary({ project, initialVersion }: { project: Project; in
     setPendingCompletion(undefined);
     setVersions((previous) => [created, ...previous.filter(({ id }) => id !== created.id)]);
     setVersionId(created.id);
+    setPollRevision((value) => value + 1);
   }
 
   async function uploadFile(event: FormEvent<HTMLFormElement>) {
@@ -180,6 +182,14 @@ export function MediaLibrary({ project, initialVersion }: { project: Project; in
         {versions.map((entry) => <option key={entry.id} value={entry.id}>{entry.filename} · {states[entry.state]}</option>)}
       </select></label>}
       {version && <p role="status">{states[version.state]}{version.description ? " · " + version.description : ""}</p>}
+      {version?.state === "failed" && <div className="row wrap">
+        <p className="muted">{version.failure === "invalid_audio" ? "지원되는 형식과 길이를 확인해 주세요." : "미디어를 처리하지 못했습니다."}</p>
+        {canEdit && version.failure === "processing_failed" && <button disabled={busy} onClick={() => void run(async () => {
+          await api(base + "/versions/" + version.id + "/retry", { method: "POST" });
+          setPollRevision((value) => value + 1);
+        })}>처리 재시도</button>}
+      </div>}
+
     </section>
   );
 }
