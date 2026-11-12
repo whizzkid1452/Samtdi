@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, describeError } from "../lib/api";
+import { VersionNotes } from "./version-notes";
 import type { MediaVersion } from "./media-library";
 
 export function timecode(ms: number) {
@@ -9,7 +10,10 @@ export function timecode(ms: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}.${String(Math.round(ms) % 1000).padStart(3, "0")}`;
 }
 
-export function VersionReview({ base, version, initialAt }: { base: string; version: MediaVersion; initialAt?: number }) {
+export function VersionReview({ base, version, initialAt, initialNote, projectId, accountId, canEdit, writable }: {
+  base: string; version: MediaVersion; initialAt?: number; initialNote?: string;
+  projectId: string; accountId: string; canEdit: boolean; writable: boolean;
+}) {
   const path = base + "/versions/" + version.id;
   const duration = version.duration_ms ?? 0;
   const audio = useRef<HTMLAudioElement>(null);
@@ -54,7 +58,7 @@ export function VersionReview({ base, version, initialAt }: { base: string; vers
 
   function seek(target: number) {
     if (!Number.isFinite(target) || !audio.current) return;
-    const next = Math.min(duration, Math.max(0, target));
+    const next = Math.round(Math.min(duration, Math.max(0, target)));
     audio.current.currentTime = next / 1000;
     setPosition(next);
   }
@@ -80,6 +84,8 @@ export function VersionReview({ base, version, initialAt }: { base: string; vers
         {start !== undefined && <span>{timecode(start)}{end !== undefined ? " ~ " + timecode(end) : ""}</span>}
         <a className="button" href={path + "/files/original"}>원본 다운로드</a>
       </div>
+      <VersionNotes path={path} projectId={projectId} versionId={version.id} accountId={accountId} initialNote={initialNote}
+        canEdit={canEdit} writable={writable} position={position} start={start} end={end} seek={seek} />
     </div>
   );
 }
