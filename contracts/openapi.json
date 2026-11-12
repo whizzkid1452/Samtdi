@@ -1343,6 +1343,48 @@
           }
         ]
       }
+    },
+    "/v1/notifications": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Recipient inbox",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Inbox"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected"
+          }
+        }
+      }
+    },
+    "/v1/notifications/{notification}/read": {
+      "post": {
+        "responses": {
+          "204": {
+            "description": "Marked read"
+          },
+          "default": {
+            "description": "Request rejected"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notification",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1810,6 +1852,66 @@
             "type": "integer"
           },
           "late_count": {
+            "type": "integer"
+          }
+        }
+      },
+      "Notification": {
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "project_title",
+          "action",
+          "subject_id",
+          "version_id",
+          "note_id",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "project_title": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "subject_id": {
+            "type": "string"
+          },
+          "version_id": {
+            "type": "string"
+          },
+          "note_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "read_at": {
+            "type": "string"
+          }
+        }
+      },
+      "Inbox": {
+        "type": "object",
+        "required": [
+          "items",
+          "unread"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Notification"
+            }
+          },
+          "unread": {
             "type": "integer"
           }
         }

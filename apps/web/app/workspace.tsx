@@ -6,6 +6,7 @@ import type { components } from "../lib/api-types";
 import { MediaLibrary } from "./media-library";
 import { DashboardPanel, ProjectActivity } from "./workspace-activity";
 import { TaskBoard } from "./task-board";
+import { Notifications } from "./notifications";
 import { ProjectMembers } from "./project-members";
 
 type Session = components["schemas"]["Session"];
@@ -89,7 +90,7 @@ export function Workspace({ initial }: { initial: Location }) {
     <div className="workspace">
       <header className="topbar">
         <span className="brand">사맛디</span>
-        <div className="row"><span className="muted">{session.email}</span><button onClick={() => void run(async () => {
+        <div className="row"><span className="muted">{session.email}</span><Notifications /><button onClick={() => void run(async () => {
           await api("/v1/auth/logout", { method: "POST" });
           setSession(null);
           setProjects([]);

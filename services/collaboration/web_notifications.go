@@ -1,0 +1,87 @@
+package collaboration
+
+import (
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+)
+
+type webNotification struct {
+	ID           string     `json:"id"`
+	ProjectID    string     `json:"project_id"`
+	ProjectTitle string     `json:"project_title"`
+	Action       string     `json:"action"`
+	SubjectID    string     `json:"subject_id"`
+	VersionID    string     `json:"version_id"`
+	NoteID       string     `json:"note_id"`
+	CreatedAt    time.Time  `json:"created_at"`
+	ReadAt       *time.Time `json:"read_at,omitempty"`
+}
+
+func (s *Server) webNotificationRoutes() {
+	s.mux.HandleFunc("GET /v1/notifications", s.withSession(s.listWebNotifications))
+	s.mux.HandleFunc("POST /v1/notifications/{notification}/read", s.withSession(s.readWebNotification))
+}
+
+func (s *Server) listWebNotifications(w http.ResponseWriter, r *http.Request, session Session) {
+	var cursor int64
+	if raw := r.URL.Query().Get("before"); raw != "" {
+		parsed, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || parsed < 1 {
+			problem(w, 400, "invalid_cursor")
+			return
+		}
+		cursor = parsed
+	}
+	ctx := r.Context()
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		internal(w, "begin_notifications", err)
+		return
+	}
+	defer tx.Rollback(ctx)
+	const visible = ` FROM web_notifications n JOIN web_activity e ON e.id=n.activity_id
+ JOIN projects p ON p.id=e.project_id JOIN memberships m ON m.project_id=p.id AND m.account_id=n.recipient_id
+ WHERE n.recipient_id=$1`
+	var unread int
+	err = tx.QueryRow(ctx, "SELECT count(*)"+visible+" AND n.read_at IS NULL", session.AccountID).Scan(&unread)
+	if err != nil {
+		internal(w, "count_notifications", err)
+		return
+	}
+	rows, err := tx.Query(ctx, `SELECT e.id::text,p.id::text,p.title,e.action,e.subject_id::text,
+ COALESCE(e.detail->>'version_id',''),COALESCE(e.detail->>'note_id',''),e.created_at,n.read_at`+visible+
+		" AND ($2::bigint=0 OR e.id<$2) ORDER BY e.id DESC LIMIT 50", session.AccountID, cursor)
+	if err != nil {
+		internal(w, "list_notifications", err)
+		return
+	}
+	items, err := pgx.CollectRows(rows, pgx.RowToStructByPos[webNotification])
+	if err != nil {
+		internal(w, "read_notifications", err)
+		return
+	}
+	writeJSON(w, 200, map[string]any{"items": items, "unread": unread})
+}
+
+func (s *Server) readWebNotification(w http.ResponseWriter, r *http.Request, session Session) {
+	id, err := strconv.ParseInt(r.PathValue("notification"), 10, 64)
+	if err != nil || id < 1 {
+		problem(w, 404, "resource_not_found")
+		return
+	}
+	result, err := s.pool.Exec(r.Context(), `UPDATE web_notifications n SET read_at=COALESCE(n.read_at,now())
+ FROM web_activity e JOIN memberships m ON m.project_id=e.project_id
+ WHERE n.activity_id=e.id AND n.activity_id=$1 AND n.recipient_id=$2 AND m.account_id=$2`, id, session.AccountID)
+	if err != nil {
+		internal(w, "mark_notification_read", err)
+		return
+	}
+	if result.RowsAffected() != 1 {
+		problem(w, 404, "resource_not_found")
+		return
+	}
+	w.WriteHeader(204)
+}
