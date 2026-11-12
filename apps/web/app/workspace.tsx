@@ -1,140 +1,118 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
-import { MediaLibrary } from "./media-library";
-import { DashboardPanel, ProjectActivity } from "./workspace-activity";
-import { TaskBoard } from "./task-board";
 import { Notifications } from "./notifications";
-import { ProjectMembers } from "./project-members";
 
 type Session = components["schemas"]["Session"];
 export type Project = components["schemas"]["Project"] & { archived_at?: string };
 export type Member = { account_id: string; email: string; role: Project["role"] };
-type Location = { project?: string; version?: string; note?: string; at?: string; task_note?: string };
 
-export function Workspace({ initial }: { initial: Location }) {
+const WorkspaceContext = createContext<{
+  session: Session;
+  projects: Project[];
+  refreshProjects: () => Promise<void>;
+} | null>(null);
+
+export function useWorkspace() {
+  const context = useContext(WorkspaceContext);
+  if (!context) throw new Error("Workspace is unavailable");
+  return context;
+}
+
+export function Workspace({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const query = useSearchParams();
+  const router = useRouter();
   const [session, setSession] = useState<Session | null>();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState(initial.project ?? "");
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [revision, setRevision] = useState(0);
-  const current = projects.find((project) => project.id === projectId);
-
-  const reload = useCallback(async () => {
-    const result = await api<Project[]>("/v1/projects");
-    setProjects(result);
-    setProjectId((selected) => result.some((project) => project.id === selected) ? selected : result[0]?.id ?? "");
-  }, []);
+  const [attempt, setAttempt] = useState(0);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     const request = new AbortController();
     async function load() {
       try {
         const account = await api<Session>("/v1/me", { signal: request.signal });
+        const visible = await api<Project[]>("/v1/projects", { signal: request.signal });
         if (request.signal.aborted) return;
-        await reload();
-        if (!request.signal.aborted) setSession(account);
+
+        setProjects(visible);
+        setSession(account);
       } catch (cause) {
         if (request.signal.aborted) return;
         if (cause instanceof ApiError && cause.status === 401) setSession(null);
         else setError(describeError(cause));
       }
     }
+
     void load();
     return () => request.abort();
-  }, [reload]);
+  }, [attempt]);
 
-  async function run(change: () => Promise<void>) {
-    setBusy(true);
+  async function refreshProjects() {
+    setProjects(await api<Project[]>("/v1/projects"));
+  }
+
+  async function logout() {
+    setLoggingOut(true);
     setError("");
     try {
-      await change();
-      setRevision((value) => value + 1);
+      await api("/v1/auth/logout", { method: "POST" });
+      setSession(null);
+      setProjects([]);
+      router.replace("/projects");
     } catch (cause) {
       setError(describeError(cause));
     } finally {
-      setBusy(false);
+      setLoggingOut(false);
     }
   }
 
-  async function createProject(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const title = String(new FormData(form).get("title"));
-    await run(async () => {
-      const project = await api<Project>("/v1/projects", { method: "POST", body: JSON.stringify({ title }) });
-      await reload();
-      setProjectId(project.id);
-      form.reset();
-    });
-  }
-
   if (!session) {
-    return (
-      <main className="login">
-        <div className="login-content">
-          <p className="brand">사맛디</p>
-          <h1>음악을 함께 완성하는 공간</h1>
-          <p className="muted">초대받은 프로젝트에 로그인해 작업을 이어가세요.</p>
-          {error && <p role="alert">{error}</p>}
-          {session === null ? <a className="button primary" href="/v1/auth/login">로그인</a> : <p role="status">{error ? "" : "로그인 상태 확인 중"}</p>}
-        </div>
-      </main>
-    );
+    const target = pathname + (query.size ? "?" + query.toString() : "");
+    const login = "/v1/auth/login?" + new URLSearchParams({ return_to: target });
+
+    return <main className="login">
+      <div className="login-content">
+        <p className="brand">사맛디</p>
+        <h1>음악을 함께 완성하는 공간</h1>
+        <p className="muted">초대받은 프로젝트에 로그인해 작업을 이어가세요.</p>
+        {session === null ? <a className="button primary" href={login} onClick={(event) => {
+          if (window.location.hash) event.currentTarget.href = "/v1/auth/login?" + new URLSearchParams({ return_to: target + window.location.hash });
+        }}>로그인</a> : error ? <>
+          <p role="alert">{error}</p>
+          <button onClick={() => { setError(""); setAttempt((value) => value + 1); }}>다시 시도</button>
+        </> : <p role="status">로그인 상태 확인 중</p>}
+      </div>
+    </main>;
   }
 
-  return (
-    <div className="workspace">
-      <header className="topbar">
-        <span className="brand">사맛디</span>
-        <div className="row"><span className="muted">{session.email}</span><Notifications /><button onClick={() => void run(async () => {
-          await api("/v1/auth/logout", { method: "POST" });
-          setSession(null);
-          setProjects([]);
-        })}>로그아웃</button></div>
-      </header>
-      <div className="workspace-grid">
-        <aside className="sidebar">
-          <h2>프로젝트</h2>
-          <nav aria-label="프로젝트">
-            {projects.map((project) => <button key={project.id} aria-current={projectId === project.id ? "page" : undefined}
-              onClick={() => setProjectId(project.id)}>{project.title}{project.archived_at ? " · 보관됨" : ""}</button>)}
-          </nav>
-          <form onSubmit={createProject}>
-            <label htmlFor="project-title">새 프로젝트 이름</label>
-            <input id="project-title" name="title" maxLength={160} required />
-            <button className="primary" disabled={busy}>프로젝트 만들기</button>
-          </form>
-        </aside>
-        <main className="main-content">
-          {error && <p className="error" role="alert">{error}</p>}
-          <DashboardPanel revision={revision} />
-          {current ? <>
-            <div className="row spread">
-              <h1>{current.title}</h1>
-              {current.role === "owner" && <button disabled={busy} onClick={() => void run(async () => {
-                await api(`/v1/projects/${current.id}/archive`, { method: "PATCH", body: JSON.stringify({ archived: !current.archived_at }) });
-                await reload();
-              })}>{current.archived_at ? "복원" : "보관"}</button>}
-            </div>
-            {current.archived_at && <p role="status">보관된 프로젝트입니다. 기존 내용을 열 수 있습니다.</p>}
-            <MediaLibrary key={"media-" + current.id} project={current} accountId={session.account_id} initialNote={initial.note} initialVersion={current.id === initial.project ? initial.version : undefined} initialAt={initial.at === undefined ? undefined : Number(initial.at)} />
-            <TaskBoard key={"tasks-" + current.id} project={current} initialNote={current.id === initial.project ? initial.task_note : undefined} onChange={() => setRevision((value) => value + 1)} />
-            <ProjectActivity key={"activity-" + current.id} projectId={current.id} revision={revision} />
-            <section className="panel" aria-label="기록 반출">
-              <h2>기록 반출</h2>
-              <div className="row wrap">
-                <a className="button" href={`/v1/projects/${current.id}/export/json`}>JSON 다운로드</a>
-                <a className="button" href={`/v1/projects/${current.id}/export/csv`}>CSV 다운로드</a>
-              </div>
-            </section>
-            <ProjectMembers key={"members-" + current.id} project={current} />
-          </> : <div className="empty"><h1>프로젝트를 만들어 보세요</h1><p className="muted">프로젝트에서 팀원과 수정본을 공유할 수 있습니다.</p></div>}
-        </main>
+  return <WorkspaceContext.Provider value={{ session, projects, refreshProjects }}>
+    <header className="topbar">
+      <div className="row">
+        <Link href="/projects" className="brand">사맛디</Link>
+        <nav className="top-links" aria-label="주 메뉴">
+          <Link href="/projects" aria-current={pathname === "/projects" ? "page" : undefined}>프로젝트</Link>
+          <Link href="/work" aria-current={pathname === "/work" ? "page" : undefined}>내 작업</Link>
+        </nav>
       </div>
-    </div>
-  );
+      <div className="row">
+        <Notifications />
+        <details className="inbox">
+          <summary className="account-label">계정</summary>
+          <div className="inbox-body panel">
+            <p className="muted">{session.email}</p>
+            <button disabled={loggingOut} onClick={() => void logout()}>로그아웃</button>
+          </div>
+        </details>
+      </div>
+    </header>
+    {error && <p className="error main-content" role="alert">{error}</p>}
+    {children}
+  </WorkspaceContext.Provider>;
 }
