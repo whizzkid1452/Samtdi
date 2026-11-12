@@ -43,6 +43,7 @@ func (s *Server) webNoteRoutes() {
 	base := "/v1/projects/{project}/versions/{version}/notes"
 	s.mux.HandleFunc("GET "+base, s.withSession(s.listWebNotes))
 	s.mux.HandleFunc("POST "+base, s.withSession(s.createWebNote))
+	s.mux.HandleFunc("GET "+base+"/{note}", s.withSession(s.getWebNote))
 	s.mux.HandleFunc("PATCH "+base+"/{note}", s.withSession(s.changeWebNote))
 	s.mux.HandleFunc("POST "+base+"/{note}/replies", s.withSession(s.createWebReply))
 	s.mux.HandleFunc("PATCH "+base+"/{note}/replies/{reply}", s.withSession(s.changeWebReply))
@@ -53,13 +54,16 @@ func (s *Server) listWebNotes(w http.ResponseWriter, r *http.Request, session Se
 		return
 	}
 	project, version, before := r.PathValue("project"), r.PathValue("version"), r.URL.Query().Get("before")
-	if !uuidPattern.MatchString(version) || (before != "" && !uuidPattern.MatchString(before)) {
+	filter := r.URL.Query().Get("filter")
+	if !uuidPattern.MatchString(version) || (before != "" && !uuidPattern.MatchString(before)) ||
+		(filter != "" && filter != "open") {
 		problem(w, 400, "invalid_notes_query")
 		return
 	}
 	rows, err := s.pool.Query(r.Context(), webNotesSelect+` WHERE n.project_id=$1 AND n.version_id=$2
  AND ($3='' OR (n.created_at,n.id)<(SELECT created_at,id FROM web_notes WHERE project_id=$1 AND version_id=$2 AND id=NULLIF($3,'')::uuid))
- ORDER BY n.created_at DESC,n.id DESC LIMIT 100`, project, version, before)
+ AND ($4='' OR (NOT n.resolved AND NOT n.deleted))
+ ORDER BY n.created_at DESC,n.id DESC LIMIT 100`, project, version, before, filter)
 	if err != nil {
 		internal(w, "list_web_notes", err)
 		return
@@ -70,6 +74,27 @@ func (s *Server) listWebNotes(w http.ResponseWriter, r *http.Request, session Se
 		return
 	}
 	writeJSON(w, 200, notes)
+}
+
+func (s *Server) getWebNote(w http.ResponseWriter, r *http.Request, session Session) {
+	if !s.webRead(w, r, session) {
+		return
+	}
+	project, version, note := r.PathValue("project"), r.PathValue("version"), r.PathValue("note")
+	if !uuidPattern.MatchString(version) || !uuidPattern.MatchString(note) {
+		problem(w, 404, "resource_not_found")
+		return
+	}
+
+	var value webNote
+	err := s.pool.QueryRow(r.Context(), webNotesSelect+" WHERE n.project_id=$1 AND n.version_id=$2 AND n.id=$3",
+		project, version, note).Scan(&value.ID, &value.VersionID, &value.AuthorID, &value.Email, &value.StartMS, &value.EndMS,
+		&value.Body, &value.Resolved, &value.Deleted, &value.Revision, &value.Replies)
+	if err != nil {
+		writeWebError(w, "read_web_note", err)
+		return
+	}
+	writeJSON(w, 200, value)
 }
 
 func (s *Server) createWebNote(w http.ResponseWriter, r *http.Request, session Session) {
