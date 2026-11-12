@@ -1047,6 +1047,250 @@
           }
         }
       }
+    },
+    "/v1/projects/{project}/tasks": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Task board",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Task"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "post": {
+        "responses": {
+          "201": {
+            "description": "Task created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Created"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "assignee_id": {
+                    "type": "string"
+                  },
+                  "due_on": {
+                    "type": "string"
+                  },
+                  "result_version_id": {
+                    "type": "string"
+                  },
+                  "review_text": {
+                    "type": "string"
+                  },
+                  "position": {
+                    "type": "integer"
+                  },
+                  "archived": {
+                    "type": "boolean"
+                  },
+                  "note_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "confirm_notes": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/NoteConfirmation"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project}/task-options": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Assignable notes and result versions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOptions"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/projects/{project}/tasks/{task}": {
+      "put": {
+        "responses": {
+          "200": {
+            "description": "Task changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Created"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title",
+                  "status",
+                  "revision"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "revision": {
+                    "type": "integer"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "assignee_id": {
+                    "type": "string"
+                  },
+                  "due_on": {
+                    "type": "string"
+                  },
+                  "result_version_id": {
+                    "type": "string"
+                  },
+                  "review_text": {
+                    "type": "string"
+                  },
+                  "position": {
+                    "type": "integer"
+                  },
+                  "archived": {
+                    "type": "boolean"
+                  },
+                  "note_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "confirm_notes": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/NoteConfirmation"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1283,6 +1527,150 @@
         "properties": {
           "id": {
             "type": "string"
+          }
+        }
+      },
+      "TaskNote": {
+        "type": "object",
+        "required": [
+          "id",
+          "version_id",
+          "start_ms",
+          "body",
+          "resolved",
+          "deleted",
+          "revision"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version_id": {
+            "type": "string"
+          },
+          "start_ms": {
+            "type": "integer"
+          },
+          "body": {
+            "type": "string"
+          },
+          "resolved": {
+            "type": "boolean"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "integer"
+          }
+        }
+      },
+      "Task": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "description",
+          "status",
+          "assignee_id",
+          "due_on",
+          "result_version_id",
+          "review_text",
+          "position",
+          "archived",
+          "revision",
+          "notes"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "assignee_id": {
+            "type": "string"
+          },
+          "due_on": {
+            "type": "string"
+          },
+          "result_version_id": {
+            "type": "string"
+          },
+          "review_text": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer"
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskNote"
+            }
+          }
+        }
+      },
+      "TaskVersion": {
+        "type": "object",
+        "required": [
+          "id",
+          "filename"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          }
+        }
+      },
+      "TaskOptions": {
+        "type": "object",
+        "required": [
+          "notes",
+          "versions"
+        ],
+        "properties": {
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskNote"
+            }
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskVersion"
+            }
+          }
+        }
+      },
+      "NoteConfirmation": {
+        "type": "object",
+        "required": [
+          "id",
+          "revision"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
           }
         }
       }

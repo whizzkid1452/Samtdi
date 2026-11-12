@@ -1130,6 +1130,200 @@ export interface paths {
         };
         trace?: never;
     };
+    "/v1/projects/{project}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Task board */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Task"][];
+                    };
+                };
+                /** @description Request rejected */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        title: string;
+                        status: string;
+                        description?: string;
+                        assignee_id?: string;
+                        due_on?: string;
+                        result_version_id?: string;
+                        review_text?: string;
+                        position?: number;
+                        archived?: boolean;
+                        note_ids?: string[];
+                        confirm_notes?: components["schemas"]["NoteConfirmation"][];
+                    };
+                };
+            };
+            responses: {
+                /** @description Task created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Created"];
+                    };
+                };
+                /** @description Request rejected */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project}/task-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Assignable notes and result versions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaskOptions"];
+                    };
+                };
+                /** @description Request rejected */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project}/tasks/{task}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                    task: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        title: string;
+                        status: string;
+                        revision: number;
+                        description?: string;
+                        assignee_id?: string;
+                        due_on?: string;
+                        result_version_id?: string;
+                        review_text?: string;
+                        position?: number;
+                        archived?: boolean;
+                        note_ids?: string[];
+                        confirm_notes?: components["schemas"]["NoteConfirmation"][];
+                    };
+                };
+            };
+            responses: {
+                /** @description Task changed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Created"];
+                    };
+                };
+                /** @description Request rejected */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1195,6 +1389,41 @@ export interface components {
         };
         Created: {
             id: string;
+        };
+        TaskNote: {
+            id: string;
+            version_id: string;
+            start_ms: number;
+            body: string;
+            resolved: boolean;
+            deleted: boolean;
+            revision: number;
+        };
+        Task: {
+            id: string;
+            title: string;
+            description: string;
+            status: string;
+            assignee_id: string;
+            due_on: string;
+            result_version_id: string;
+            review_text: string;
+            position: number;
+            archived: boolean;
+            revision: number;
+            notes: components["schemas"]["TaskNote"][];
+        };
+        TaskVersion: {
+            id: string;
+            filename: string;
+        };
+        TaskOptions: {
+            notes: components["schemas"]["TaskNote"][];
+            versions: components["schemas"]["TaskVersion"][];
+        };
+        NoteConfirmation: {
+            id: string;
+            revision: number;
         };
     };
     responses: never;

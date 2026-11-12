@@ -4,12 +4,13 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { MediaLibrary } from "./media-library";
+import { TaskBoard } from "./task-board";
 import { ProjectMembers } from "./project-members";
 
 type Session = components["schemas"]["Session"];
 export type Project = components["schemas"]["Project"] & { archived_at?: string };
 export type Member = { account_id: string; email: string; role: Project["role"] };
-type Location = { project?: string; version?: string; note?: string; at?: string };
+type Location = { project?: string; version?: string; note?: string; at?: string; task_note?: string };
 
 export function Workspace({ initial }: { initial: Location }) {
   const [session, setSession] = useState<Session | null>();
@@ -116,6 +117,7 @@ export function Workspace({ initial }: { initial: Location }) {
             </div>
             {current.archived_at && <p role="status">보관된 프로젝트입니다. 기존 내용을 열 수 있습니다.</p>}
             <MediaLibrary key={current.id} project={current} accountId={session.account_id} initialNote={initial.note} initialVersion={current.id === initial.project ? initial.version : undefined} initialAt={initial.at === undefined ? undefined : Number(initial.at)} />
+            <TaskBoard key={current.id} project={current} initialNote={current.id === initial.project ? initial.task_note : undefined} />
             <ProjectMembers key={current.id} project={current} />
           </> : <div className="empty"><h1>프로젝트를 만들어 보세요</h1><p className="muted">프로젝트에서 팀원과 수정본을 공유할 수 있습니다.</p></div>}
         </main>
