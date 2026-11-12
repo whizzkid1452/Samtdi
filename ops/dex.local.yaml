@@ -1,0 +1,23 @@
+issuer: http://127.0.0.1:5556/dex
+storage:
+  type: memory
+web:
+  http: 0.0.0.0:5556
+oauth2:
+  skipApprovalScreen: true
+enablePasswordDB: true
+staticClients:
+  - id: samtdi-local
+    name: Samtdi Local
+    secret: samtdi-local-oidc-only
+    redirectURIs:
+      - http://127.0.0.1:3100/v1/auth/callback
+staticPasswords:
+  - email: owner@example.test
+    hash: '$2y$10$mEyzvKMZjeJ1k6UDhex7T.VqzKFbIoBANd1TaWfGyKbsWVrFdEnvO'
+    username: owner
+    userID: samtdi-owner
+  - email: reviewer@example.test
+    hash: '$2y$10$mEyzvKMZjeJ1k6UDhex7T.VqzKFbIoBANd1TaWfGyKbsWVrFdEnvO'
+    username: reviewer
+    userID: samtdi-reviewer

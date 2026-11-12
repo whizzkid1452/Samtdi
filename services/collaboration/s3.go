@@ -137,3 +137,8 @@ func objectStorageError(err error) error {
 
 	return err
 }
+
+func (store *s3Store) ping(ctx context.Context) error {
+	_, err := store.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &store.bucket})
+	return err
+}

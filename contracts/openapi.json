@@ -1,0 +1,15 @@
+{
+  "openapi": "3.1.0",
+  "info": {"title": "Samtdi API", "version": "1.0.0"},
+  "paths": {
+    "/livez": {"get": {"responses": {"200": {"description": "Process alive"}}}},
+    "/readyz": {"get": {"responses": {"200": {"description": "Dependencies ready"}, "503": {"description": "Dependency unavailable"}}}},
+    "/v1/me": {"get": {"responses": {"200": {"description": "Current session", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Session"}}}}, "401": {"description": "Login required"}}}},
+    "/v1/projects": {"get": {"responses": {"200": {"description": "Member projects", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Project"}}}}}}}}
+  },
+  "components": {"schemas": {
+    "Role": {"type": "string", "enum": ["owner", "editor", "reviewer"]},
+    "Session": {"type": "object", "required": ["account_id", "email", "kind"], "properties": {"account_id": {"type": "string"}, "email": {"type": "string"}, "kind": {"type": "string"}}},
+    "Project": {"type": "object", "required": ["id", "title", "role"], "properties": {"id": {"type": "string"}, "title": {"type": "string"}, "role": {"$ref": "#/components/schemas/Role"}}}
+  }}
+}
