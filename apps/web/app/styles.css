@@ -199,3 +199,14 @@ label { font-size: .9rem; color: var(--muted); }
   .task-detail-grid { grid-template-columns: minmax(0, 1fr); }
   .task-menu summary { min-height: 44px; }
 }
+
+.work-filters { margin-block: 1rem; }
+.work-filters a[aria-current] { border-color: var(--accent); background: #e3eee7; font-weight: 650; }
+.activity-day { margin-top: 1.25rem; }
+.activity-day h3 { margin: 0; font-size: .9rem; color: var(--muted); }
+.activity-day li { padding-inline: .75rem; overflow-wrap: anywhere; }
+.project-switcher { margin-right: .2rem; }
+.project-switcher .inbox-body { left: 0; right: auto; }
+.project-switcher .inbox-body a { display: block; overflow-wrap: anywhere; }
+.project-switcher .inbox-body [aria-current] { font-weight: 700; color: var(--accent); }
+.member-list li > span { overflow-wrap: anywhere; }

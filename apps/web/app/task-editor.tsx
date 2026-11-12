@@ -18,7 +18,7 @@ export const statuses: [Status, string][] = [
   ["todo", "할 일"], ["progress", "진행 중"], ["review", "검토 요청"], ["done", "완료"],
 ];
 
-export function statusLabel(status: Status) {
+export function statusLabel(status: string) {
   return statuses.find(([value]) => value === status)?.[1] ?? status;
 }
 

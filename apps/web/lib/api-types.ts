@@ -1606,7 +1606,10 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    filter?: "assigned" | "review" | "due" | "late";
+                    after?: string;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -1902,6 +1905,8 @@ export interface components {
             role: components["schemas"]["Role"];
             /** Format: date-time */
             archived_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
         };
         MediaItem: {
             id: string;
@@ -2010,6 +2015,8 @@ export interface components {
             review_count: number;
             due_soon_count: number;
             late_count: number;
+            assigned_count: number;
+            next_cursor: string;
         };
         Notification: {
             id: string;

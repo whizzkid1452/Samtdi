@@ -32,6 +32,7 @@ type project struct {
 	Title      string     `json:"title"`
 	Role       Role       `json:"role"`
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
+	UpdatedAt  *time.Time `json:"updated_at,omitempty"`
 }
 
 type member struct {
@@ -70,8 +71,10 @@ func requireRole(w http.ResponseWriter, role Role, err error, allowed bool) bool
 }
 
 func (s *Server) listProjects(w http.ResponseWriter, r *http.Request, session Session) {
-	rows, err := s.pool.Query(r.Context(), `SELECT p.id::text AS id, p.title, m.role, p.archived_at FROM projects p
- JOIN memberships m ON m.project_id = p.id WHERE m.account_id = $1 ORDER BY p.created_at, p.id`, session.AccountID)
+	rows, err := s.pool.Query(r.Context(), `SELECT p.id::text AS id, p.title, m.role, p.archived_at, COALESCE(recent.created_at,p.created_at) AS updated_at FROM projects p
+ JOIN memberships m ON m.project_id=p.id
+ LEFT JOIN LATERAL (SELECT created_at FROM web_activity WHERE project_id=p.id ORDER BY id DESC LIMIT 1) recent ON true
+ WHERE m.account_id=$1 ORDER BY p.created_at,p.id`, session.AccountID)
 	if err != nil {
 		internal(w, "list_projects", err)
 		return

@@ -1890,7 +1890,30 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "filter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "assigned",
+                "review",
+                "due",
+                "late"
+              ]
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
       }
     },
     "/v1/projects/{project}/activity": {
@@ -2222,6 +2245,10 @@
             "$ref": "#/components/schemas/Role"
           },
           "archived_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
             "type": "string",
             "format": "date-time"
           }
@@ -2631,7 +2658,9 @@
           "tasks",
           "review_count",
           "due_soon_count",
-          "late_count"
+          "late_count",
+          "assigned_count",
+          "next_cursor"
         ],
         "properties": {
           "tasks": {
@@ -2648,6 +2677,12 @@
           },
           "late_count": {
             "type": "integer"
+          },
+          "assigned_count": {
+            "type": "integer"
+          },
+          "next_cursor": {
+            "type": "string"
           }
         }
       },

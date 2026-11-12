@@ -24,26 +24,51 @@ func (s *Server) webActivityRoutes() {
 }
 
 func (s *Server) webDashboard(w http.ResponseWriter, r *http.Request, session Session) {
+	query := r.URL.Query()
+	filter, after := query.Get("filter"), query.Get("after")
+	if filter == "" {
+		filter = "assigned"
+	}
+	if (filter != "assigned" && filter != "review" && filter != "due" && filter != "late") ||
+		(after != "" && !uuidPattern.MatchString(after)) {
+		problem(w, 400, "invalid_dashboard_filter")
+		return
+	}
+
 	var tasks json.RawMessage
-	var review, due, late int
+	var assigned, review, due, late int
+	var next string
 	err := s.pool.QueryRow(r.Context(), `WITH visible AS (
- SELECT t.id,t.project_id,p.title AS project_title,t.title,t.status,t.assignee_id,t.due_on
+ SELECT t.id,t.project_id,p.title AS project_title,t.title,t.status,t.due_on,
+ COALESCE(t.due_on,'infinity'::date) AS sort_date,
+ t.assignee_id=$1 AS assigned,
+ (t.status='review') AS review,
+ t.assignee_id=$1 AND t.due_on BETWEEN (now() AT TIME ZONE 'Asia/Seoul')::date AND (now() AT TIME ZONE 'Asia/Seoul')::date+7 AS due,
+ t.assignee_id=$1 AND t.due_on<(now() AT TIME ZONE 'Asia/Seoul')::date AS late
  FROM web_tasks t JOIN projects p ON p.id=t.project_id
  JOIN memberships m ON m.project_id=p.id AND m.account_id=$1
  WHERE NOT t.archived AND p.archived_at IS NULL AND t.status<>'done'
- ), mine AS (SELECT * FROM visible WHERE assignee_id=$1),
- upcoming AS (SELECT * FROM mine ORDER BY due_on NULLS LAST,id LIMIT 50)
+ ), filtered AS (
+ SELECT * FROM visible WHERE CASE $2 WHEN 'review' THEN review WHEN 'due' THEN due WHEN 'late' THEN late ELSE assigned END
+ ), candidates AS (
+ SELECT * FROM filtered WHERE $3='' OR (sort_date,id)>(
+ SELECT sort_date,id FROM filtered WHERE id=NULLIF($3,'')::uuid)
+ ORDER BY sort_date,id LIMIT 51
+ ), page AS (SELECT * FROM candidates ORDER BY sort_date,id LIMIT 50)
  SELECT COALESCE((SELECT jsonb_agg(jsonb_build_object('id',id,'project_id',project_id,'project_title',project_title,
- 'title',title,'status',status,'due_on',COALESCE(due_on::text,'')) ORDER BY due_on NULLS LAST,id) FROM upcoming),'[]'),
- (SELECT count(*) FROM visible WHERE status='review'),
- (SELECT count(*) FROM mine WHERE due_on BETWEEN (now() AT TIME ZONE 'Asia/Seoul')::date AND (now() AT TIME ZONE 'Asia/Seoul')::date+7),
- (SELECT count(*) FROM mine WHERE due_on<(now() AT TIME ZONE 'Asia/Seoul')::date)`, session.AccountID).
-		Scan(&tasks, &review, &due, &late)
+ 'title',title,'status',status,'due_on',COALESCE(due_on::text,'')) ORDER BY sort_date,id) FROM page),'[]'),
+ count(*) FILTER(WHERE assigned),count(*) FILTER(WHERE review),count(*) FILTER(WHERE due),count(*) FILTER(WHERE late),
+ CASE WHEN (SELECT count(*) FROM candidates)>50 THEN (SELECT id::text FROM page ORDER BY sort_date DESC,id DESC LIMIT 1) ELSE '' END
+ FROM visible`, session.AccountID, filter, after).Scan(&tasks, &assigned, &review, &due, &late, &next)
 	if err != nil {
 		internal(w, "read_dashboard", err)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"tasks": tasks, "review_count": review, "due_soon_count": due, "late_count": late})
+
+	writeJSON(w, 200, map[string]any{
+		"tasks": tasks, "assigned_count": assigned, "review_count": review,
+		"due_soon_count": due, "late_count": late, "next_cursor": next,
+	})
 }
 
 func (s *Server) listWebActivity(w http.ResponseWriter, r *http.Request, session Session) {
