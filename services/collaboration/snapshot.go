@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,8 +18,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var snapshotTables = []string{"accounts", "projects", "memberships", "invitations", "lfs_objects",
+var legacySnapshotTables = []string{"accounts", "projects", "memberships", "invitations", "lfs_objects",
 	"reviews", "review_comments", "review_media_versions"}
+
+var snapshotTables = append(append([]string(nil), legacySnapshotTables...),
+	"web_activity", "web_media_items", "web_uploads", "web_media_versions", "web_media_jobs", "web_media_garbage",
+	"web_notes", "web_note_replies", "web_note_edits", "web_tasks", "web_task_notes", "web_notifications")
+
+func tablesForSnapshot(version int) []string {
+	if version == 1 {
+		return legacySnapshotTables
+	}
+	return snapshotTables
+}
 
 const snapshotManifestLimit = 32 << 20
 
@@ -79,7 +91,10 @@ func snapshotObjects(ctx context.Context, db rowsQuerier) ([]snapshotObject, err
 	return collectSnapshotRows(ctx, db, `SELECT 'lfs/' || project_id::text || '/' || left(oid,2) || '/' || oid AS key, oid, size FROM lfs_objects
  UNION
  SELECT 'review-media/' || r.project_id::text || '/' || m.review_id::text || '/' || m.mix_oid, m.mix_oid, m.mix_bytes
- FROM review_media_versions m JOIN reviews r ON r.id = m.review_id WHERE m.state = 'ready' ORDER BY 1`,
+ FROM review_media_versions m JOIN reviews r ON r.id = m.review_id WHERE m.state = 'ready'
+ UNION ALL SELECT original_key,original_hash,original_bytes FROM web_media_versions WHERE state='ready'
+ UNION ALL SELECT playback_key,playback_hash,playback_bytes FROM web_media_versions WHERE state='ready'
+ UNION ALL SELECT peaks_key,peaks_hash,peaks_bytes FROM web_media_versions WHERE state='ready' ORDER BY 1`,
 		func(row pgx.CollectableRow) (snapshotObject, error) {
 			var value snapshotObject
 			err := row.Scan(&value.Key, &value.SHA256, &value.Bytes)
@@ -102,7 +117,7 @@ func (state snapshotState) snapshot(ctx context.Context, folder string) error {
 			_ = os.RemoveAll(root)
 		}
 	}()
-	manifest := snapshotManifest{Version: 1, CreatedAt: time.Now().UTC()}
+	manifest := snapshotManifest{Version: 2, CreatedAt: time.Now().UTC()}
 
 	tx, err := state.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
@@ -121,6 +136,21 @@ func (state snapshotState) snapshot(ctx context.Context, folder string) error {
 	manifest.Objects, err = snapshotObjects(ctx, tx)
 	if err != nil {
 		return err
+	}
+
+	pending, err := snapshotPendingUploads(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if state.git == nil {
+		var legacyData bool
+		if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM reviews) OR EXISTS(SELECT 1 FROM lfs_objects)").Scan(&legacyData); err != nil {
+			return err
+		}
+		if legacyData {
+			return errors.New("Git configuration is required to back up existing Git collaboration data")
+		}
+		projectIDs = nil
 	}
 
 	for _, table := range snapshotTables {
@@ -175,6 +205,14 @@ func (state snapshotState) snapshot(ctx context.Context, folder string) error {
 			return err
 		}
 	}
+	for _, source := range pending {
+		saved, err := state.snapshotPendingBlob(ctx, root, source)
+		if err != nil {
+			return err
+		}
+		manifest.Objects = append(manifest.Objects, saved)
+	}
+	sort.Slice(manifest.Objects, func(i, j int) bool { return manifest.Objects[i].Key < manifest.Objects[j].Key })
 	encoded, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil || len(encoded) > snapshotManifestLimit {
 		return errors.New("snapshot manifest too large")
@@ -234,8 +272,21 @@ func (state snapshotState) restore(ctx context.Context, folder string) error {
 	}
 	defer tx.Rollback(ctx)
 	schema, err := snapshotSchema(ctx, tx)
-	if err != nil || !reflect.DeepEqual(schema, manifest.Schema) {
+	if err != nil {
+		return err
+	}
+	expected := schema
+	if manifest.Version == 1 {
+		if len(schema) < 6 {
+			return errors.New("incomplete collaboration schema")
+		}
+		expected = schema[:6]
+	}
+	if !reflect.DeepEqual(expected, manifest.Schema) {
 		return errors.New("snapshot schema does not match")
+	}
+	if state.git == nil && len(manifest.Repositories) != 0 {
+		return errors.New("Git configuration is required for this snapshot")
 	}
 
 	var populated bool
@@ -246,28 +297,44 @@ func (state snapshotState) restore(ctx context.Context, folder string) error {
 		return errors.New("restore requires an empty collaboration database")
 	}
 
-	for index, table := range snapshotTables {
+	if _, err := tx.Exec(ctx, "ALTER TABLE web_activity DISABLE TRIGGER web_activity_notification"); err != nil {
+		return err
+	}
+	for index, table := range tablesForSnapshot(manifest.Version) {
 		file, err := os.Open(filepath.Join(root, manifest.Tables[index].Path))
 		if err != nil {
 			return err
 		}
-		_, err = tx.Conn().PgConn().CopyFrom(ctx, file, "COPY "+table+" FROM STDIN (FORMAT binary)")
+		destination := table
+		if manifest.Version == 1 && table == "projects" {
+			destination += " (id,title,created_at)"
+		}
+		_, err = tx.Conn().PgConn().CopyFrom(ctx, file, "COPY "+destination+" FROM STDIN (FORMAT binary)")
 		if err := errors.Join(err, file.Close()); err != nil {
 			return err
 		}
 	}
-	objects, err := snapshotObjects(ctx, tx)
-	if err != nil || len(objects) != len(manifest.Objects) || !equalObjects(objects, manifest.Objects) {
-		return errors.New("snapshot object index does not match the database")
-	}
-	projectIDs, err := snapshotProjectIDs(ctx, tx)
-	if err != nil {
+	if err := validateWebRestoreIndex(ctx, tx, manifest.Objects); err != nil {
 		return err
+	}
+	if state.git != nil {
+		projectIDs, err := snapshotProjectIDs(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if err := state.restoreRepositories(ctx, root, manifest.Repositories, projectIDs); err != nil {
+			return err
+		}
+	} else {
+		var legacyData bool
+		if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM reviews) OR EXISTS(SELECT 1 FROM lfs_objects)").Scan(&legacyData); err != nil {
+			return err
+		}
+		if legacyData {
+			return errors.New("Git configuration is required to restore existing Git collaboration data")
+		}
 	}
 
-	if err := state.restoreRepositories(ctx, root, manifest.Repositories, projectIDs); err != nil {
-		return err
-	}
 	for _, object := range manifest.Objects {
 		if err := state.restoreBlob(ctx, root, object); err != nil {
 			return err
@@ -282,6 +349,9 @@ func (state snapshotState) restore(ctx context.Context, folder string) error {
 		return err
 	}
 
+	if err := restoreWebState(ctx, tx); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 

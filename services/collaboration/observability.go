@@ -10,10 +10,11 @@ import (
 )
 
 type routeCounters struct {
-	Requests     uint64 `json:"requests"`
-	ClientErrors uint64 `json:"client_errors"`
-	ServerErrors uint64 `json:"server_errors"`
-	TotalMillis  int64  `json:"total_milliseconds"`
+	Requests      uint64 `json:"requests"`
+	ClientErrors  uint64 `json:"client_errors"`
+	ServerErrors  uint64 `json:"server_errors"`
+	ResponseBytes uint64 `json:"response_bytes"`
+	TotalMillis   int64  `json:"total_milliseconds"`
 }
 
 type serviceMetrics struct {
@@ -21,7 +22,7 @@ type serviceMetrics struct {
 	routes map[string]routeCounters
 }
 
-func (metrics *serviceMetrics) record(route string, status int, elapsed time.Duration) {
+func (metrics *serviceMetrics) record(route string, status int, elapsed time.Duration, bytes uint64) {
 	metrics.mu.Lock()
 	defer metrics.mu.Unlock()
 
@@ -30,6 +31,7 @@ func (metrics *serviceMetrics) record(route string, status int, elapsed time.Dur
 	}
 	counts := metrics.routes[route]
 	counts.Requests++
+	counts.ResponseBytes += bytes
 	counts.TotalMillis += elapsed.Milliseconds()
 	switch {
 	case status >= 500:
@@ -54,6 +56,7 @@ func (metrics *serviceMetrics) snapshot() map[string]routeCounters {
 type responseStatus struct {
 	http.ResponseWriter
 	status int
+	bytes  uint64
 }
 
 func (tracked *responseStatus) Unwrap() http.ResponseWriter { return tracked.ResponseWriter }
@@ -69,7 +72,9 @@ func (tracked *responseStatus) Write(raw []byte) (int, error) {
 	if tracked.status == 0 {
 		tracked.status = http.StatusOK
 	}
-	return tracked.ResponseWriter.Write(raw)
+	n, err := tracked.ResponseWriter.Write(raw)
+	tracked.bytes += uint64(n)
+	return n, err
 }
 
 func (s *Server) serveObserved(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +93,7 @@ func (s *Server) serveObserved(w http.ResponseWriter, r *http.Request) {
 	if route == "" {
 		route = "unmatched"
 	}
-	s.metrics.record(route, status, elapsed)
+	s.metrics.record(route, status, elapsed, observed.bytes)
 	if status >= 400 {
 		slog.Info("collaboration response", "request_id", requestID, "route", route, "status", status, "duration_ms", elapsed.Milliseconds())
 	}
@@ -131,6 +136,28 @@ func (s *Server) operations(w http.ResponseWriter, r *http.Request, session Sess
 		return
 	}
 
+	mediaRows, err := s.pool.Query(ctx, `SELECT state,count(*) FROM web_media_versions GROUP BY state`)
+	if err != nil {
+		internal(w, "web_media_counters", err)
+		return
+	}
+	mediaStates, err := pgx.CollectRows(mediaRows, pgx.RowToStructByName[renderCount])
+	if err != nil {
+		internal(w, "read_web_media_counters", err)
+		return
+	}
+	var mediaBytes, waitingMillis int64
+	err = s.pool.QueryRow(ctx, `SELECT
+ COALESCE((SELECT sum(original_bytes+playback_bytes+peaks_bytes)::bigint FROM web_media_versions WHERE state='ready'),0),
+ COALESCE((SELECT (EXTRACT(EPOCH FROM (now()-min(v.created_at)))*1000)::bigint
+ FROM web_media_jobs j JOIN web_media_versions v ON v.id=j.version_id WHERE j.finished_at IS NULL),0)`).
+		Scan(&mediaBytes, &waitingMillis)
+	if err != nil {
+		internal(w, "web_media_usage", err)
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"requests": s.metrics.snapshot(), "lfs_objects": lfsObjects,
-		"lfs_bytes": lfsBytes, "reviews": reviewVersions, "renders": renders})
+		"lfs_bytes": lfsBytes, "reviews": reviewVersions, "renders": renders, "web_media": mediaStates,
+		"web_media_bytes": mediaBytes, "oldest_unfinished_media_ms": waitingMillis})
 }

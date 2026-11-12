@@ -52,9 +52,12 @@ func RunMaintenance(ctx context.Context, pool *pgxpool.Pool, settings Maintenanc
 	if err := Migrate(ctx, pool); err != nil {
 		return errors.New("maintenance schema migration failed")
 	}
-	git, err := NewGitRepositories(ctx, settings.Git)
-	if err != nil {
-		return err
+	var git *GitRepositories
+	if settings.Git != (GitConfig{}) {
+		git, err = NewGitRepositories(ctx, settings.Git)
+		if err != nil {
+			return err
+		}
 	}
 	blobs, err := newS3Store(ctx, settings.S3, settings.AllowLoopbackHTTP)
 	if err != nil {

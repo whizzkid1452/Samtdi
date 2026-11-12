@@ -27,6 +27,24 @@ func validSnapshotObject(object snapshotObject) bool {
 		return false
 	}
 	parts := strings.Split(object.Key, "/")
+	if parts[0] == "web" {
+		if object.Bytes == 0 || object.Bytes > webUploadLimit {
+			return false
+		}
+		if len(parts) == 4 && parts[1] == "incoming" {
+			return uuidPattern.MatchString(parts[2]) && uuidPattern.MatchString(parts[3])
+		}
+		if len(parts) != 6 || parts[1] != "versions" || !uuidPattern.MatchString(parts[2]) ||
+			!uuidPattern.MatchString(parts[3]) || !uuidPattern.MatchString(parts[4]) {
+			return false
+		}
+		switch parts[5] {
+		case "source.wav", "source.mp3", "playback.wav", "peaks.json":
+			return true
+		default:
+			return false
+		}
+	}
 	if len(parts) != 4 || !uuidPattern.MatchString(parts[1]) || parts[3] != object.SHA256 {
 		return false
 	}
@@ -92,7 +110,7 @@ func readSnapshot(root string) (snapshotManifest, error) {
 		return snapshotManifest{}, err
 	}
 	var manifest snapshotManifest
-	if err := json.Unmarshal(data, &manifest); err != nil || manifest.Version != 1 || len(manifest.Tables) != len(snapshotTables) {
+	if err := json.Unmarshal(data, &manifest); err != nil || (manifest.Version != 1 && manifest.Version != 2) || len(manifest.Tables) != len(tablesForSnapshot(manifest.Version)) {
 		return snapshotManifest{}, errors.New("invalid collaboration snapshot manifest")
 	}
 
@@ -106,7 +124,7 @@ func readSnapshot(root string) (snapshotManifest, error) {
 		}
 		return nil
 	}
-	for i, table := range snapshotTables {
+	for i, table := range tablesForSnapshot(manifest.Version) {
 		if err := verify(manifest.Tables[i], filepath.Join("db", table+".copy")); err != nil {
 			return snapshotManifest{}, err
 		}
