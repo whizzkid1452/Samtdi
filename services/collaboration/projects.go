@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
@@ -27,9 +28,10 @@ func (role Role) canWrite() bool {
 }
 
 type project struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	Role  Role   `json:"role"`
+	ID         string     `json:"id"`
+	Title      string     `json:"title"`
+	Role       Role       `json:"role"`
+	ArchivedAt *time.Time `json:"archived_at,omitempty"`
 }
 
 type member struct {
@@ -68,7 +70,7 @@ func requireRole(w http.ResponseWriter, role Role, err error, allowed bool) bool
 }
 
 func (s *Server) listProjects(w http.ResponseWriter, r *http.Request, session Session) {
-	rows, err := s.pool.Query(r.Context(), `SELECT p.id::text AS id, p.title, m.role FROM projects p
+	rows, err := s.pool.Query(r.Context(), `SELECT p.id::text AS id, p.title, m.role, p.archived_at FROM projects p
  JOIN memberships m ON m.project_id = p.id WHERE m.account_id = $1 ORDER BY p.created_at, p.id`, session.AccountID)
 	if err != nil {
 		internal(w, "list_projects", err)
@@ -99,8 +101,9 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request, session S
 	}
 
 	created := project{Title: title, Role: Owner}
-	err := s.pool.QueryRow(r.Context(), `WITH created AS (INSERT INTO projects (title) VALUES ($1) RETURNING id)
- INSERT INTO memberships (project_id, account_id, role) SELECT id, $2, 'owner' FROM created
+	err := s.pool.QueryRow(r.Context(), `WITH created AS (INSERT INTO projects (title) VALUES ($1) RETURNING id),
+ member AS (INSERT INTO memberships (project_id, account_id, role) SELECT id, $2, 'owner' FROM created RETURNING project_id)
+ INSERT INTO web_activity(project_id, actor_id, action, subject_id) SELECT project_id, $2, 'project.created', project_id FROM member
  RETURNING project_id::text`, title, session.AccountID).Scan(&created.ID)
 	if err != nil {
 		internal(w, "create_project", err)
@@ -181,6 +184,10 @@ func (s *Server) changeMember(w http.ResponseWriter, r *http.Request, session Se
 		return
 	}
 
+	if !requireActiveProject(w, ctx, tx, projectID) {
+		return
+	}
+
 	targetRole, err := readRole(ctx, tx, projectID, accountID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		problem(w, http.StatusNotFound, "member_not_found")
@@ -212,6 +219,11 @@ func (s *Server) changeMember(w http.ResponseWriter, r *http.Request, session Se
 	}
 	if err != nil {
 		internal(w, "write_membership", err)
+		return
+	}
+	if err := appendWebActivity(ctx, tx, projectID, session.AccountID, "membership.changed", accountID,
+		map[string]any{"role": input.Role, "removed": r.Method == http.MethodDelete}); err != nil {
+		internal(w, "record_membership_change", err)
 		return
 	}
 	if err := tx.Commit(ctx); err != nil {

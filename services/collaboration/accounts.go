@@ -29,9 +29,20 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 	var projectID string
 	var role Role
 	if inviteHash != nil {
-		err := tx.QueryRow(ctx, `SELECT project_id::text, role FROM invitations
-  WHERE token_hash = $1 AND email = $2 AND expires_at > now() AND accepted_by IS NULL AND revoked_at IS NULL
-  FOR UPDATE`, inviteHash, who.Email).Scan(&projectID, &role)
+		err := tx.QueryRow(ctx, `SELECT project_id::text FROM invitations WHERE token_hash=$1`, inviteHash).Scan(&projectID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", errInvitationRejected
+		}
+		if err != nil {
+			return "", err
+		}
+		if err := lockProject(ctx, tx, projectID); err != nil {
+			return "", err
+		}
+		err = tx.QueryRow(ctx, `SELECT role FROM invitations
+  WHERE token_hash=$1 AND email=$2 AND expires_at>now() AND accepted_by IS NULL AND revoked_at IS NULL
+  AND EXISTS (SELECT 1 FROM projects p WHERE p.id=invitations.project_id AND p.archived_at IS NULL)
+  FOR UPDATE`, inviteHash, who.Email).Scan(&role)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", errInvitationRejected
 		}
@@ -75,6 +86,9 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 			return "", err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE invitations SET accepted_by = $2 WHERE token_hash = $1`, inviteHash, accountID); err != nil {
+			return "", err
+		}
+		if err := appendWebActivity(ctx, tx, projectID, accountID, "invitation.accepted", accountID, nil); err != nil {
 			return "", err
 		}
 	}
