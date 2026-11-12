@@ -1,193 +1,322 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { api, describeError } from "../lib/api";
+import type { components } from "../lib/api-types";
+import { projectHref, taskHref, versionLink } from "../lib/routes";
+import { TaskEditor, statuses, statusLabel, type Status, type Task, type TaskChange, type TaskNote } from "./task-editor";
 import { timecode } from "./version-review";
 import type { Member, Project } from "./workspace";
 
-const columns = [
-  ["todo", "할 일"], ["progress", "진행 중"], ["review", "검토 요청"], ["done", "완료"],
-] as const;
-type Status = typeof columns[number][0];
-export type LinkedNote = { id: string; version_id: string; start_ms: number; body: string; resolved: boolean; deleted: boolean; revision: number };
-export type Task = {
-  id: string; title: string; description: string; status: Status; assignee_id: string;
-  due_on: string; result_version_id: string; review_text: string; position: number;
-  archived: boolean; revision: number; notes: LinkedNote[];
-};
-type Options = { notes: LinkedNote[]; versions: { id: string; filename: string }[] };
-type Selection = { task?: Task; status?: Status; position?: number; note?: string };
+type Counts = Record<Status, number>;
+type TaskSelection = { task?: Task; change?: TaskChange };
+const pageSize = 100;
 
 export function todayInSeoul() {
   return new Intl.DateTimeFormat("sv-SE", { dateStyle: "short", timeZone: "Asia/Seoul" }).format(new Date());
 }
 
-function taskInput(task: Task, extra: object = {}) {
-  return {
-    title: task.title, description: task.description, status: task.status, assignee_id: task.assignee_id,
-    due_on: task.due_on, result_version_id: task.result_version_id, review_text: task.review_text,
-    archived: task.archived, revision: task.revision, note_ids: task.notes.map(({ id }) => id), ...extra,
-  };
+function taskFilters(query: URLSearchParams) {
+  const params = new URLSearchParams();
+  const search = query.get("q");
+  const status = query.get("status");
+  const assignee = query.get("assignee");
+  const due = query.get("due");
+  const view = query.get("view");
+  if (search) params.set("q", search.slice(0, 200));
+  if (status && statuses.some(([value]) => value === status)) params.set("status", status);
+  if (assignee && (assignee === "unassigned" || /^[0-9a-f-]{36}$/.test(assignee))) params.set("assignee", assignee);
+  if (due && ["late", "soon", "none"].includes(due)) params.set("due", due);
+  if (query.get("archived") === "true") params.set("archived", "true");
+  if (view === "board") params.set("view", view);
+  return params;
 }
 
-function fetchBoard(base: string, signal?: AbortSignal) {
-  return Promise.all([
-    api<Task[]>(base + "/tasks", { signal }), api<Member[]>(base + "/members", { signal }),
-    api<Options>(base + "/task-options", { signal }),
-  ]);
-}
-
-export function TaskBoard({ project, initialNote, onChange }: { project: Project; initialNote?: string; onChange?: () => void }) {
-  const base = `/v1/projects/${project.id}`;
-  const canWrite = project.role !== "reviewer" && !project.archived_at;
-  const [tasks, setTasks] = useState<Task[]>([]);
+function useMembers(base: string) {
   const [members, setMembers] = useState<Member[]>([]);
-  const [options, setOptions] = useState<Options>();
-  const [selection, setSelection] = useState<Selection | null>(initialNote ? { note: initialNote } : null);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
+  useEffect(() => {
+    const request = new AbortController();
 
-  const show = useCallback(([result, team, links]: Awaited<ReturnType<typeof fetchBoard>>) => {
-    setTasks(result);
-    setHasMore(result.length === 100);
-    setMembers(team);
-    setOptions(links);
-  }, []);
+    api<Member[]>(base + "/members", { signal: request.signal }).then((rows) => {
+      if (!request.signal.aborted) setMembers(rows);
+    }).catch((cause) => { if (!request.signal.aborted) setError(describeError(cause)); });
+    return () => request.abort();
+  }, [base]);
+  return { members, error };
+}
+
+export function TaskBoard({ project, initialNote }: { project: Project; initialNote?: string }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const query = useSearchParams();
+  const filters = taskFilters(new URLSearchParams(query));
+  const board = filters.get("view") === "board";
+  const [input, setInput] = useState(filters.get("q") ?? "");
+  const [selection, setSelection] = useState<TaskSelection>();
+  const [seedNote, setSeedNote] = useState<TaskNote>();
+  const [error, setError] = useState("");
+  const [counts, setCounts] = useState<Counts>();
+  const [revision, setRevision] = useState(0);
+  const base = "/v1/projects/" + project.id;
+  const { members, error: memberError } = useMembers(base);
+  const canWrite = project.role !== "reviewer" && !project.archived_at;
+  const detailQuery = filters.size ? "?" + filters : "";
+  const apiFilters = new URLSearchParams(filters);
+  apiFilters.delete("view");
+  if (!apiFilters.has("archived")) apiFilters.set("archived", "false");
+  const queryString = apiFilters.toString();
+
+  useEffect(() => {
+    if (!initialNote || !canWrite) return;
+    const request = new AbortController();
+
+    api<components["schemas"]["TaskOptions"]>(base + "/task-options?note=" + encodeURIComponent(initialNote), { signal: request.signal })
+      .then(({ notes }) => {
+        if (request.signal.aborted) return;
+        if (notes[0] && !notes[0].deleted) { setSeedNote(notes[0]); setSelection({}); }
+        else setError("연결할 피드백을 찾을 수 없습니다.");
+      })
+      .catch((cause) => { if (!request.signal.aborted) setError(describeError(cause)); });
+    return () => request.abort();
+  }, [base, canWrite, initialNote]);
 
   useEffect(() => {
     const request = new AbortController();
-    fetchBoard(base, request.signal).then((result) => {
-      if (!request.signal.aborted) show(result);
+
+    api<Counts>(base + "/task-counts?" + queryString, { signal: request.signal }).then((value) => {
+      if (!request.signal.aborted) setCounts(value);
     }).catch((cause) => { if (!request.signal.aborted) setError(describeError(cause)); });
     return () => request.abort();
-  }, [base, show]);
+  }, [base, queryString, revision]);
 
-  async function load() {
-    show(await fetchBoard(base));
+  function href(name: string, value: string) {
+    const params = new URLSearchParams(filters);
+    if (value) params.set(name, value);
+    else params.delete(name);
+    return pathname + (params.size ? "?" + params : "");
   }
 
-  async function persist(task: Task | undefined, data: object) {
-    setBusy(true);
-    setError("");
-    try {
-      await api(base + "/tasks" + (task ? "/" + task.id : ""), {
-        method: task ? "PUT" : "POST", body: JSON.stringify(data),
-      });
-      await load();
-      setSelection(null);
-      onChange?.();
-    } catch (cause) {
-      setError(describeError(cause));
-    } finally {
-      setBusy(false);
-    }
+  function close() {
+    setSelection(undefined);
+    setSeedNote(undefined);
+    if (initialNote) router.replace(pathname + detailQuery);
   }
 
-  function card(task: Task, index: number, lane: Task[]) {
-    const owner = members.find((member) => member.account_id === task.assignee_id);
-    const late = task.due_on && task.due_on < todayInSeoul() && task.status !== "done";
-    return <article className="task-card" key={task.id} draggable={canWrite && !task.archived}
-      onDragStart={(event) => event.dataTransfer.setData("text/plain", task.id)}>
-      <h4>{task.title}</h4>
-      {task.description && <p className="message-body">{task.description}</p>}
-      <p className={late ? "error" : "muted"}>{owner?.email ?? "미할당"}{task.due_on ? " · " + task.due_on : ""}{late ? " · 지연" : ""}</p>
-      {task.notes.map((note) => <a key={note.id} href={"/?" + new URLSearchParams({
-        project: project.id, version: note.version_id, note: note.id, at: String(note.start_ms),
-      })}>{timecode(note.start_ms)} {note.deleted ? "삭제된 노트" : "노트"} </a>)}
-      {task.result_version_id && <a href={"/?" + new URLSearchParams({ project: project.id, version: task.result_version_id })}>결과 버전</a>}
-      {task.review_text && <p className="message-body">{task.review_text}</p>}
-      {canWrite && <div className="row wrap">
-        <button onClick={() => setSelection({ task })}>카드 편집</button>
-        <button disabled={!index || busy} aria-label={task.title + " 위로"} onClick={() => {
-          const prior = lane[index - 1];
-          if (prior) setSelection({ task, position: prior.position });
-        }}>위로</button>
-        <button onClick={() => setSelection({ task })}>{task.archived ? "복원 설정" : "상태·보관 설정"}</button>
-      </div>}
+  function openDetail(id: string) {
+    router.push(taskHref(project.id, id) + detailQuery);
+  }
+
+  function taskCard(task: Task, previous?: Task) {
+    const link = taskHref(project.id, task.id) + detailQuery;
+    const assignee = members.find(({ account_id }) => account_id === task.assignee_id);
+    const late = task.due_on && task.status !== "done" && task.due_on < todayInSeoul();
+
+    return <article className={board ? "task-card" : "task-list-row"} draggable={board && canWrite && !task.archived}
+      onDragStart={(event) => {
+        event.dataTransfer.setData("text/plain", task.id);
+        event.dataTransfer.effectAllowed = "move";
+      }}>
+      <Link href={link} className="resource-title">{task.title}</Link>
+      {!board && <span className="status-label">{statusLabel(task.status)}</span>}
+      <span className="muted">{assignee?.email ?? "미할당"}</span>
+      <span className={late ? "error" : "muted"}>{task.due_on || "마감 없음"}{late ? " · 지연" : ""}</span>
+      <span className="muted">피드백 {task.notes.length}</span>
+      {canWrite && <details className="task-menu">
+        <summary aria-label={task.title + " 관리"}>더 보기</summary>
+        <div className="row wrap">
+          {previous && <button type="button" onClick={() => setSelection({ task, change: { position: previous.position } })}>위로 이동</button>}
+          {statuses.filter(([value]) => value !== task.status).map(([value, label]) => <button type="button" key={value}
+            onClick={() => setSelection({ task, change: { status: value } })}>{label}으로 이동</button>)}
+          <button type="button" onClick={() => setSelection({ task, change: { archived: !task.archived } })}>{task.archived ? "복원" : "보관"}</button>
+        </div>
+      </details>}
     </article>;
   }
 
-  return <section className="panel" id="task-board" aria-label="작업 보드">
-    <div className="row spread"><h2>작업 보드</h2>{canWrite && <button className="primary" onClick={() => setSelection({})}>카드 만들기</button>}</div>
-    {error && <div role="alert" className="row wrap error">{error}
-      <button onClick={() => void load().then(() => { setSelection(null); setError(""); }).catch((cause) => setError(describeError(cause)))}>최신 상태 보기</button>
-    </div>}
-    {canWrite && selection && options && <TaskForm key={JSON.stringify(selection)} selection={selection} options={options} members={members}
-      busy={busy} close={() => setSelection(null)} save={(data) => void persist(selection.task, data)} />}
-    <div className="board">
-      {columns.map(([status, label]) => {
-        const lane = tasks.filter((task) => task.status === status && !task.archived);
-        return <section key={status} aria-label={label} className="lane" onDragOver={(event) => { if (canWrite) event.preventDefault(); }}
-          onDrop={(event) => {
+  async function drop(id: string, status: Status) {
+    try {
+      const task = await api<Task>(base + "/tasks/" + encodeURIComponent(id));
+      if (task.status !== status && !task.archived) setSelection({ task, change: { status } });
+    } catch (cause) {
+      setError(describeError(cause));
+    }
+  }
+
+  return <section id="task-board" aria-label="작업">
+    <div className="row spread wrap section-header">
+      <h2 className="section-title">작업</h2>
+      {canWrite && <button className="primary" onClick={() => setSelection({})}>새 작업</button>}
+    </div>
+    <div className="row wrap">
+      <div className="segmented" aria-label="작업 보기">
+        <Link className="button" href={href("view", "")} aria-current={!board ? "page" : undefined}>목록</Link>
+        <Link className="button" href={href("view", "board")} aria-current={board ? "page" : undefined}>보드</Link>
+      </div>
+      <form className="row wrap" onSubmit={(event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        router.push(href("q", input.trim()));
+      }}>
+        <input type="search" aria-label="작업 검색" placeholder="작업 검색" maxLength={200} value={input} onChange={(event) => setInput(event.target.value)} />
+        <button>검색</button>
+      </form>
+    </div>
+    <div className="row wrap filter-bar">
+      <label>상태 <select value={filters.get("status") ?? ""} onChange={(event) => router.push(href("status", event.target.value))}>
+        <option value="">전체</option>{statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+      </select></label>
+      <label>담당자 <select value={filters.get("assignee") ?? ""} onChange={(event) => router.push(href("assignee", event.target.value))}>
+        <option value="">전체</option><option value="unassigned">미할당</option>
+        {members.map(({ account_id, email }) => <option key={account_id} value={account_id}>{email}</option>)}
+      </select></label>
+      <label>마감 <select value={filters.get("due") ?? ""} onChange={(event) => router.push(href("due", event.target.value))}>
+        <option value="">전체</option><option value="soon">7일 내</option><option value="late">지연</option><option value="none">마감 없음</option>
+      </select></label>
+      <label className="row"><input type="checkbox" checked={filters.get("archived") === "true"}
+        onChange={(event) => router.push(href("archived", event.target.checked ? "true" : ""))} />보관된 작업</label>
+      {filters.size > (board ? 1 : 0) && <Link href={pathname + (board ? "?view=board" : "")}>필터 초기화</Link>}
+    </div>
+    {(error || memberError) && <p role="alert" className="error">{error || memberError}</p>}
+    {board ? <div className="board">
+      {statuses.filter(([value]) => !filters.get("status") || filters.get("status") === value).map(([value, label]) => {
+        const lane = new URLSearchParams(queryString);
+        lane.set("status", value);
+        return <section className="lane" key={value} aria-label={label} onDragOver={canWrite ? (event) => event.preventDefault() : undefined}
+          onDrop={canWrite ? (event) => {
             event.preventDefault();
-            const task = tasks.find((item) => item.id === event.dataTransfer.getData("text/plain"));
-            if (canWrite && task && task.status !== status) setSelection({ task, status });
-          }}>
-          <h3>{label} <span className="muted">{lane.length}</span></h3>
-          {lane.map((task, index) => card(task, index, lane))}
+            const id = event.dataTransfer.getData("text/plain");
+            if (/^[0-9a-f-]{36}$/.test(id)) void drop(id, value);
+          } : undefined}>
+          <h3>{label} {counts && <span className="muted">{counts[value]}</span>}</h3>
+          <TaskRows key={lane.toString() + ":" + revision} path={base + "/tasks?" + lane} render={taskCard} />
         </section>;
       })}
-    </div>
-    {tasks.some((task) => task.archived) && <details><summary>보관된 카드</summary>
-      {tasks.filter((task) => task.archived).map((task) => card(task, 0, []))}
-    </details>}
-    {hasMore && <button onClick={() => {
-      const cursor = tasks.at(-1)?.id;
-      if (!cursor) return;
-      void api<Task[]>(base + "/tasks?after=" + cursor).then((rows) => {
-        setTasks((old) => [...old, ...rows.filter((row) => !old.some((task) => task.id === row.id))]);
-        setHasMore(rows.length === 100);
-      }).catch((cause) => setError(describeError(cause)));
-    }}>카드 더 보기</button>}
+    </div> : <div className="task-list">
+      <TaskRows key={queryString + ":" + revision} path={base + "/tasks?" + queryString} render={taskCard} />
+    </div>}
+    {selection && canWrite && <TaskEditor base={base} members={members} task={selection.task} seedNote={seedNote} change={selection.change}
+      close={close} saved={(id) => {
+        close();
+        setRevision((value) => value + 1);
+        if (!selection.task) openDetail(id);
+      }} />}
   </section>;
 }
 
-function TaskForm({ selection, options, members, busy, close, save }: {
-  selection: Selection; options: Options; members: Member[]; busy: boolean;
-  close: () => void; save: (data: object) => void;
-}) {
-  const task = selection.task;
-  const [status, setStatus] = useState<Status>(selection.status ?? task?.status ?? "todo");
-  const [selected, setSelected] = useState<string[]>(task?.notes.map(({ id }) => id) ?? (selection.note ? [selection.note] : []));
-  const linked = [...options.notes, ...(task?.notes ?? []).filter((note) => !options.notes.some(({ id }) => id === note.id))];
-  const unresolved = linked.filter((note) => selected.includes(note.id) && !note.resolved && !note.deleted);
-  const initialBody = linked.find(({ id }) => id === selection.note)?.body ?? "";
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const fields = new FormData(event.currentTarget);
-    const data = {
-      title: fields.get("title"), description: fields.get("description"), status,
-      assignee_id: fields.get("assignee"), due_on: fields.get("due_on"),
-      result_version_id: fields.get("result"), review_text: fields.get("review"),
-      revision: task?.revision ?? 0, archived: fields.has("archived"), position: selection.position,
-      note_ids: selected, confirm_notes: fields.has("confirm") ? unresolved.map(({ id, revision }) => ({ id, revision })) : [],
-    };
-    save(task ? taskInput(task, data) : data);
+function TaskRows({ path, render }: { path: string; render: (task: Task, previous?: Task) => ReactNode }) {
+  const [rows, setRows] = useState<Task[]>();
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [more, setMore] = useState(false);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    const request = new AbortController();
+
+    api<Task[]>(path, { signal: request.signal }).then((value) => {
+      if (request.signal.aborted) return;
+      setRows(value);
+      setMore(value.length === pageSize);
+    }).catch((cause) => { if (!request.signal.aborted) setError(describeError(cause)); });
+    return () => request.abort();
+  }, [attempt, path]);
+
+  async function loadMore() {
+    const cursor = rows?.at(-1)?.id;
+    if (!cursor || loading) return;
+    setLoading(true);
+    try {
+      const next = await api<Task[]>(path + "&after=" + cursor);
+      setRows((previous) => [...(previous ?? []), ...next.filter((task) => !previous?.some(({ id }) => id === task.id))]);
+      setMore(next.length === pageSize);
+    } catch (cause) {
+      setError(describeError(cause));
+    } finally {
+      setLoading(false);
+    }
   }
 
-  return <form className="task-form" onSubmit={submit}>
-    <h3>{task ? "카드 편집" : "새 작업 카드"}</h3>
-    <div className="form-grid">
-      <label>카드 제목<input name="title" defaultValue={task?.title ?? initialBody.slice(0, 160)} maxLength={160} required /></label>
-      <label>작업 상태<select value={status} onChange={(event) => setStatus(event.target.value as Status)}>{columns.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
-      <label>담당자<select name="assignee" defaultValue={task?.assignee_id ?? ""}><option value="">미할당</option>
-        {members.filter((member) => member.role !== "reviewer").map((member) => <option key={member.account_id} value={member.account_id}>{member.email}</option>)}</select></label>
-      <label>마감일<input name="due_on" type="date" defaultValue={task?.due_on ?? ""} /></label>
-      <label>작업 설명<textarea name="description" maxLength={4000} defaultValue={task?.description ?? ""} /></label>
-      <label>검토 설명<textarea name="review" maxLength={2000} defaultValue={task?.review_text ?? ""} /></label>
-      <label>결과 버전<select name="result" defaultValue={task?.result_version_id ?? ""}><option value="">선택 안 함</option>
-        {task?.result_version_id && !options.versions.some(({ id }) => id === task.result_version_id) && <option value={task.result_version_id}>기존 결과 버전</option>}
-        {options.versions.map((version) => <option key={version.id} value={version.id}>{version.filename}</option>)}
-      </select></label>
-    </div>
-    {linked.length > 0 && <details open={!!selection.note}><summary>연결할 노트</summary>
-      {linked.map((note) => <label className="row" key={note.id}><input type="checkbox" checked={selected.includes(note.id)} onChange={(event) =>
-        setSelected((ids) => event.target.checked ? [...ids, note.id] : ids.filter((id) => id !== note.id))} />
-        {timecode(note.start_ms)} · {note.deleted ? "삭제된 노트" : note.body}</label>)}
-    </details>}
-    {task && <label className="row"><input type="checkbox" name="archived" defaultChecked={task.archived} /> 카드 보관</label>}
-    {status === "done" && unresolved.length > 0 && <label className="row"><input type="checkbox" name="confirm" required /> 미해결 노트 {unresolved.length}개를 확인하고 완료합니다</label>}
-    <div className="row"><button className="primary" disabled={busy}>카드 저장</button><button type="button" onClick={close}>취소</button></div>
-  </form>;
+  return <>
+    {error && <div className="row wrap" role="alert"><span className="error">{error}</span>
+      <button onClick={() => { setError(""); setAttempt((value) => value + 1); }}>다시 시도</button></div>}
+    {!rows && !error && <p role="status">작업을 불러오는 중</p>}
+    {rows?.length === 0 && <p className="empty muted">표시할 작업이 없습니다.</p>}
+    {rows && rows.length > 0 && <ul className="task-rows">
+      {rows.map((task, index) => {
+        const previous = rows[index - 1];
+        return <li key={task.id}>{render(task, previous?.status === task.status ? previous : undefined)}</li>;
+      })}
+    </ul>}
+    {more && <button disabled={loading} onClick={() => void loadMore()}>작업 더 보기</button>}
+  </>;
+}
+
+export function TaskDetail({ project, taskId }: { project: Project; taskId: string }) {
+  const base = "/v1/projects/" + project.id;
+  const { members, error: memberError } = useMembers(base);
+  const params = taskFilters(new URLSearchParams(useSearchParams()));
+  const [task, setTask] = useState<Task>();
+  const [change, setChange] = useState<TaskChange | null>();
+  const [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
+  const canWrite = project.role !== "reviewer" && !project.archived_at;
+  const back = projectHref(project.id, "tasks") + (params.size ? "?" + params : "");
+
+  useEffect(() => {
+    const request = new AbortController();
+
+    api<Task>(base + "/tasks/" + encodeURIComponent(taskId), { signal: request.signal }).then((value) => {
+      if (!request.signal.aborted) setTask(value);
+    }).catch((cause) => { if (!request.signal.aborted) setError(describeError(cause)); });
+    return () => request.abort();
+  }, [base, revision, taskId]);
+
+  const nextStatus = task ? ({ todo: "progress", progress: "review", review: "done", done: "todo" } as const)[task.status] : undefined;
+  const nextLabel = nextStatus ? ({ progress: "진행 시작", review: "검토 요청", done: "완료", todo: "다시 열기" } as const)[nextStatus] : undefined;
+  const assignee = members.find(({ account_id }) => account_id === task?.assignee_id);
+
+  return <section aria-label="작업 상세">
+    <Link href={back}>작업 목록</Link>
+    {(error || memberError) && <div role="alert"><p className="error">{error || memberError}</p>
+      <button onClick={() => { setError(""); setRevision((value) => value + 1); }}>다시 시도</button></div>}
+    {!task && !error && <p role="status">작업을 불러오는 중</p>}
+    {task && <>
+      <div className="row spread wrap section-header task-detail-title">
+        <h2 className="section-title">{task.title}</h2>
+        {canWrite && <div className="row wrap">
+          {!task.archived && nextStatus && <button className="primary" onClick={() => setChange({ status: nextStatus })}>{nextLabel}</button>}
+          {!task.archived && <button onClick={() => setChange(null)}>작업 편집</button>}
+          <details className="inbox"><summary>관리</summary><div className="inbox-body panel">
+            <button onClick={() => setChange({ archived: !task.archived })}>{task.archived ? "작업 복원" : "작업 보관"}</button>
+          </div></details>
+        </div>}
+      </div>
+      <div className="task-detail-grid">
+        <div>
+          {task.description && <p className="message-body">{task.description}</p>}
+          <h3>연결한 피드백</h3>
+          {task.notes.length === 0 && <p className="muted">연결된 피드백이 없습니다.</p>}
+          <ul className="resource-list">
+            {task.notes.map((note) => <li key={note.id}>
+              <Link href={versionLink(project.id, note.version_id, note.id, note.start_ms)}>{timecode(note.start_ms)} · {note.deleted ? "삭제된 피드백" : note.body}</Link>
+              {note.resolved && <span className="status-label">해결됨</span>}
+            </li>)}
+          </ul>
+          {(task.result_version_id || task.review_text) && <section>
+            <h3>검토 결과</h3>
+            {task.result_version_id && <Link href={versionLink(project.id, task.result_version_id)}>결과 버전 열기</Link>}
+            {task.review_text && <p className="message-body">{task.review_text}</p>}
+          </section>}
+        </div>
+        <dl className="task-metadata">
+          <dt>상태</dt><dd>{statusLabel(task.status)}{task.archived ? " · 보관됨" : ""}</dd>
+          <dt>담당자</dt><dd>{assignee?.email ?? "미할당"}</dd>
+          <dt>마감일</dt><dd>{task.due_on || "마감 없음"}</dd>
+        </dl>
+      </div>
+      {change !== undefined && canWrite && <TaskEditor base={base} members={members} task={task} change={change ?? undefined}
+        close={() => setChange(undefined)} saved={() => { setChange(undefined); setRevision((value) => value + 1); }} />}
+    </>}
+  </section>;
 }

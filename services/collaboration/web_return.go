@@ -54,8 +54,10 @@ func safeWebReturn(raw string) bool {
 
 func safeWebReturnValue(key, value string) bool {
 	switch key {
-	case "project", "version", "note", "task_note", "assignee":
+	case "project", "version", "note", "task_note":
 		return uuidPattern.MatchString(value)
+	case "assignee":
+		return value == "unassigned" || uuidPattern.MatchString(value)
 	case "at":
 		return len(value) <= 10 && value != "" && strings.Trim(value, "0123456789") == ""
 	case "view":

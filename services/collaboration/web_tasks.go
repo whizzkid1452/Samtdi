@@ -96,22 +96,49 @@ func (s *Server) webTaskRoutes() {
 	base := "/v1/projects/{project}"
 	s.mux.HandleFunc("GET "+base+"/tasks", s.withSession(s.listWebTasks))
 	s.mux.HandleFunc("POST "+base+"/tasks", s.withSession(s.saveWebTask))
+	s.mux.HandleFunc("GET "+base+"/tasks/{task}", s.withSession(s.getWebTask))
+	s.mux.HandleFunc("GET "+base+"/task-counts", s.withSession(s.webTaskCounts))
 	s.mux.HandleFunc("PUT "+base+"/tasks/{task}", s.withSession(s.saveWebTask))
 	s.mux.HandleFunc("GET "+base+"/task-options", s.withSession(s.webTaskOptions))
+}
+
+const webTaskFilter = ` WHERE t.project_id=$1
+ AND ($2='' OR strpos(lower(t.title || ' ' || t.description),lower($2))>0)
+ AND ($3='' OR t.status=$3)
+ AND ($4='' OR ($4='unassigned' AND t.assignee_id IS NULL) OR t.assignee_id::text=$4)
+ AND ($5='' OR t.archived=NULLIF($5,'')::boolean)
+ AND ($6='' OR ($6='none' AND t.due_on IS NULL)
+ OR ($6='late' AND t.status<>'done' AND t.due_on<(now() AT TIME ZONE 'Asia/Seoul')::date)
+ OR ($6='soon' AND t.status<>'done' AND t.due_on BETWEEN (now() AT TIME ZONE 'Asia/Seoul')::date AND (now() AT TIME ZONE 'Asia/Seoul')::date+7))`
+
+func webTaskFilterArgs(r *http.Request) ([]any, bool) {
+	query := r.URL.Query()
+	search, status := strings.TrimSpace(query.Get("q")), query.Get("status")
+	assignee, archived, due := query.Get("assignee"), query.Get("archived"), query.Get("due")
+	if (search != "" && !webText(search, 200)) ||
+		(status != "" && status != "todo" && status != "progress" && status != "review" && status != "done") ||
+		(assignee != "" && assignee != "unassigned" && !uuidPattern.MatchString(assignee)) ||
+		(archived != "" && archived != "true" && archived != "false") ||
+		(due != "" && due != "late" && due != "soon" && due != "none") {
+		return nil, false
+	}
+	return []any{r.PathValue("project"), search, status, assignee, archived, due}, true
 }
 
 func (s *Server) listWebTasks(w http.ResponseWriter, r *http.Request, session Session) {
 	if !s.webRead(w, r, session) {
 		return
 	}
+	args, valid := webTaskFilterArgs(r)
 	cursor := r.URL.Query().Get("after")
-	if cursor != "" && !uuidPattern.MatchString(cursor) {
-		problem(w, 400, "invalid_cursor")
+	if !valid || (cursor != "" && !uuidPattern.MatchString(cursor)) {
+		problem(w, 400, "invalid_task_filter")
 		return
 	}
-	rows, err := s.pool.Query(r.Context(), webTaskSelect+` WHERE t.project_id=$1 AND ($2='' OR
- (t.status,t.position,t.id)>(SELECT status,position,id FROM web_tasks WHERE project_id=$1 AND id=NULLIF($2,'')::uuid))
- ORDER BY t.status,t.position,t.id LIMIT 100`, r.PathValue("project"), cursor)
+
+	rows, err := s.pool.Query(r.Context(), webTaskSelect+webTaskFilter+` AND ($7='' OR
+ (t.status,t.position,t.id)>(SELECT status,position,id FROM web_tasks WHERE project_id=$1 AND id=NULLIF($7,'')::uuid))
+ ORDER BY t.status,t.position,t.id LIMIT 100`, append(args, cursor)...)
 	if err != nil {
 		internal(w, "list_web_tasks", err)
 		return
@@ -124,17 +151,84 @@ func (s *Server) listWebTasks(w http.ResponseWriter, r *http.Request, session Se
 	writeJSON(w, 200, value)
 }
 
+func (s *Server) getWebTask(w http.ResponseWriter, r *http.Request, session Session) {
+	if !s.webRead(w, r, session) {
+		return
+	}
+	task := r.PathValue("task")
+	if !uuidPattern.MatchString(task) {
+		problem(w, 404, "resource_not_found")
+		return
+	}
+
+	rows, err := s.pool.Query(r.Context(), webTaskSelect+" WHERE t.project_id=$1 AND t.id=$2", r.PathValue("project"), task)
+	if err != nil {
+		internal(w, "get_web_task", err)
+		return
+	}
+	value, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByPos[webTask])
+	if err != nil {
+		writeWebError(w, "read_web_task", err)
+		return
+	}
+	writeJSON(w, 200, value)
+}
+
+func (s *Server) webTaskCounts(w http.ResponseWriter, r *http.Request, session Session) {
+	if !s.webRead(w, r, session) {
+		return
+	}
+	args, valid := webTaskFilterArgs(r)
+	if !valid {
+		problem(w, 400, "invalid_task_filter")
+		return
+	}
+	rows, err := s.pool.Query(r.Context(), "SELECT status,count(*) FROM web_tasks t"+webTaskFilter+" GROUP BY status", args...)
+	if err != nil {
+		internal(w, "count_web_tasks", err)
+		return
+	}
+	counts, err := pgx.CollectRows(rows, pgx.RowToStructByPos[struct {
+		Status string
+		Count  int64
+	}])
+	if err != nil {
+		internal(w, "read_task_counts", err)
+		return
+	}
+	result := map[string]int64{"todo": 0, "progress": 0, "review": 0, "done": 0}
+	for _, count := range counts {
+		result[count.Status] = count.Count
+	}
+	writeJSON(w, 200, result)
+}
+
 func (s *Server) webTaskOptions(w http.ResponseWriter, r *http.Request, session Session) {
 	if !s.webRead(w, r, session) {
 		return
 	}
+	query := r.URL.Query()
+	search, note, kind, before := strings.TrimSpace(query.Get("q")), query.Get("note"), query.Get("kind"), query.Get("before")
+	if (search != "" && !webText(search, 200)) || (note != "" && !uuidPattern.MatchString(note)) ||
+		(kind != "" && kind != "note" && kind != "version") || (before != "" && (kind == "" || !uuidPattern.MatchString(before))) {
+		problem(w, 400, "invalid_task_options")
+		return
+	}
+
 	var notes, versions json.RawMessage
 	err := s.pool.QueryRow(r.Context(), `SELECT
- COALESCE((SELECT jsonb_agg(item) FROM (SELECT `+webTaskNoteJSON+` AS item FROM web_notes n
- WHERE n.project_id=$1 ORDER BY n.created_at DESC,n.id DESC LIMIT 100) recent),'[]'::jsonb),
- COALESCE((SELECT jsonb_agg(item) FROM (SELECT jsonb_build_object('id',v.id,'filename',v.filename) AS item
- FROM web_media_versions v WHERE v.project_id=$1 AND v.state='ready' ORDER BY v.created_at DESC,v.id DESC LIMIT 100) recent),'[]'::jsonb)`,
-		r.PathValue("project")).Scan(&notes, &versions)
+ COALESCE((SELECT jsonb_agg(item ORDER BY created_at DESC,id DESC) FROM (SELECT `+webTaskNoteJSON+` AS item,n.created_at,n.id FROM web_notes n
+ WHERE n.project_id=$1 AND $4<>'version' AND ($3='' OR n.id=NULLIF($3,'')::uuid)
+ AND ($2='' OR (NOT n.deleted AND strpos(lower(n.body),lower($2))>0))
+ AND ($5='' OR (n.created_at,n.id)<(SELECT created_at,id FROM web_notes WHERE project_id=$1 AND id=NULLIF($5,'')::uuid))
+ ORDER BY n.created_at DESC,n.id DESC LIMIT 100) recent),'[]'::jsonb),
+ COALESCE((SELECT jsonb_agg(item ORDER BY created_at DESC,id DESC) FROM (
+ SELECT jsonb_build_object('id',v.id,'filename',v.filename) AS item,v.created_at,v.id FROM web_media_versions v
+ WHERE v.project_id=$1 AND v.state='ready' AND $4<>'note' AND $3=''
+ AND ($2='' OR strpos(lower(v.filename),lower($2))>0)
+ AND ($5='' OR (v.created_at,v.id)<(SELECT created_at,id FROM web_media_versions WHERE project_id=$1 AND id=NULLIF($5,'')::uuid))
+ ORDER BY v.created_at DESC,v.id DESC LIMIT 100) recent),'[]'::jsonb)`,
+		r.PathValue("project"), search, note, kind, before).Scan(&notes, &versions)
 	if err != nil {
 		internal(w, "read_task_options", err)
 		return

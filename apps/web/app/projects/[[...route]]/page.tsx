@@ -14,5 +14,6 @@ export default async function Projects({ params }: { params: Promise<{ route?: s
   if (tab === "media" && itemId && (route.length === 3 || (route.length === 5 && section === "versions"))) {
     return <ProjectScreen projectId={projectId} tab={tab} itemId={itemId} versionId={versionId} />;
   }
+  if (tab === "tasks" && route.length === 3) return <ProjectScreen projectId={projectId} tab={tab} taskId={itemId} />;
   notFound();
 }

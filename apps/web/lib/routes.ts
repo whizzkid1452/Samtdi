@@ -18,3 +18,14 @@ export function versionHref({ projectId, itemId, versionId, noteId, at }: {
 
   return query.size ? path + "?" + query : path;
 }
+
+export function taskHref(projectId: string, taskId: string) {
+  return projectHref(projectId, "tasks") + "/" + encodeURIComponent(taskId);
+}
+
+export function versionLink(projectId: string, versionId: string, noteId?: string, at?: number) {
+  const query = new URLSearchParams({ project: projectId, version: versionId });
+  if (noteId) query.set("note", noteId);
+  if (at !== undefined) query.set("at", String(at));
+  return "/?" + query;
+}

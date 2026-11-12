@@ -7,7 +7,7 @@ import { api, describeError } from "../lib/api";
 import { projectHref, type ProjectTab } from "../lib/routes";
 import { MediaDetail, MediaLibrary } from "./media-library";
 import { ProjectMembers } from "./project-members";
-import { TaskBoard } from "./task-board";
+import { TaskBoard, TaskDetail } from "./task-board";
 import { ProjectActivity } from "./workspace-activity";
 import { useWorkspace, type Project } from "./workspace";
 
@@ -66,7 +66,7 @@ export function ProjectIndex() {
   </main>;
 }
 
-export function ProjectScreen({ projectId, tab, itemId, versionId }: { projectId: string; tab: ProjectTab; itemId?: string; versionId?: string }) {
+export function ProjectScreen({ projectId, tab, itemId, versionId, taskId }: { projectId: string; tab: ProjectTab; itemId?: string; versionId?: string; taskId?: string }) {
   const { projects, session } = useWorkspace();
   const query = useSearchParams();
   const router = useRouter();
@@ -102,7 +102,8 @@ export function ProjectScreen({ projectId, tab, itemId, versionId }: { projectId
         <MediaDetail key={projectId + ":" + itemId + ":" + (versionId ?? "")} project={project} itemId={itemId} versionId={versionId}
           accountId={session.account_id} initialNote={query.get("note") ?? undefined} initialAt={at === null ? undefined : Number(at)} /> :
         <MediaLibrary key={projectId + ":" + query.toString()} project={project} />)}
-      {tab === "tasks" && <TaskBoard key={projectId} project={project} initialNote={query.get("task_note") ?? undefined} />}
+      {tab === "tasks" && (taskId ? <TaskDetail key={projectId + ":" + taskId} project={project} taskId={taskId} /> :
+        <TaskBoard key={projectId + ":" + query.toString()} project={project} initialNote={query.get("task_note") ?? undefined} />)}
       {tab === "activity" && <ProjectActivity key={projectId} projectId={projectId} revision={0} />}
       {tab === "settings" && <ProjectSettings key={projectId} project={project} />}
     </main>
