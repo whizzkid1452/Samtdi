@@ -1291,6 +1291,58 @@
           }
         }
       }
+    },
+    "/v1/dashboard": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Assigned work and deadline summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dashboard"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected"
+          }
+        }
+      }
+    },
+    "/v1/projects/{project}/activity": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Project change history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Activity"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1670,6 +1722,94 @@
             "type": "string"
           },
           "revision": {
+            "type": "integer"
+          }
+        }
+      },
+      "Activity": {
+        "type": "object",
+        "required": [
+          "id",
+          "action",
+          "subject_id",
+          "actor",
+          "detail",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "subject_id": {
+            "type": "string"
+          },
+          "actor": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "object"
+          },
+          "created_at": {
+            "type": "string"
+          }
+        }
+      },
+      "DashboardTask": {
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "project_title",
+          "title",
+          "status",
+          "due_on"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "project_title": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "due_on": {
+            "type": "string"
+          }
+        }
+      },
+      "Dashboard": {
+        "type": "object",
+        "required": [
+          "tasks",
+          "review_count",
+          "due_soon_count",
+          "late_count"
+        ],
+        "properties": {
+          "tasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DashboardTask"
+            }
+          },
+          "review_count": {
+            "type": "integer"
+          },
+          "due_soon_count": {
+            "type": "integer"
+          },
+          "late_count": {
             "type": "integer"
           }
         }

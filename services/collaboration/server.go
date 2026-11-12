@@ -171,6 +171,7 @@ func (s *Server) routes() {
 	s.webMediaDeliveryRoutes()
 	s.webNoteRoutes()
 	s.webTaskRoutes()
+	s.webActivityRoutes()
 	if s.receive != nil {
 		s.reviewRoutes()
 		s.reviewMediaRoutes()
