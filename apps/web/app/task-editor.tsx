@@ -5,7 +5,7 @@ import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { Dialog } from "./dialog";
 import { timecode } from "./version-review";
-import type { Member } from "./workspace";
+import { useWorkspace, type Member } from "./workspace";
 
 export type Task = components["schemas"]["Task"];
 export type TaskNote = components["schemas"]["TaskNote"];
@@ -22,28 +22,61 @@ export function statusLabel(status: string) {
   return statuses.find(([value]) => value === status)?.[1] ?? status;
 }
 
+type TaskDraft = {
+  title: string; description: string; assignee: string; due: string; status: Status;
+  review: string; resultId: string; notes: TaskNote[]; revision: number;
+};
+
+function readTaskDraft(key: string): TaskDraft | null {
+  try {
+    const draft = JSON.parse(sessionStorage.getItem(key) ?? "null") as TaskDraft | null;
+    return draft && typeof draft.title === "string" && Array.isArray(draft.notes) ? draft : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeTaskDraft(key: string, draft?: TaskDraft) {
+  try {
+    if (draft) sessionStorage.setItem(key, JSON.stringify(draft));
+    else sessionStorage.removeItem(key);
+  } catch {
+    // The mounted form still retains its draft if browser storage is unavailable.
+  }
+}
+
 export function TaskEditor({ base, members, task, seedNote, change, close, saved }: {
   base: string; members: Member[]; task?: Task; seedNote?: TaskNote; change?: TaskChange; close: () => void; saved: (id: string) => void;
 }) {
+  const { session } = useWorkspace();
+  const key = "samtdi-task-draft:" + session.account_id + ":" + base + ":" +
+    (task?.id ?? seedNote?.id ?? "new") + ":" + JSON.stringify(change ?? {});
+  const [restored] = useState(() => readTaskDraft(key));
   const [latest, setLatest] = useState(task);
-  const [title, setTitle] = useState(task?.title ?? seedNote?.body.slice(0, 160) ?? "");
-  const [description, setDescription] = useState(task?.description ?? "");
-  const [assignee, setAssignee] = useState(task?.assignee_id ?? "");
-  const [due, setDue] = useState(task?.due_on ?? "");
-  const [status, setStatus] = useState<Status>(change?.status ?? task?.status ?? "todo");
-  const [review, setReview] = useState(task?.review_text ?? "");
-  const [resultId, setResultId] = useState(task?.result_version_id ?? "");
-  const [notes, setNotes] = useState(task?.notes ?? (seedNote ? [seedNote] : []));
+  const [title, setTitle] = useState(restored?.title ?? task?.title ?? seedNote?.body.slice(0, 160) ?? "");
+  const [description, setDescription] = useState(restored?.description ?? task?.description ?? "");
+  const [assignee, setAssignee] = useState(restored?.assignee ?? task?.assignee_id ?? "");
+  const [due, setDue] = useState(restored?.due ?? task?.due_on ?? "");
+  const [status, setStatus] = useState<Status>(restored?.status ?? change?.status ?? task?.status ?? "todo");
+  const [review, setReview] = useState(restored?.review ?? task?.review_text ?? "");
+  const [resultId, setResultId] = useState(restored?.resultId ?? task?.result_version_id ?? "");
+  const [notes, setNotes] = useState(restored?.notes ?? task?.notes ?? (seedNote ? [seedNote] : []));
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [dirty, setDirty] = useState(!!restored);
   const [error, setError] = useState("");
-  const [hasConflict, setHasConflict] = useState(false);
+  const [hasConflict, setHasConflict] = useState(!!restored && !!task && restored.revision !== task.revision);
   const [hasReadLatest, setHasReadLatest] = useState(false);
   const unresolved = notes.filter((note) => !note.resolved && !note.deleted);
   const archived = change?.archived ?? task?.archived ?? false;
   const heading = !task ? "새 작업" : change?.archived !== undefined ? (archived ? "작업 보관" : "작업 복원")
     : change?.status ? statusLabel(status) : change?.position !== undefined ? "순서 이동" : "작업 편집";
+
+  useEffect(() => {
+    if (!dirty) return;
+    const revision = hasConflict && !hasReadLatest ? (restored?.revision ?? task?.revision ?? 0) : (latest?.revision ?? 0);
+    storeTaskDraft(key, { title, description, assignee, due, status, review, resultId, notes, revision });
+  }, [assignee, description, dirty, due, hasConflict, hasReadLatest, key, latest, notes, restored, resultId, review, status, task, title]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,6 +91,7 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
           confirm_notes: status === "done" && confirm ? unresolved.map(({ id, revision }) => ({ id, revision })) : [],
         }),
       });
+      storeTaskDraft(key);
       saved(result.id);
     } catch (cause) {
       setError(cause instanceof ApiError && cause.code === "review_evidence_required"
@@ -94,9 +128,12 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
   }
 
   return <Dialog title={heading} close={() => {
-    if (!busy && (!dirty || window.confirm("저장하지 않은 변경을 버릴까요?"))) close();
+    if (busy || (dirty && !window.confirm("저장하지 않은 변경을 버릴까요?"))) return;
+    storeTaskDraft(key);
+    close();
   }}>
     <form className="task-editor" onSubmit={submit} onChange={() => setDirty(true)}>
+      {restored && <p className="muted" role="status">이전에 작성하던 내용을 불러왔습니다.</p>}
       {!change && <>
         <label>작업 제목<input autoComplete="off" value={title} required maxLength={160} onChange={(event) => setTitle(event.target.value)} /></label>
         <label>작업 설명<textarea value={description} maxLength={4000} onChange={(event) => setDescription(event.target.value)} /></label>

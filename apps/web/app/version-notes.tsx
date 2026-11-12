@@ -13,7 +13,7 @@ type FeedbackPage = { notes: Note[]; filter: string; more: boolean };
 const pageSize = 100;
 
 export function noteLabel(note: Pick<Note, "start_ms" | "end_ms">) {
-  return timecode(note.start_ms) + (note.end_ms == null ? "" : " – " + timecode(note.end_ms));
+  return timecode(note.start_ms) + (note.end_ms == null ? "" : " ~ " + timecode(note.end_ms));
 }
 
 export function useVersionNotes({ url, linkedNote }: { url: string; linkedNote?: string }) {
