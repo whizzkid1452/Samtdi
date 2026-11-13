@@ -7,7 +7,7 @@ import { api, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { projectHref, taskHref, versionLink } from "../lib/routes";
 import { TaskEditor, statuses, statusLabel, type Status, type Task, type TaskChange, type TaskNote } from "./task-editor";
-import { timecode } from "./version-review";
+import { timecode } from "../lib/timecode";
 import type { Member, Project } from "./workspace";
 
 type Counts = Record<Status, number>;

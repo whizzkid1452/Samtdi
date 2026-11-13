@@ -234,10 +234,10 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
       <button onClick={() => setRefresh((value) => value + 1)}>다시 시도</button></div>}
     {!item && !error && <p role="status">음원을 불러오는 중</p>}
     {item && <>
-      <div className="row spread wrap section-header">
+      <div className="row spread wrap section-header review-header">
         <h2 className="section-title">{item.title}</h2>
         <div className="row wrap">
-          {canEdit && !item.archived_at && <button className="primary" onClick={() => openUpload({ projectId: project.id, itemId })}>수정본 업로드</button>}
+          {canEdit && !item.archived_at && <button onClick={() => openUpload({ projectId: project.id, itemId })}>수정본 업로드</button>}
           {canEdit && <details className="inbox">
             <summary aria-label="음원 관리">관리</summary>
             <div className="inbox-body panel"><div className="row wrap">{version?.state === "ready" && <a className="button" href={base + "/versions/" + version.id + "/files/original"}>원본 다운로드</a>}<button disabled={busy} onClick={() => {
@@ -258,8 +258,8 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
         </select></label>
         {more && <button disabled={busy} onClick={() => void loadMore()}>이전 버전 더 보기</button>}
       </div>}
-      {version && <p className="row wrap muted"><VersionStatus version={version} /><span>{version.filename} · {uploadedAt.format(new Date(version.created_at))}</span>
-        {version.description && <span>{version.description}</span>}</p>}
+      {version?.description && <p className="review-description muted">{version.description}</p>}
+      {version?.state === "failed" && <VersionStatus version={version} />}
       {item.latest && item.latest.id !== version?.id && <Link href={versionHref({ projectId: project.id, itemId, versionId: item.latest.id })} onNavigate={(event) => {
         if (!canLeaveVersion()) event.preventDefault();
       }}>최신 버전 {states[item.latest.state]} 보기</Link>}
