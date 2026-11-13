@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Ayotbi · 프로젝트 리뷰</title>
+    <link rel="stylesheet" href="/review-assets/review.css">
+    <script src="/review-assets/review.js" defer></script>
+</head>
+<body data-project="{{.Project}}" data-review="{{.Review}}">
+<header class="masthead">
+    <a class="brand" href="/review">ayotbi</a>
+    <div class="header-tools"><span>{{.Email}}</span><button id="logout" class="secondary">로그아웃</button></div>
+</header>
+<main>
+    <nav aria-label="현재 위치"><a href="/review">프로젝트</a>{{if .Review}} <span aria-hidden="true">/</span> <a href="/review/{{.Project}}">리뷰 목록</a>{{end}}</nav>
+    <div class="heading"><div><p class="eyebrow">프로젝트 협업</p><h1 id="page-title">{{if .Review}}커밋 리뷰{{else if .Project}}제품 PR{{else}}참여 프로젝트{{end}}</h1></div><span class="badge">멤버 전용</span></div>
+    <p id="feedback" role="status" class="feedback"></p>
+    {{if .Review}}
+    <section class="card summary" aria-labelledby="version-title">
+        <div class="section-head"><h2 id="version-title">검토 버전</h2><span id="review-state" class="badge"></span></div>
+        <div class="versions">
+            <div><span>기준 · 공유 브랜치</span><code id="base-commit"></code></div>
+            <div><span id="source-branch">변경 · 작업 브랜치</span><code id="head-commit"></code></div>
+        </div>
+        <p id="review-note" class="muted"></p>
+        {{if .CanWrite}}<details id="merge-tools"><summary>병합 검증과 해결 선택</summary>
+            <label for="resolutions">해결 선택 JSON</label><textarea id="resolutions" rows="3" placeholder='{"resolutions":[]}'></textarea>
+            <div class="actions"><button id="validate">후보 검증</button>{{if .CanMerge}}<button id="merge" class="secondary">공유 브랜치에 병합</button>{{end}}</div>
+            <pre id="merge-result" hidden></pre>
+        </details>{{end}}
+    </section>
+    <div class="columns">
+        <section class="card" aria-labelledby="diff-title">
+            <div class="section-head"><h2 id="diff-title">음악 변경</h2><span id="diff-count" class="muted"></span></div>
+            <div id="diff-list" class="stack"></div>
+        </section>
+        <section class="card" aria-labelledby="audio-title">
+            <div class="section-head"><h2 id="audio-title">WAV 비교</h2><button id="refresh-media" class="secondary">새로고침</button></div>
+            <p class="muted">같은 범위와 출력 설정의 기준·변경 렌더를 전환합니다.</p>
+            <label for="audio-pair">비교할 렌더 범위</label><select id="audio-pair"></select>
+            <div class="actions"><button id="play-a" class="secondary" disabled>기준 A</button><button id="play-b" class="secondary" disabled>변경 B</button></div>
+            <audio id="audio" controls preload="none" aria-label="선택한 기준 또는 변경 WAV"></audio>
+            <p id="media-state" class="muted" role="status"></p>
+            {{if .CanWrite}}<form id="render-form">
+                <div class="range"><label>시작 (초)<input name="begin" type="number" min="0" step="0.01" value="0" required></label>
+                <label>끝 (초)<input name="end" type="number" min="0.01" step="0.01" value="8" required></label></div>
+                <button type="submit">기준·변경 렌더 요청</button>
+            </form>{{end}}
+        </section>
+    </div>
+    <section class="card" aria-labelledby="comments-title">
+        <h2 id="comments-title">커밋 댓글</h2>
+        <form id="comment-form">
+            <div class="range"><label>댓글 대상<select name="side"><option value="head">변경 커밋</option><option value="base">기준 커밋</option></select></label>
+            <label>음악 위치 (틱)<input name="ticks" type="number" min="0" step="1"></label></div>
+            <label>댓글<textarea name="body" rows="3" maxlength="4000" required></textarea></label>
+            <button type="submit">댓글 기록</button>
+        </form>
+        <div id="comments" class="stack"></div>
+    </section>
+    {{else}}
+    {{if .Project}}{{if .CanWrite}}<section class="card"><h2>새 제품 PR</h2>
+        <form id="create-review"><div class="range"><label>제목<input name="title" maxlength="160" required></label>
+        <label>원격 작업 브랜치<input name="branch" maxlength="256" required></label></div><button type="submit">검토 시작</button></form>
+    </section>{{end}}{{end}}
+    <section class="card"><div id="listing" class="stack"></div></section>
+    {{end}}
+</main>
+</body>
+</html>

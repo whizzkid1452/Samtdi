@@ -1,0 +1,69 @@
+{
+  "assets": {},
+  "audioClips": {},
+  "automation": {},
+  "id": "fixture-song",
+  "masterGainDb": 0.0,
+  "midiClips": {},
+  "name": "공통 검증 곡",
+  "patterns": {},
+  "plugins": {},
+  "routes": {
+    "out-a": {
+      "destinationTrackId": null,
+      "gainDb": 0.0,
+      "kind": "output",
+      "preFader": false,
+      "sourceTrackId": "a"
+    },
+    "out-b": {
+      "destinationTrackId": null,
+      "gainDb": 0.0,
+      "kind": "output",
+      "preFader": false,
+      "sourceTrackId": "b"
+    }
+  },
+  "sampleRateHz": 48000,
+  "schemaVersion": 1,
+  "tempoMap": [
+    {
+      "bpm": 120.0,
+      "id": "tempo-initial",
+      "positionTicks": 0
+    }
+  ],
+  "ticksPerQuarter": 960,
+  "timeSignatures": [
+    {
+      "denominator": 4,
+      "id": "meter-initial",
+      "numerator": 4,
+      "positionTicks": 0
+    }
+  ],
+  "trackOrder": [
+    "a",
+    "b"
+  ],
+  "tracks": {
+    "a": {
+      "gainDb": 0.0,
+      "kind": "audio",
+      "muted": false,
+      "name": "a",
+      "pan": 0.0,
+      "pluginChain": [],
+      "solo": false
+    },
+    "b": {
+      "gainDb": 0.0,
+      "kind": "audio",
+      "muted": false,
+      "name": "b",
+      "pan": 0.25,
+      "pluginChain": [],
+      "solo": false
+    }
+  }
+}
