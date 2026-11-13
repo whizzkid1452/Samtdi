@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { projectHref, versionHref } from "../lib/routes";
 import { timecode } from "../lib/timecode";
+import { readReplyDraft, useFeedbackDraft } from "./feedback-drafts";
+import { submitFeedbackShortcut } from "./feedback-shortcut";
 
 type Message = components["schemas"]["Message"];
 export type Note = components["schemas"]["Note"];
@@ -132,9 +134,10 @@ export function useVersionNotes({ url, linkedNote }: { url: string; linkedNote?:
   };
 }
 
-export function VersionNotes({ feedback, url, projectId, itemId, versionId, accountId, canEdit, writable, seek }: {
+export function VersionNotes({ feedback, url, projectId, itemId, versionId, accountId, canEdit, writable, seek, replyActive, onReply, composer }: {
   feedback: ReturnType<typeof useVersionNotes>; url: string; projectId: string; itemId: string; versionId: string; accountId: string;
   canEdit: boolean; writable: boolean; seek: (position: number) => void;
+  replyActive: boolean; onReply: () => void; composer: ReactNode;
 }) {
   const { notes, selected, filter, busy, error } = feedback;
 
@@ -142,6 +145,10 @@ export function VersionNotes({ feedback, url, projectId, itemId, versionId, acco
     feedback.select(note.id);
     seek(note.start_ms);
   }
+
+  const thread = selected && <FeedbackThread key={selected.id} note={selected} url={url} projectId={projectId} itemId={itemId}
+    versionId={versionId} canEdit={canEdit} accountId={accountId} writable={writable}
+    feedback={feedback} replyActive={replyActive} onReply={onReply} />;
 
   return <aside className="feedback-panel" aria-label="피드백">
     <div className="row spread wrap">
@@ -151,31 +158,48 @@ export function VersionNotes({ feedback, url, projectId, itemId, versionId, acco
         <button aria-pressed={!filter} onClick={() => feedback.setFilter("")}>전체</button>
       </div>
     </div>
+    {composer}
     {error && <div role="alert"><p className="error">{error}</p><button onClick={feedback.retry}>다시 시도</button></div>}
     {!notes && !error && <p role="status">피드백을 불러오는 중</p>}
     {notes?.length === 0 && <p className="muted">{filter ? "미해결 피드백이 없습니다." : "이 버전에 남긴 피드백이 없습니다."}</p>}
     <ul className="feedback-list">
       {notes?.map((note) => <li key={note.id}>
-        <button type="button" aria-expanded={selected?.id === note.id} onClick={() => open(note)}>
-          <span className="feedback-time">{noteLabel(note)}</span>
+        <button type="button" aria-expanded={selected?.id === note.id} onClick={() => selected?.id === note.id ? feedback.select(undefined) : open(note)}>
+          <span className="feedback-meta">
+            <span className="feedback-time">{noteLabel(note)}</span>
+            <span className="muted">{note.email}</span>
+          </span>
           <span className="feedback-summary">{note.deleted ? "삭제된 피드백" : note.body}</span>
-          {note.resolved && <span className="status-label">해결됨</span>}
+          <span className="feedback-meta">
+            {note.resolved && <span className="status-label">해결됨</span>}
+            {note.replies.some(({ deleted }) => !deleted) && <span className="muted">답글 {note.replies.filter(({ deleted }) => !deleted).length}</span>}
+          </span>
         </button>
+        {selected?.id === note.id && thread}
       </li>)}
     </ul>
     {feedback.more && <button disabled={busy} onClick={() => void feedback.loadMore()}>피드백 더 보기</button>}
-    {selected && <FeedbackThread key={selected.id} note={selected} url={url} projectId={projectId} itemId={itemId}
-      versionId={versionId} canEdit={canEdit} accountId={accountId} writable={writable} feedback={feedback} />}
+    {selected && !notes?.some(({ id }) => id === selected.id) && <>
+      <p className="muted">현재 목록 밖의 피드백</p>
+      {thread}
+    </>}
   </aside>;
 }
 
-function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, accountId, writable, feedback }: {
+function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, accountId, writable, feedback, replyActive, onReply }: {
   note: Note; url: string; projectId: string; itemId: string; versionId: string; canEdit: boolean; accountId: string;
   writable: boolean; feedback: ReturnType<typeof useVersionNotes>;
+  replyActive: boolean; onReply: () => void;
 }) {
   const target = url + "/" + note.id;
   const link = versionHref({ projectId, itemId, versionId, noteId: note.id, at: note.start_ms });
-  const [reply, setReply] = useState("");
+  const key = "samtdi-reply:" + accountId + ":" + versionId + ":" + note.id;
+  const { draft: reply, updateDraft, storageError } = useFeedbackDraft({ key, read: () => readReplyDraft(key) });
+  const replyInput = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (replyActive) replyInput.current?.focus();
+  }, [replyActive]);
 
   function editor(message: Message, endpoint: string) {
     if (!writable || message.author_id !== accountId || message.deleted) return null;
@@ -185,16 +209,13 @@ function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, acco
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (await feedback.reply(note, reply)) setReply("");
+    if (reply?.trim() && await feedback.reply(note, reply)) updateDraft(null);
   }
 
   return <section className="feedback-thread" id={"note-" + note.id} aria-label="선택한 피드백">
     <div className="row spread wrap">
       <strong className="feedback-time">{noteLabel(note)}</strong>
-      <button type="button" onClick={() => {
-        if (reply.trim() && !window.confirm("작성 중인 답글을 버릴까요?")) return;
-        feedback.select(undefined);
-      }}>대화 닫기</button>
+      <button type="button" onClick={() => feedback.select(undefined)}>대화 닫기</button>
     </div>
     <p className="muted">{note.email}</p>
     <p className="message-body">{note.deleted ? "삭제된 피드백" : note.body}</p>
@@ -214,10 +235,17 @@ function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, acco
         {editor(entry, target + "/replies/" + entry.id)}
       </li>)}
     </ul>
-    {writable && !note.deleted && <form className="notes-form" onSubmit={submit}>
-      <textarea aria-label="답글" placeholder="답글 쓰기" maxLength={4000} required value={reply} onChange={(event) => setReply(event.target.value)} />
-      <button disabled={feedback.busy || !reply.trim()}>답글 남기기</button>
-    </form>}
+    {storageError && <p className="error" role="alert">{storageError}</p>}
+    {writable && !note.deleted && (replyActive
+      ? <form className="notes-form" onSubmit={submit}>
+        <textarea ref={replyInput} aria-label="답글" placeholder="답글 쓰기" maxLength={4000} required
+          value={reply ?? ""} onChange={(event) => updateDraft(event.target.value)} onKeyDown={submitFeedbackShortcut} />
+        <div className="row wrap">
+          <button disabled={feedback.busy || !reply?.trim()}>답글 남기기</button>
+          {reply?.trim() && <button type="button" disabled={feedback.busy} onClick={() => updateDraft(null)}>답글 초안 버리기</button>}
+        </div>
+      </form>
+      : <button type="button" disabled={feedback.busy} onClick={onReply}>{reply?.trim() ? "답글 계속 작성" : "답글"}</button>)}
   </section>;
 }
 
