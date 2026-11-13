@@ -121,9 +121,9 @@ export function Workspace({ initial }: { initial: Location }) {
               })}>{current.archived_at ? "복원" : "보관"}</button>}
             </div>
             {current.archived_at && <p role="status">보관된 프로젝트입니다. 기존 내용을 열 수 있습니다.</p>}
-            <MediaLibrary key={current.id} project={current} accountId={session.account_id} initialNote={initial.note} initialVersion={current.id === initial.project ? initial.version : undefined} initialAt={initial.at === undefined ? undefined : Number(initial.at)} />
-            <TaskBoard key={current.id} project={current} initialNote={current.id === initial.project ? initial.task_note : undefined} onChange={() => setRevision((value) => value + 1)} />
-            <ProjectActivity key={current.id} projectId={current.id} revision={revision} />
+            <MediaLibrary key={"media-" + current.id} project={current} accountId={session.account_id} initialNote={initial.note} initialVersion={current.id === initial.project ? initial.version : undefined} initialAt={initial.at === undefined ? undefined : Number(initial.at)} />
+            <TaskBoard key={"tasks-" + current.id} project={current} initialNote={current.id === initial.project ? initial.task_note : undefined} onChange={() => setRevision((value) => value + 1)} />
+            <ProjectActivity key={"activity-" + current.id} projectId={current.id} revision={revision} />
             <section className="panel" aria-label="기록 반출">
               <h2>기록 반출</h2>
               <div className="row wrap">
@@ -131,7 +131,7 @@ export function Workspace({ initial }: { initial: Location }) {
                 <a className="button" href={`/v1/projects/${current.id}/export/csv`}>CSV 다운로드</a>
               </div>
             </section>
-            <ProjectMembers key={current.id} project={current} />
+            <ProjectMembers key={"members-" + current.id} project={current} />
           </> : <div className="empty"><h1>프로젝트를 만들어 보세요</h1><p className="muted">프로젝트에서 팀원과 수정본을 공유할 수 있습니다.</p></div>}
         </main>
       </div>
