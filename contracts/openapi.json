@@ -46,6 +46,27 @@
         }
       }
     },
+    "/v1/auth/login": {
+      "get": {
+        "parameters": [
+          {
+            "name": "return_to",
+            "in": "query",
+            "description": "Validated relative workspace or review URL to open after login",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "invite",
+            "in": "query",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "303": { "description": "Redirect to the identity provider" },
+          "400": { "description": "Invalid invitation or return URL" }
+        }
+      }
+    },
     "/v1/me": {
       "get": {
         "responses": {

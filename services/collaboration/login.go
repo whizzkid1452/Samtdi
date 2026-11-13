@@ -66,7 +66,7 @@ func (s *Server) beginLogin(w http.ResponseWriter, r *http.Request) {
 	attempt := loginAttempt{Nonce: randomToken(), Verifier: oauth2.GenerateVerifier()}
 	if r.URL.Path == "/v1/auth/login" {
 		attempt.WebReturn = query.Get("return_to")
-		if attempt.WebReturn != "" && !safeReviewReturn(attempt.WebReturn) {
+		if attempt.WebReturn != "" && !safeWebReturn(attempt.WebReturn) {
 			problem(w, http.StatusBadRequest, "invalid_return_path")
 			return
 		}
