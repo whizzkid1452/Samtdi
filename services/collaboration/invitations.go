@@ -41,6 +41,10 @@ func (s *Server) invite(w http.ResponseWriter, r *http.Request, session Session)
 		return
 	}
 
+	if !requireActiveProject(w, ctx, tx, projectID) {
+		return
+	}
+
 	token := randomToken()
 	var id string
 	var expires time.Time
@@ -49,6 +53,10 @@ func (s *Server) invite(w http.ResponseWriter, r *http.Request, session Session)
 		tokenHash(token), projectID, email, input.Role).Scan(&id, &expires)
 	if err != nil {
 		internal(w, "insert_invite", err)
+		return
+	}
+	if err := appendWebActivity(ctx, tx, projectID, session.AccountID, "invitation.created", id, nil); err != nil {
+		internal(w, "record_invitation", err)
 		return
 	}
 	if err := tx.Commit(ctx); err != nil {

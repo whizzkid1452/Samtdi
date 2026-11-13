@@ -199,6 +199,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /v1/auth/logout", s.withSession(s.logout))
 	s.mux.HandleFunc("GET /v1/projects", s.withSession(s.listProjects))
 	s.mux.HandleFunc("POST /v1/projects", s.withSession(s.createProject))
+	s.mux.HandleFunc("PATCH /v1/projects/{project}/archive", s.withSession(s.archiveWebProject))
 	s.mux.HandleFunc("GET /v1/projects/{project}/members", s.withSession(s.listMembers))
 	s.mux.HandleFunc("PATCH /v1/projects/{project}/members/{account}", s.withSession(s.changeMember))
 	s.mux.HandleFunc("DELETE /v1/projects/{project}/members/{account}", s.withSession(s.changeMember))
