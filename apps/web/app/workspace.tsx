@@ -6,6 +6,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { Notifications } from "./notifications";
+import { UploadProvider } from "./upload";
 
 type Session = components["schemas"]["Session"];
 export type Project = components["schemas"]["Project"] & { archived_at?: string };
@@ -93,6 +94,7 @@ export function Workspace({ children }: { children: ReactNode }) {
   }
 
   return <WorkspaceContext.Provider value={{ session, projects, refreshProjects }}>
+    <UploadProvider key={session.account_id} accountId={session.account_id}>
     <header className="topbar">
       <div className="row">
         <Link href="/projects" className="brand">사맛디</Link>
@@ -114,5 +116,6 @@ export function Workspace({ children }: { children: ReactNode }) {
     </header>
     {error && <p className="error main-content" role="alert">{error}</p>}
     {children}
+    </UploadProvider>
   </WorkspaceContext.Provider>;
 }

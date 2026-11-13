@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-var projectReturnPath = regexp.MustCompile(`^/projects/[a-fA-F0-9-]+(?:/(?:media(?:/[a-fA-F0-9-]+/versions/[a-fA-F0-9-]+)?|tasks(?:/[a-fA-F0-9-]+)?|activity|settings))?$`)
+var projectReturnPath = regexp.MustCompile(`^/projects/[a-fA-F0-9-]+(?:/(?:media(?:/[a-fA-F0-9-]+(?:/versions/[a-fA-F0-9-]+)?)?|tasks(?:/[a-fA-F0-9-]+)?|activity|settings))?$`)
 
 func safeWebReturn(raw string) bool {
 	if safeReviewReturn(raw) {
