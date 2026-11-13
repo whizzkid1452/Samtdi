@@ -167,3 +167,35 @@ label { font-size: .9rem; color: var(--muted); }
   .review-grid { grid-template-columns: minmax(0, 1fr); }
   .wave-marker { min-width: 2rem; min-height: 2rem; }
 }
+
+.task-rows { list-style: none; margin: 0; padding: 0; }
+.task-list { border: 1px solid var(--border); border-radius: 8px; margin-top: 1rem; }
+.task-list .empty, .task-list > button { margin: .75rem; }
+.task-list .task-rows > li + li { border-top: 1px solid var(--border); }
+.task-list-row { display: grid; grid-template-columns: minmax(10rem, 1.5fr) auto minmax(8rem, 1fr) auto auto auto; align-items: start; gap: .85rem; padding: .85rem; }
+.task-list-row > * { overflow-wrap: anywhere; min-width: 0; }
+.task-card { display: grid; gap: .35rem; background: var(--bg); }
+.task-card .resource-title { margin: 0; }
+.lane { background: var(--surface); }
+.task-menu summary { color: var(--muted); cursor: pointer; }
+.task-menu > div { margin-top: .45rem; }
+.task-detail-title { margin-top: 1rem; }
+.task-detail-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(12rem, 1fr); gap: 1rem; }
+.task-detail-grid a, .task-metadata dd { overflow-wrap: anywhere; }
+.task-metadata { margin: 0; padding: .8rem 1rem; border: 1px solid var(--border); border-radius: 8px; align-self: start; }
+.task-metadata dt { color: var(--muted); margin-top: .45rem; }
+.task-metadata dd { margin: 0; font-weight: 600; }
+.task-editor { display: grid; gap: .85rem; margin-top: .85rem; }
+.task-editor label:not(.row) { display: grid; gap: .35rem; }
+.task-editor ul { margin: 0; padding-inline-start: 1rem; }
+.task-editor .clean-list { padding: 0; }
+.task-editor p { margin: 0; }
+.option-picker { margin: .5rem 0; }
+.option-picker ul { max-height: 15rem; overflow: auto; }
+.option-picker button { text-align: left; overflow-wrap: anywhere; max-width: 100%; }
+@media (max-width: 800px) {
+  .task-list-row { grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; }
+  .task-list-row > :first-child { grid-column: 1 / -1; }
+  .task-detail-grid { grid-template-columns: minmax(0, 1fr); }
+  .task-menu summary { min-height: 44px; }
+}

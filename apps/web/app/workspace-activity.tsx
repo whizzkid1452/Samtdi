@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { taskHref } from "../lib/routes";
 import { useEffect, useState } from "react";
 import { api, describeError } from "../lib/api";
 
@@ -41,7 +43,7 @@ export function DashboardPanel({ revision }: { revision: number }) {
       </div>
       {data.tasks.length === 0 ? <p className="muted">진행할 담당 작업이 없습니다.</p> :
         <ul className="clean-list">{data.tasks.map((task) => <li key={task.id} className="row spread wrap">
-          <a href={"/?project=" + task.project_id + "#task-board"}>{task.title}</a>
+          <Link href={taskHref(task.project_id, task.id)}>{task.title}</Link>
           <span className="muted">{task.project_title} · {statuses[task.status]}{task.due_on ? " · " + task.due_on : ""}</span>
         </li>)}</ul>}
     </>}

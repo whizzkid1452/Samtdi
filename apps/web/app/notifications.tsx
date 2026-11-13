@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { taskHref, versionLink } from "../lib/routes";
+import { useEffect, useRef, useState } from "react";
 import { api, describeError } from "../lib/api";
 
-type Notification = { id: string; project_id: string; project_title: string; action: string; version_id: string; note_id: string; read_at?: string };
+type Notification = { id: string; project_id: string; project_title: string; action: string; subject_id: string; version_id: string; note_id: string; read_at?: string };
 type Inbox = { items: Notification[]; unread: number };
 
 export function Notifications() {
+  const details = useRef<HTMLDetailsElement>(null);
   const [inbox, setInbox] = useState<Inbox>({ items: [], unread: 0 });
   const [error, setError] = useState("");
 
@@ -32,7 +35,7 @@ export function Notifications() {
     }
   }
 
-  return <details className="inbox" onToggle={(event) => {
+  return <details ref={details} className="inbox" onToggle={(event) => {
     if (event.currentTarget.open) void api<Inbox>("/v1/notifications").then(setInbox).catch((cause) => setError(describeError(cause)));
   }}>
     <summary>알림{inbox.unread > 0 && <strong> {inbox.unread}</strong>}</summary>
@@ -40,12 +43,10 @@ export function Notifications() {
       {error && <p role="alert" className="error">{error}</p>}
       {inbox.items.length === 0 && <p className="muted">받은 알림이 없습니다.</p>}
       <ul className="clean-list">{inbox.items.map((notice) => {
-        const query = new URLSearchParams({ project: notice.project_id });
-        if (notice.version_id) query.set("version", notice.version_id);
-        if (notice.note_id) query.set("note", notice.note_id);
-        const link = "/?" + query + (notice.version_id ? "#note-" + notice.note_id : "#task-board");
+        const link = notice.version_id ? versionLink(notice.project_id, notice.version_id, notice.note_id)
+          : taskHref(notice.project_id, notice.subject_id);
         return <li key={notice.id}>
-          <div className="row spread"><a href={link}>{notice.action === "reply.created" ? "새 답글" : "작업이 배정됐습니다"}</a>
+          <div className="row spread"><Link href={link} onNavigate={() => { if (details.current) details.current.open = false; }}>{notice.action === "reply.created" ? "새 답글" : "작업이 배정됐습니다"}</Link>
             {!notice.read_at && <button onClick={() => void markRead(notice.id)}>읽음</button>}</div>
           <small className="muted">{notice.project_title}</small>
         </li>;

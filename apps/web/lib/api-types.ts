@@ -1363,6 +1363,11 @@ export interface paths {
             parameters: {
                 query?: {
                     after?: string;
+                    status?: "todo" | "progress" | "review" | "done";
+                    archived?: "true" | "false";
+                    due?: "late" | "soon" | "none";
+                    q?: string;
+                    assignee?: string;
                 };
                 header?: never;
                 path: {
@@ -1455,7 +1460,12 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    note?: string;
+                    kind?: "note" | "version";
+                    before?: string;
+                    q?: string;
+                };
                 header?: never;
                 path: {
                     project: string;
@@ -1499,7 +1509,38 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                    task: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Task detail */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Task"];
+                    };
+                };
+                /** @description Request rejected */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
         put: {
             parameters: {
                 query?: never;
@@ -1766,6 +1807,63 @@ export interface paths {
                     content: {
                         "application/json": Record<string, never>;
                         "text/csv": string;
+                    };
+                };
+                /** @description Request rejected */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project}/task-counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    status?: "todo" | "progress" | "review" | "done";
+                    archived?: "true" | "false";
+                    due?: "late" | "soon" | "none";
+                    q?: string;
+                    assignee?: string;
+                };
+                header?: never;
+                path: {
+                    project: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Matching tasks per status */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            todo: number;
+                            progress: number;
+                            review: number;
+                            done: number;
+                        };
                     };
                 };
                 /** @description Request rejected */
