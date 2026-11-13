@@ -22,7 +22,8 @@ export function ProjectIndex() {
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const visible = projects.filter((project) => project.title.toLowerCase().includes(search.trim().toLowerCase()));
+  const visible = projects.filter((project) => project.title.toLowerCase().includes(search.trim().toLowerCase()))
+    .sort((left, right) => (right.updated_at ?? "").localeCompare(left.updated_at ?? ""));
 
   async function createProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,8 +59,10 @@ export function ProjectIndex() {
     <ul className="resource-list">
       {visible.map((project) => <li className="row spread wrap" key={project.id}>
         <Link className="resource-title" href={projectHref(project.id)}>{project.title}</Link>
-        <span className="muted">{{owner: "소유자", editor: "편집자", reviewer: "검토자"}[project.role]}
-          {project.archived_at ? " · 보관됨" : ""}</span>
+        <div className="row wrap muted">
+          {project.updated_at && <time dateTime={project.updated_at}>{new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeZone: "Asia/Seoul" }).format(new Date(project.updated_at))}</time>}
+          <span className="status-label">{{owner: "소유자", editor: "편집자", reviewer: "검토자"}[project.role]}{project.archived_at ? " · 보관됨" : ""}</span>
+        </div>
       </li>)}
     </ul>
     {visible.length === 0 && <p className="muted">{search ? "검색 결과가 없습니다." : "새 프로젝트를 만들어 음원을 공유하세요."}</p>}
@@ -69,7 +72,6 @@ export function ProjectIndex() {
 export function ProjectScreen({ projectId, tab, itemId, versionId, taskId }: { projectId: string; tab: ProjectTab; itemId?: string; versionId?: string; taskId?: string }) {
   const { projects, session } = useWorkspace();
   const query = useSearchParams();
-  const router = useRouter();
   const project = projects.find(({ id }) => id === projectId);
   const at = query.get("at");
 
@@ -83,10 +85,17 @@ export function ProjectScreen({ projectId, tab, itemId, versionId, taskId }: { p
     <div className="project-header">
       <div className="project-header-inner">
         <div className="row wrap project-title">
-          <select aria-label="프로젝트 선택" value={project.id}
-            onChange={(event) => router.push(projectHref(event.target.value, tab))}>
-            {projects.map(({ id, title }) => <option key={id} value={id}>{title}</option>)}
-          </select>
+          <details className="inbox project-switcher">
+            <summary>프로젝트 전환</summary>
+            <ul className="inbox-body panel clean-list">
+              {projects.map(({ id, title }) => <li key={id}>
+                <Link href={projectHref(id, tab)} aria-current={id === project.id ? "page" : undefined} onClick={(event) => {
+                  const menu = event.currentTarget.closest("details");
+                  if (menu) menu.open = false;
+                }}>{title}</Link>
+              </li>)}
+            </ul>
+          </details>
           <h1>{project.title}</h1>
           <span className="status-label">{project.archived_at ? "보관됨" : "비공개"}</span>
         </div>
@@ -104,7 +113,7 @@ export function ProjectScreen({ projectId, tab, itemId, versionId, taskId }: { p
         <MediaLibrary key={projectId + ":" + query.toString()} project={project} />)}
       {tab === "tasks" && (taskId ? <TaskDetail key={projectId + ":" + taskId} project={project} taskId={taskId} /> :
         <TaskBoard key={projectId + ":" + query.toString()} project={project} initialNote={query.get("task_note") ?? undefined} />)}
-      {tab === "activity" && <ProjectActivity key={projectId} projectId={projectId} revision={0} />}
+      {tab === "activity" && <ProjectActivity key={projectId} projectId={projectId} />}
       {tab === "settings" && <ProjectSettings key={projectId} project={project} />}
     </main>
   </>;
