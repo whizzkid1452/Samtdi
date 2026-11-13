@@ -1,6 +1,6 @@
 # 사맛디 웹 UI 수정 플랜
 
-작성일은 2026년 11월 12일이다. 조사 기준은 Samtdi `d338ef5bf9eec40908ad889f6494592a9ef2ee48`과 로컬 실행 화면이다. 아래 내용은 제안 단계이며 구현 완료 여부는 후속 PR에 기록한다.
+작성일은 2026년 11월 12일이다. 조사 기준은 Samtdi `d338ef5bf9eec40908ad889f6494592a9ef2ee48`과 로컬 실행 화면이다. 아래 계획으로 UI-01~UI-06을 구현했다. PR과 확인한 동작은 문서 끝에서 확인할 수 있다.
 
 **프로젝트를 고르고, 음원을 듣고, 피드백을 작업으로 연결하는 순서가 화면에서 보이게 만든다.** GitHub의 프로젝트별 탐색, 목록에서 상세로 들어가는 구조, 같은 작업을 여러 보기로 확인하는 방식을 적용한다. 기본 프로젝트 화면은 음원 목록으로 정한다. [GitHub 저장소 안내](https://docs.github.com/en/repositories) · [GitHub Projects 안내](https://docs.github.com/en/issues/planning-and-tracking-with-projects/learning-about-projects/about-projects)
 
@@ -198,3 +198,26 @@ UI-01~03을 첫 번째 사용성 점검 지점으로 삼는다. 프로젝트를 
 처음 사용하는 사람에게 위 흐름을 설명 없이 수행하게 하고, 첫 클릭 위치, 잘못 들어간 화면, 도움을 요청한 구간, 완료 여부를 기록한다. 이 항목은 예정된 사용성 검증이며 현재 개선 효과를 측정한 결과는 없다.
 
 현재는 기존 화면의 데스크톱·모바일 배치, 작업 작성 폼, URL이 갱신되지 않는 프로젝트 선택을 Chrome에서 확인했다. 새 UI의 동작과 사용성은 후속 구현 후 검증한다.
+
+
+## 8. 구현과 검증 기록
+
+| 단계 | Draft PR | 확인한 흐름 |
+| --- | --- | --- |
+| UI-01 | [#16 프로젝트 탐색](https://github.com/whizzkid1452/Samtdi/pull/16) | 프로젝트 탭과 뒤로 가기, 기존 보드 주소와 로그인 복귀 |
+| UI-02 | [#17 음원 목록·업로드](https://github.com/whizzkid1452/Samtdi/pull/17) | 파일명으로 음원 생성, 전송 중 탭 이동, 등록 실패 후 새로고침·재시도 |
+| UI-03 | [#18 버전 검토·피드백](https://github.com/whizzkid1452/Samtdi/pull/18) | 재생 중 작성 위치 고정, 피드백 직접 링크와 미해결 필터 |
+| UI-04 | [#19 작업 목록·보드·상세](https://github.com/whizzkid1452/Samtdi/pull/19) | 작업 만들기·배정·검토·완료, 목록/보드 복귀, 101개 작업 검색·집계·페이지 이동 |
+| UI-05 | [#20 내 작업·활동·설정](https://github.com/whizzkid1452/Samtdi/pull/20) | 내 작업 필터와 개수, 활동 대상 링크, 초대 복귀, 프로젝트 보관·복원 |
+| UI-06 | [통합 검증 브랜치](https://github.com/whizzkid1452/Samtdi/tree/codex/ui-06-pilot-verification) | Chrome·Firefox 두 계정, WebKit iPhone 13 크기, 키보드 탐색·초안·포커스 복귀, 오래된 피드백 링크, 권한 철회 |
+
+로컬 Go API·웹·미디어 작업자와 테스트 계정을 실행한 뒤 다음 명령으로 검증했다. 테스트는 새 프로젝트에 짧은 WAV·MP3를 올린다.
+
+```sh
+cd apps/web
+SAMTDI_CHROME_CHANNEL=chrome SAMTDI_VERIFY_MOBILE=1 SAMTDI_VERIFY_PAGINATION=1 pnpm verify:pilot
+```
+
+Chrome 157.0.8103.51과 Firefox 159.0에서 프로젝트 생성·초대, WAV 재생 중 타임코드 피드백, 작업 배정 알림, MP3 수정본, 검토 요청과 완료, JSON·CSV, 잘못된 오디오 파일, 팀원 접근 권한 철회까지 통과했다. 101번째 이후 피드백도 링크에서 직접 열었다. WebKit 27.2의 iPhone 13 에뮬레이션에서 가로 잘림, 오디오 메타데이터, Escape 후 포커스 복귀, 피드백 작성과 작업 목록 진입을 확인했다.
+
+제작팀의 첫 사용 관찰과 모바일 실기기 검증은 아직 남아 있다.

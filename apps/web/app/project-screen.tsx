@@ -19,10 +19,11 @@ export function ProjectIndex() {
   const { projects, refreshProjects } = useWorkspace();
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const visible = projects.filter((project) => project.title.toLowerCase().includes(search.trim().toLowerCase()))
+  const visible = projects.filter((project) => Boolean(project.archived_at) === showArchived && project.title.toLowerCase().includes(search.trim().toLowerCase()))
     .sort((left, right) => (right.updated_at ?? "").localeCompare(left.updated_at ?? ""));
 
   async function createProject(event: FormEvent<HTMLFormElement>) {
@@ -54,8 +55,13 @@ export function ProjectIndex() {
       <button type="button" disabled={saving} onClick={() => setCreating(false)}>취소</button>
     </form>}
     {error && <p role="alert" className="error">{error}</p>}
-    {projects.length > 0 && <input type="search" aria-label="프로젝트 검색" placeholder="프로젝트 검색" value={search}
-      onChange={(event) => setSearch(event.target.value)} />}
+    {projects.length > 0 && <div className="row wrap filter-bar">
+      <input type="search" aria-label="프로젝트 검색" placeholder="프로젝트 검색" value={search}
+        onChange={(event) => setSearch(event.target.value)} />
+      {projects.some((project) => project.archived_at) && <label className="row">
+        <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} /> 보관된 프로젝트
+      </label>}
+    </div>}
     <ul className="resource-list">
       {visible.map((project) => <li className="row spread wrap" key={project.id}>
         <Link className="resource-title" href={projectHref(project.id)}>{project.title}</Link>
@@ -65,7 +71,7 @@ export function ProjectIndex() {
         </div>
       </li>)}
     </ul>
-    {visible.length === 0 && <p className="muted">{search ? "검색 결과가 없습니다." : "새 프로젝트를 만들어 음원을 공유하세요."}</p>}
+    {visible.length === 0 && <p className="muted">{search || showArchived ? "조건에 맞는 프로젝트가 없습니다." : "새 프로젝트를 만들어 음원을 공유하세요."}</p>}
   </main>;
 }
 
@@ -88,7 +94,7 @@ export function ProjectScreen({ projectId, tab, itemId, versionId, taskId }: { p
           <details className="inbox project-switcher">
             <summary>프로젝트 전환</summary>
             <ul className="inbox-body panel clean-list">
-              {projects.map(({ id, title }) => <li key={id}>
+              {projects.filter((entry) => !entry.archived_at || entry.id === project.id).map(({ id, title }) => <li key={id}>
                 <Link href={projectHref(id, tab)} aria-current={id === project.id ? "page" : undefined} onClick={(event) => {
                   const menu = event.currentTarget.closest("details");
                   if (menu) menu.open = false;

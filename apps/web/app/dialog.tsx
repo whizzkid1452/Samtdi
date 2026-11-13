@@ -1,16 +1,22 @@
 "use client";
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useId, useRef, type ReactNode } from "react";
 
-export function Dialog({ title, children, close }: { title: string; children: ReactNode; close: () => void }) {
+export function Dialog({ title, children, close, returnFocus }: { title: string; children: ReactNode; close: () => void; returnFocus?: HTMLElement | null }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const label = useId();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = dialog.current;
+    const trigger = returnFocus ?? document.activeElement;
     element?.showModal();
-    return () => element?.close();
-  }, []);
+    element?.querySelector<HTMLElement>("input:not([type=hidden]), textarea, select")?.focus();
+
+    return () => {
+      element?.close();
+      if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus();
+    };
+  }, [returnFocus]);
 
   return <dialog ref={dialog} className="dialog" aria-labelledby={label} onCancel={(event) => {
     event.preventDefault();
