@@ -53,17 +53,45 @@ func (s *Server) listWebNotes(w http.ResponseWriter, r *http.Request, session Se
 	if !s.webRead(w, r, session) {
 		return
 	}
-	project, version, before := r.PathValue("project"), r.PathValue("version"), r.URL.Query().Get("before")
-	filter := r.URL.Query().Get("filter")
-	if !uuidPattern.MatchString(version) || (before != "" && !uuidPattern.MatchString(before)) ||
-		(filter != "" && filter != "open") {
+	project, version := r.PathValue("project"), r.PathValue("version")
+	query := r.URL.Query()
+	before, after, filter, sort := query.Get("before"), query.Get("after"), query.Get("filter"), query.Get("sort")
+	cursor := after
+	if before != "" {
+		cursor = before
+	}
+	if !uuidPattern.MatchString(version) || (cursor != "" && !uuidPattern.MatchString(cursor)) ||
+		(before != "" && (after != "" || sort == "time")) ||
+		(filter != "" && filter != "open" && filter != "resolved") ||
+		(sort != "" && sort != "recent" && sort != "time") {
 		problem(w, 400, "invalid_notes_query")
 		return
 	}
+
+	if after != "" {
+		var found bool
+		err := s.pool.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM web_notes
+ WHERE project_id=$1 AND version_id=$2 AND id=$3)`, project, version, cursor).Scan(&found)
+		if err != nil {
+			internal(w, "read_notes_cursor", err)
+			return
+		}
+		if !found {
+			problem(w, 400, "invalid_notes_cursor")
+			return
+		}
+	}
+
+	page := ` AND ($3='' OR (n.created_at,n.id)<(SELECT created_at,id FROM web_notes
+ WHERE project_id=$1 AND version_id=$2 AND id=NULLIF($3,'')::uuid))
+ ORDER BY n.created_at DESC,n.id DESC LIMIT 100`
+	if sort == "time" {
+		page = ` AND ($3='' OR (n.start_ms,n.id)>(SELECT start_ms,id FROM web_notes
+ WHERE project_id=$1 AND version_id=$2 AND id=NULLIF($3,'')::uuid))
+ ORDER BY n.start_ms,n.id LIMIT 100`
+	}
 	rows, err := s.pool.Query(r.Context(), webNotesSelect+` WHERE n.project_id=$1 AND n.version_id=$2
- AND ($3='' OR (n.created_at,n.id)<(SELECT created_at,id FROM web_notes WHERE project_id=$1 AND version_id=$2 AND id=NULLIF($3,'')::uuid))
- AND ($4='' OR (NOT n.resolved AND NOT n.deleted))
- ORDER BY n.created_at DESC,n.id DESC LIMIT 100`, project, version, before, filter)
+ AND ($4='' OR (NOT n.deleted AND n.resolved=($4='resolved')))`+page, project, version, cursor, filter)
 	if err != nil {
 		internal(w, "list_web_notes", err)
 		return

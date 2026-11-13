@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
@@ -11,7 +12,7 @@ import { submitFeedbackShortcut } from "./feedback-shortcut";
 
 type Message = components["schemas"]["Message"];
 export type Note = components["schemas"]["Note"];
-type FeedbackPage = { notes: Note[]; filter: string; more: boolean };
+type FeedbackPage = { notes: Note[]; path: string; more: boolean };
 const pageSize = 100;
 
 export function noteLabel(note: Pick<Note, "start_ms" | "end_ms">) {
@@ -19,7 +20,10 @@ export function noteLabel(note: Pick<Note, "start_ms" | "end_ms">) {
 }
 
 export function useVersionNotes({ url, linkedNote }: { url: string; linkedNote?: string }) {
-  const [filter, setFilter] = useState("");
+  const query = useSearchParams();
+  const requestedFilter = query.get("feedback");
+  const filter = requestedFilter === "open" || requestedFilter === "resolved" ? requestedFilter : "";
+  const sort = query.get("sort") === "recent" ? "recent" : "time";
   const [page, setPage] = useState<FeedbackPage>();
   const [direct, setDirect] = useState<Note>();
   const [selectedId, setSelectedId] = useState(linkedNote);
@@ -27,8 +31,9 @@ export function useVersionNotes({ url, linkedNote }: { url: string; linkedNote?:
   const [refresh, setRefresh] = useState(0);
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
-  const path = url + (filter ? "?filter=open" : "");
-  const currentPage = page?.filter === filter ? page : undefined;
+  const pageRequest = useRef<AbortController | null>(null);
+  const path = url + "?" + new URLSearchParams({ filter, sort });
+  const currentPage = page?.path === path ? page : undefined;
   const notes = currentPage?.notes;
   const selected = notes?.find(({ id }) => id === selectedId) ?? (direct?.id === selectedId ? direct : undefined);
 
@@ -36,10 +41,13 @@ export function useVersionNotes({ url, linkedNote }: { url: string; linkedNote?:
     const request = new AbortController();
     api<Note[]>(path, { signal: request.signal }).then((rows) => {
       if (request.signal.aborted) return;
-      setPage({ notes: rows, more: rows.length === pageSize, filter });
+      setPage({ notes: rows, more: rows.length === pageSize, path });
     }).catch((cause) => { if (!request.signal.aborted) setError(describeError(cause)); });
-    return () => request.abort();
-  }, [path, filter, refresh]);
+    return () => {
+      request.abort();
+      pageRequest.current?.abort();
+    };
+  }, [path, refresh]);
 
   useEffect(() => {
     if (!linkedNote) return;
@@ -59,12 +67,16 @@ export function useVersionNotes({ url, linkedNote }: { url: string; linkedNote?:
     setDirect(note);
     setPage((previous) => {
       if (!previous) return previous;
-      const rows = previous.notes.filter(({ id }) => id !== note.id);
-      if (!previous.filter || (!note.resolved && !note.deleted)) {
-        const index = previous.notes.findIndex(({ id }) => id === note.id);
-        rows.splice(index < 0 ? 0 : index, 0, note);
-      }
-      return { ...previous, notes: rows };
+
+      const current = previous.notes.some(({ id }) => id === note.id);
+      if (!current) return previous;
+
+      const params = new URL(previous.path, window.location.origin).searchParams;
+      const pageFilter = params.get("filter");
+      const included = !pageFilter || (!note.deleted && note.resolved === (pageFilter === "resolved"));
+      const notes = included ? previous.notes.map((row) => row.id === note.id ? note : row)
+        : previous.notes.filter(({ id }) => id !== note.id);
+      return { ...previous, notes };
     });
   }
 
@@ -98,32 +110,56 @@ export function useVersionNotes({ url, linkedNote }: { url: string; linkedNote?:
 
   function select(id: string | undefined) {
     setSelectedId(id);
+    const note = notes?.find((row) => row.id === id);
+    if (note) setDirect(note);
     setError("");
   }
 
+  function setQuery(name: "feedback" | "sort", value: string) {
+    const params = new URLSearchParams(window.location.search);
+    if (value) params.set(name, value);
+    else params.delete(name);
+
+    setError("");
+    window.history.pushState(null, "", window.location.pathname + (params.size ? "?" + params : "") + window.location.hash);
+  }
+
   return {
-    notes, selected, filter, busy, error, more: currentPage?.more,
-    setFilter: (value: string) => { setError(""); setFilter(value); },
+    notes, selected, filter, sort, busy, error, more: currentPage?.more,
+    setFilter: (value: string) => setQuery("feedback", value),
+    setSort: (value: string) => setQuery("sort", value),
     select,
     retry: () => { setError(""); setRefresh((value) => value + 1); },
     loadMore: () => run(async () => {
       const cursor = currentPage?.notes.at(-1)?.id;
       if (!cursor) return;
 
-      const rows = await api<Note[]>(url + "?" + new URLSearchParams({ before: cursor, filter }));
-      setPage((previous) => previous?.filter === filter
-        ? { ...previous, notes: [...previous.notes, ...rows.filter((row) => !previous.notes.some(({ id }) => id === row.id))], more: rows.length === pageSize }
-        : previous);
+      const request = new AbortController();
+      pageRequest.current = request;
+      try {
+        const rows = await api<Note[]>(path + "&" + new URLSearchParams({ after: cursor }), { signal: request.signal });
+        if (request.signal.aborted) return;
+
+        setPage((previous) => previous?.path === path
+          ? { ...previous, notes: [...previous.notes, ...rows.filter((row) => !previous.notes.some(({ id }) => id === row.id))], more: rows.length === pageSize }
+          : previous);
+      } catch (cause) {
+        if (!request.signal.aborted) throw cause;
+      } finally {
+        pageRequest.current = null;
+      }
     }),
     create: (anchor: { start_ms: number; end_ms?: number }, body: string) => run(async () => {
       const created = await api<{ id: string }>(url, { method: "POST", body: JSON.stringify({ ...anchor, body }) });
       await refreshNote(created.id);
+      setRefresh((value) => value + 1);
       select(created.id);
       return created.id;
     }),
     change: (note: Note, target: string, revision: number, payload: object) => run(async () => {
       await api(target, { method: "PATCH", body: JSON.stringify({ revision, ...payload }) });
       await refreshNote(note.id);
+      if ("resolved" in payload || "deleted" in payload) setRefresh((value) => value + 1);
       return true;
     }),
     reply: (note: Note, body: string) => run(async () => {
@@ -140,7 +176,7 @@ export function VersionNotes({ feedback, url, projectId, itemId, versionId, acco
   playRange: (range: { start_ms: number; end_ms: number }) => Promise<void>;
   replyActive: boolean; onReply: () => void; composer: ReactNode;
 }) {
-  const { notes, selected, filter, busy, error } = feedback;
+  const { notes, selected, filter, sort, busy, error } = feedback;
 
   function open(note: Note) {
     feedback.select(note.id);
@@ -155,14 +191,21 @@ export function VersionNotes({ feedback, url, projectId, itemId, versionId, acco
     <div className="row spread wrap">
       <h3>피드백</h3>
       <div className="segmented" aria-label="피드백 필터">
+        <button aria-pressed={!filter} onClick={() => feedback.setFilter("all")}>전체</button>
         <button aria-pressed={filter === "open"} onClick={() => feedback.setFilter("open")}>미해결</button>
-        <button aria-pressed={!filter} onClick={() => feedback.setFilter("")}>전체</button>
+        <button aria-pressed={filter === "resolved"} onClick={() => feedback.setFilter("resolved")}>해결됨</button>
       </div>
+    </div>
+    <div className="row wrap feedback-sort">
+      <label>정렬 <select value={sort} onChange={(event) => feedback.setSort(event.target.value)}>
+        <option value="time">시간순</option>
+        <option value="recent">최신순</option>
+      </select></label>
     </div>
     {composer}
     {error && <div role="alert"><p className="error">{error}</p><button onClick={feedback.retry}>다시 시도</button></div>}
     {!notes && !error && <p role="status">피드백을 불러오는 중</p>}
-    {notes?.length === 0 && <p className="muted">{filter ? "미해결 피드백이 없습니다." : "이 버전에 남긴 피드백이 없습니다."}</p>}
+    {notes?.length === 0 && <p className="muted">{filter === "resolved" ? "해결된 피드백이 없습니다." : filter === "open" ? "미해결 피드백이 없습니다." : "이 버전에 남긴 피드백이 없습니다."}</p>}
     <ul className="feedback-list">
       {notes?.map((note) => <li key={note.id}>
         <button type="button" aria-expanded={selected?.id === note.id} onClick={() => selected?.id === note.id ? feedback.select(undefined) : open(note)}>
@@ -179,7 +222,10 @@ export function VersionNotes({ feedback, url, projectId, itemId, versionId, acco
         {selected?.id === note.id && thread}
       </li>)}
     </ul>
-    {feedback.more && <button disabled={busy} onClick={() => void feedback.loadMore()}>피드백 더 보기</button>}
+    {feedback.more && <div className="row wrap">
+      <span className="muted">불러온 피드백 {notes?.length}개 표시</span>
+      <button disabled={busy} onClick={() => void feedback.loadMore()}>피드백 더 보기</button>
+    </div>}
     {selected && !notes?.some(({ id }) => id === selected.id) && <>
       <p className="muted">현재 목록 밖의 피드백</p>
       {thread}

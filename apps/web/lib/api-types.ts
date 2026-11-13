@@ -1077,8 +1077,12 @@ export interface paths {
             parameters: {
                 query?: {
                     before?: string;
-                    /** @description Return unresolved and non-deleted notes. */
-                    filter?: "open";
+                    /** @description Last note ID in the selected sort order. Cannot be combined with before. */
+                    after?: string;
+                    /** @description Timecode ascending or creation time descending. Defaults to recent. */
+                    sort?: "time" | "recent";
+                    /** @description Filter non-deleted notes by resolution state. */
+                    filter?: "open" | "resolved";
                 };
                 header?: never;
                 path: {

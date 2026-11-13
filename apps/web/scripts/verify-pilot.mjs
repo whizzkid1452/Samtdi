@@ -145,18 +145,50 @@ async function verifyMovingPlayhead(page) {
 }
 
 async function verifyFeedbackPagination({ owner, first, note }) {
-  for (let index = 0; index < 100; index++) {
-    const response = await owner.request.post(first.path + "/notes", {
-      headers, data: { start_ms: index, body: "페이지 검증 " + index },
+  const url = first.path + "/notes";
+  for (let index = 0; index < 205; index++) {
+    const response = await owner.request.post(url, {
+      headers, data: { start_ms: index % 2, body: "페이지 검증 " + index },
     });
     assert.equal(response.status(), 201);
   }
 
-  const page = await (await owner.request.get(first.path + "/notes")).json();
-  assert.equal(page.length, 100);
-  assert.ok(!page.some(({ id }) => id === note.id));
-  await owner.goto(first.url + "?note=" + note.id);
+  const legacy = await (await owner.request.get(url)).json();
+  assert.equal(legacy.length, 100);
+  assert.ok(!legacy.some(({ id }) => id === note.id));
+
+  for (const sort of ["time", "recent"]) {
+    const notes = [];
+    for (let cursor = ""; ;) {
+      const query = new URLSearchParams({ sort });
+      if (cursor) query.set("after", cursor);
+      const response = await owner.request.get(url + "?" + query);
+      assert.equal(response.status(), 200);
+      const page = await response.json();
+      notes.push(...page);
+      if (page.length < 100) break;
+      cursor = page.at(-1).id;
+    }
+    assert.equal(notes.length, 206);
+    assert.equal(new Set(notes.map(({ id }) => id)).size, notes.length);
+    if (sort === "time") {
+      const sorted = [...notes].sort((left, right) => left.start_ms - right.start_ms || left.id.localeCompare(right.id));
+      assert.deepEqual(notes, sorted);
+    } else {
+      assert.equal(notes[0].id, legacy[0].id);
+      assert.equal(notes.at(-1).id, note.id);
+    }
+  }
+
+  await owner.goto(first.url + "?note=" + note.id + "&sort=recent&feedback=all");
   await owner.getByRole("region", { name: "선택한 피드백" }).getByText(note.body, { exact: true }).waitFor();
+  await owner.getByText("현재 목록 밖의 피드백").waitFor();
+  await button(owner, "피드백 더 보기").click();
+  await owner.getByText("불러온 피드백 200개 표시").waitFor();
+  await button(owner, "피드백 더 보기").click();
+  await owner.locator(".feedback-list > li").filter({ hasText: note.body }).waitFor();
+  await owner.getByLabel("정렬").selectOption("time");
+  await owner.waitForURL((url) => url.searchParams.get("sort") === "time");
 }
 
 try {

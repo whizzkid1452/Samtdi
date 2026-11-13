@@ -169,6 +169,7 @@ label { font-size: .9rem; color: var(--muted); }
 .feedback-time { white-space: nowrap; color: #11572b; }
 .feedback-summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .feedback-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; font-size: .82rem; }
+.feedback-sort { margin-top: .5rem; }
 .feedback-composer { margin-top: .75rem; padding-bottom: .75rem; border-bottom: 1px solid var(--border); }
 .feedback-composer form { margin-top: .65rem; }
 .feedback-thread { border-left: 2px solid var(--accent); padding: .65rem .75rem; margin: .35rem 0 .75rem; overflow-wrap: anywhere; }
