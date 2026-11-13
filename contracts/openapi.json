@@ -1094,15 +1094,37 @@
             }
           },
           {
+            "name": "after",
+            "in": "query",
+            "description": "Last note ID in the selected sort order. Cannot be combined with before.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "time",
+                "recent"
+              ]
+            },
+            "description": "Timecode ascending or creation time descending. Defaults to recent."
+          },
+          {
             "name": "filter",
             "in": "query",
             "schema": {
               "type": "string",
               "enum": [
-                "open"
+                "open",
+                "resolved"
               ]
             },
-            "description": "Return unresolved and non-deleted notes."
+            "description": "Filter non-deleted notes by resolution state."
           }
         ]
       },

@@ -64,6 +64,10 @@ func safeWebReturnValue(key, value string) bool {
 		return value == "list" || value == "board"
 	case "filter":
 		return value == "assigned" || value == "review" || value == "due" || value == "late"
+	case "feedback":
+		return value == "all" || value == "open" || value == "resolved"
+	case "sort":
+		return value == "time" || value == "recent"
 	case "status":
 		return value == "todo" || value == "progress" || value == "review" || value == "done"
 	case "archived":
