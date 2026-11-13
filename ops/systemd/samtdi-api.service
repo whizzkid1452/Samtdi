@@ -1,0 +1,18 @@
+[Unit]
+Description=Samtdi collaboration API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=samtdi
+Group=samtdi
+WorkingDirectory=/opt/samtdi/current
+EnvironmentFile=/etc/samtdi/api.env
+ExecStart=/opt/samtdi/current/bin/ayotbi-collaboration
+Restart=on-failure
+TimeoutStopSec=35
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
