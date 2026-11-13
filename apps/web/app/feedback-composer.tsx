@@ -29,7 +29,7 @@ export function FeedbackComposer({ draft, busy, error, save, close, discard, cha
       <strong className="feedback-time">{noteLabel(draft.anchor)}</strong>
       <button type="button" disabled={busy} onClick={moveAnchor}>현재 위치로 변경</button>
     </div>
-    <textarea ref={input} aria-label="피드백 내용" placeholder="이 부분에서 들은 내용을 남겨 주세요" maxLength={4000}
+    <textarea ref={input} aria-label="피드백 내용" placeholder="이 부분에서 들은 내용을 남겨 주세요" maxLength={4000} readOnly={busy}
       value={draft.body} onChange={(event) => changeBody(event.target.value)} onKeyDown={submitFeedbackShortcut} required />
     {error && <p role="alert" className="error">{error}</p>}
     <div className="row wrap">

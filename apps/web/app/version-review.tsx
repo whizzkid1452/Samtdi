@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, describeError } from "../lib/api";
 import { timecode } from "../lib/timecode";
+import { ReviewRangeInput } from "./review-range-input";
 import { ReviewWaveform } from "./review-waveform";
 import { FeedbackComposer } from "./feedback-composer";
 import { feedbackDraftKey, readFeedbackDraft, useFeedbackDraft, type FeedbackDraft } from "./feedback-drafts";
@@ -75,16 +76,25 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
     setPosition(next);
   }
 
+  function pausePlayback() {
+    previewEnd.current = null;
+    audio.current?.pause();
+  }
+
   function currentPosition() {
     return clamp((audio.current?.currentTime ?? 0) * 1000);
+  }
+
+  function clearRange() {
+    if (previewEnd.current !== null) pausePlayback();
+    setRange(undefined);
   }
 
   function compose(useRange: boolean) {
     const anchor = useRange && validRange ? { start_ms: range[0], end_ms: range[1] } : { start_ms: currentPosition() };
     if (!draft?.body.trim()) updateDraft({ anchor, body: "" });
 
-    previewEnd.current = null;
-    audio.current?.pause();
+    pausePlayback();
     setEditor("note");
   }
 
@@ -136,7 +146,7 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
 
   return <div className="review-grid">
     <section className="player-panel" aria-label="음원 플레이어" onKeyDown={(event) => {
-      if (event.key === "Escape" && range) setRange(undefined);
+      if (event.key === "Escape" && range) clearRange();
       if (event.key === " " && event.target instanceof HTMLCanvasElement && metadataReady) {
         event.preventDefault();
         void togglePlayback();
@@ -168,18 +178,23 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
       </div>
       <div className="row wrap player-actions">
         <button type="button" aria-pressed={!!range} disabled={!metadataReady || !duration}
-          onClick={() => setRange(range ? undefined : [currentPosition(), currentPosition()])}>
+          onClick={() => {
+            if (range) clearRange();
+            else {
+              const at = currentPosition();
+              setRange([at, at]);
+            }
+          }}>
           {range ? "구간 해제" : "구간 지정"}
         </button>
       </div>
       {range && <div className="row wrap range-fields">
         <p className="muted">파형에서 구간을 드래그하거나 시작·끝 시간을 입력하세요.</p>
-        {(["시작", "끝"] as const).map((label, index) => <label key={label}>{label} (초)
-          <input type="number" min={0} max={duration / 1000} step={.001} value={range[index] / 1000} onChange={(event) => {
-            const value = clamp(Number(event.target.value));
+        {(["시작", "끝"] as const).map((label, index) => <ReviewRangeInput key={label} label={label}
+          duration={duration} value={range[index]} change={(milliseconds) => {
+            const value = clamp(milliseconds);
             setRange(index === 0 ? [value, range[1]] : [range[0], value]);
-          }} />
-        </label>)}
+          }} />)}
         <button type="button" disabled={!validRange || !metadataReady}
           onClick={() => void playRange({ start_ms: range[0], end_ms: range[1] })}>구간 듣기</button>
         {writable && <button type="button" disabled={!validRange || feedback.busy || !metadataReady}
@@ -187,12 +202,11 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
       </div>}
     </section>
     <VersionNotes feedback={feedback} url={notesURL} projectId={projectId} itemId={version.item_id}
-      versionId={version.id} accountId={accountId} canEdit={canEdit} writable={writable} seek={seek} playRange={playRange}
+      versionId={version.id} accountId={accountId} canEdit={canEdit} writable={writable} seek={seek} playRange={playRange} pause={pausePlayback}
       replyActive={typeof editor === "object" && editor.replyTo === feedback.selected?.id}
       onReply={() => {
         if (feedback.selected) setEditor({ replyTo: feedback.selected.id });
-        previewEnd.current = null;
-        audio.current?.pause();
+        pausePlayback();
       }}
       composer={writable && <div className="feedback-composer">
         <button ref={composerTrigger} aria-expanded={composerOpen} disabled={!metadataReady || feedback.busy} onClick={() => composerOpen ? closeComposer() : compose(false)}>

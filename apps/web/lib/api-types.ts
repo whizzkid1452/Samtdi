@@ -1367,6 +1367,8 @@ export interface paths {
             parameters: {
                 query?: {
                     after?: string;
+                    /** @description Return tasks linked to this feedback in the project. */
+                    note?: string;
                     status?: "todo" | "progress" | "review" | "done";
                     archived?: "true" | "false";
                     due?: "late" | "soon" | "none";
@@ -1845,6 +1847,8 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
+                    /** @description Return tasks linked to this feedback in the project. */
+                    note?: string;
                     status?: "todo" | "progress" | "review" | "done";
                     archived?: "true" | "false";
                     due?: "late" | "soon" | "none";

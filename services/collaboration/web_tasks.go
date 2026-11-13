@@ -109,20 +109,23 @@ const webTaskFilter = ` WHERE t.project_id=$1
  AND ($5='' OR t.archived=NULLIF($5,'')::boolean)
  AND ($6='' OR ($6='none' AND t.due_on IS NULL)
  OR ($6='late' AND t.status<>'done' AND t.due_on<(now() AT TIME ZONE 'Asia/Seoul')::date)
- OR ($6='soon' AND t.status<>'done' AND t.due_on BETWEEN (now() AT TIME ZONE 'Asia/Seoul')::date AND (now() AT TIME ZONE 'Asia/Seoul')::date+7))`
+ OR ($6='soon' AND t.status<>'done' AND t.due_on BETWEEN (now() AT TIME ZONE 'Asia/Seoul')::date AND (now() AT TIME ZONE 'Asia/Seoul')::date+7))
+ AND ($7='' OR EXISTS (SELECT 1 FROM web_task_notes l
+ WHERE l.project_id=t.project_id AND l.task_id=t.id AND l.note_id=NULLIF($7,'')::uuid))`
 
 func webTaskFilterArgs(r *http.Request) ([]any, bool) {
 	query := r.URL.Query()
 	search, status := strings.TrimSpace(query.Get("q")), query.Get("status")
-	assignee, archived, due := query.Get("assignee"), query.Get("archived"), query.Get("due")
+	assignee, archived, due, note := query.Get("assignee"), query.Get("archived"), query.Get("due"), query.Get("note")
 	if (search != "" && !webText(search, 200)) ||
 		(status != "" && status != "todo" && status != "progress" && status != "review" && status != "done") ||
 		(assignee != "" && assignee != "unassigned" && !uuidPattern.MatchString(assignee)) ||
 		(archived != "" && archived != "true" && archived != "false") ||
-		(due != "" && due != "late" && due != "soon" && due != "none") {
+		(due != "" && due != "late" && due != "soon" && due != "none") ||
+		(note != "" && !uuidPattern.MatchString(note)) {
 		return nil, false
 	}
-	return []any{r.PathValue("project"), search, status, assignee, archived, due}, true
+	return []any{r.PathValue("project"), search, status, assignee, archived, due, note}, true
 }
 
 func (s *Server) listWebTasks(w http.ResponseWriter, r *http.Request, session Session) {
@@ -136,8 +139,8 @@ func (s *Server) listWebTasks(w http.ResponseWriter, r *http.Request, session Se
 		return
 	}
 
-	rows, err := s.pool.Query(r.Context(), webTaskSelect+webTaskFilter+` AND ($7='' OR
- (t.status,t.position,t.id)>(SELECT status,position,id FROM web_tasks WHERE project_id=$1 AND id=NULLIF($7,'')::uuid))
+	rows, err := s.pool.Query(r.Context(), webTaskSelect+webTaskFilter+` AND ($8='' OR
+ (t.status,t.position,t.id)>(SELECT status,position,id FROM web_tasks WHERE project_id=$1 AND id=NULLIF($8,'')::uuid))
  ORDER BY t.status,t.position,t.id LIMIT 100`, append(args, cursor)...)
 	if err != nil {
 		internal(w, "list_web_tasks", err)

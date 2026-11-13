@@ -58,9 +58,14 @@ async function upload(page, { file, action, expected }) {
   assert.equal(repeated.status(), 202);
   assert.equal((await repeated.json()).id, version.id);
   const url = base.replace("/v1/projects/", "/projects/") + "/media/" + version.item_id + "/versions/" + version.id;
+  if (action === "수정본 업로드") {
+    await link(page, "업로드한 버전 열기").waitFor();
+    assert.notEqual(page.url(), url);
+    await link(page, "업로드한 버전 열기").click();
+  }
   await page.waitForURL(url);
   if (expected === "ready") await button(page, "재생").waitFor();
-  else await page.getByText("처리 실패", { exact: true }).waitFor();
+  else await page.locator(".version-overview > .row").getByText("처리 실패", { exact: true }).waitFor();
   const ready = await (await page.request.get(path)).json();
   assert.equal(ready.state, expected);
   return { ...ready, path, url };
@@ -233,6 +238,18 @@ try {
   await link(editor, "mix-v1").click();
   await editor.waitForURL(first.url);
   await verifyWaveformSeeking(editor, first.duration_ms);
+  await button(editor, "구간 지정").click();
+  await editor.getByLabel("시작 (초)").fill("0.2");
+  await editor.getByLabel("끝 (초)").fill("0.6");
+  await editor.getByRole("slider", { name: "구간 끝" }).press("ArrowRight");
+  const end = Number(await editor.getByLabel("끝 (초)").inputValue());
+  assert.ok(end > .6);
+  await button(editor, "구간 듣기").click();
+  await editor.waitForFunction((seconds) => {
+    const audio = document.querySelector("audio");
+    return audio?.paused && Math.abs(audio.currentTime - seconds) < .025;
+  }, end);
+  await button(editor, "구간 해제").click();
   await button(editor, "재생").click();
   await verifyMovingPlayhead(editor);
   const message = "인트로 볼륨을 조금 낮춰 주세요.";
@@ -240,6 +257,12 @@ try {
   const feedbackURL = first.url + "?note=" + createdNote.id;
   const note = await (await editor.request.get(first.path + "/notes/" + createdNote.id)).json();
   assert.equal(note.start_ms, createdNote.anchor);
+  await button(editor, "이 위치에 피드백 남기기").click();
+  await editor.getByLabel("피드백 내용").fill("새로고침 뒤 초안 확인");
+  await editor.reload();
+  await button(editor, "피드백 계속 작성").click();
+  assert.equal(await editor.getByLabel("피드백 내용").inputValue(), "새로고침 뒤 초안 확인");
+  await button(editor, "초안 버리기").click();
   console.log("Project, WAV, invitation, playback and anchored feedback passed");
 
   const signedOut = await desktop.newPage();
@@ -251,16 +274,23 @@ try {
   await signedOut.close();
 
   await owner.goto(feedbackURL);
-  await link(owner, "작업 만들기").click();
+  await button(owner, "작업 만들기").click();
   const taskTitle = "인트로 레벨 조정 " + project.slice(0, 8);
   await owner.getByLabel("작업 제목").fill(taskTitle);
   await owner.getByLabel("담당자", { exact: true }).selectOption(editorSession.account_id);
-  await button(owner, "작업 만들기").click();
+  await button(owner.getByRole("dialog", { name: "새 작업" }), "작업 만들기").click();
+  assert.equal(owner.url(), feedbackURL);
+  await link(owner, taskTitle).click();
   await owner.waitForURL("**/tasks/*");
   const taskURL = owner.url();
   const taskPath = base + "/tasks/" + taskURL.split("/").at(-1);
   const task = await (await owner.request.get(taskPath)).json();
   assert.equal(task.notes[0].id, note.id);
+  const linkedTasks = await owner.request.get(base + "/tasks?note=" + note.id);
+  assert.equal(linkedTasks.status(), 200);
+  assert.deepEqual((await linkedTasks.json()).map(({ id }) => id), [task.id]);
+  const taskCounts = await (await owner.request.get(base + "/task-counts?note=" + note.id)).json();
+  assert.equal(taskCounts.todo, 1);
 
   await editor.getByText(/^알림/).first().click();
   const inbox = editor.getByRole("region", { name: "알림 목록" });
@@ -371,6 +401,7 @@ try {
     await touch.getByRole("form", { name: "피드백 남기기" }).waitFor({ state: "hidden" });
     assert.equal(await button(touch, "이 위치에 피드백 남기기").evaluate((element) => element === document.activeElement), true);
     await writeFeedback(touch, "모바일 화면에서 확인했습니다.");
+    await ensureFits(touch);
     await tab(touch, "작업").click();
     await link(touch, taskTitle).waitFor();
     await ensureFits(touch);

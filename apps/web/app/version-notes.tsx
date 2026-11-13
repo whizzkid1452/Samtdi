@@ -5,8 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
-import { projectHref, versionHref } from "../lib/routes";
+import { versionHref } from "../lib/routes";
 import { timecode } from "../lib/timecode";
+import { ReviewTaskLinks } from "./review-task-links";
 import { readReplyDraft, useFeedbackDraft } from "./feedback-drafts";
 import { submitFeedbackShortcut } from "./feedback-shortcut";
 
@@ -170,10 +171,11 @@ export function useVersionNotes({ url, linkedNote }: { url: string; linkedNote?:
   };
 }
 
-export function VersionNotes({ feedback, url, projectId, itemId, versionId, accountId, canEdit, writable, seek, playRange, replyActive, onReply, composer }: {
+export function VersionNotes({ feedback, url, projectId, itemId, versionId, accountId, canEdit, writable, seek, playRange, pause, replyActive, onReply, composer }: {
   feedback: ReturnType<typeof useVersionNotes>; url: string; projectId: string; itemId: string; versionId: string; accountId: string;
   canEdit: boolean; writable: boolean; seek: (position: number) => void;
   playRange: (range: { start_ms: number; end_ms: number }) => Promise<void>;
+  pause: () => void;
   replyActive: boolean; onReply: () => void; composer: ReactNode;
 }) {
   const { notes, selected, filter, sort, busy, error } = feedback;
@@ -185,7 +187,7 @@ export function VersionNotes({ feedback, url, projectId, itemId, versionId, acco
 
   const thread = selected && <FeedbackThread key={selected.id} note={selected} url={url} projectId={projectId} itemId={itemId}
     versionId={versionId} canEdit={canEdit} accountId={accountId} writable={writable}
-    feedback={feedback} playRange={playRange} replyActive={replyActive} onReply={onReply} />;
+    feedback={feedback} playRange={playRange} pause={pause} replyActive={replyActive} onReply={onReply} />;
 
   return <aside className="feedback-panel" aria-label="피드백">
     <div className="row spread wrap">
@@ -233,10 +235,11 @@ export function VersionNotes({ feedback, url, projectId, itemId, versionId, acco
   </aside>;
 }
 
-function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, accountId, writable, feedback, playRange, replyActive, onReply }: {
+function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, accountId, writable, feedback, playRange, pause, replyActive, onReply }: {
   note: Note; url: string; projectId: string; itemId: string; versionId: string; canEdit: boolean; accountId: string;
   writable: boolean; feedback: ReturnType<typeof useVersionNotes>;
   playRange: (range: { start_ms: number; end_ms: number }) => Promise<void>;
+  pause: () => void;
   replyActive: boolean; onReply: () => void;
 }) {
   const target = url + "/" + note.id;
@@ -272,12 +275,12 @@ function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, acco
       {note.end_ms != null && !note.deleted && <button type="button" onClick={() => {
         if (note.end_ms != null) void playRange({ start_ms: note.start_ms, end_ms: note.end_ms });
       }}>구간 듣기</button>}
-      {writable && canEdit && !note.deleted && <Link href={projectHref(projectId, "tasks") + "?task_note=" + note.id}>작업 만들기</Link>}
       {writable && !note.deleted && (canEdit || note.author_id === accountId) && <button disabled={feedback.busy}
         onClick={() => void feedback.change(note, target, note.revision, { resolved: !note.resolved })}>
         {note.resolved ? "다시 열기" : "해결"}
       </button>}
     </div>
+    <ReviewTaskLinks projectId={projectId} note={note} canCreate={writable && canEdit && !note.deleted} pause={pause} />
     {editor(note, target)}
     <ul className="clean-list replies">
       {note.replies.map((entry) => <li key={entry.id}>
@@ -290,7 +293,7 @@ function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, acco
     {writable && !note.deleted && (replyActive
       ? <form className="notes-form" onSubmit={submit}>
         <textarea ref={replyInput} aria-label="답글" placeholder="답글 쓰기" maxLength={4000} required
-          value={reply ?? ""} onChange={(event) => updateDraft(event.target.value)} onKeyDown={submitFeedbackShortcut} />
+          readOnly={feedback.busy} value={reply ?? ""} onChange={(event) => updateDraft(event.target.value)} onKeyDown={submitFeedbackShortcut} />
         <div className="row wrap">
           <button disabled={feedback.busy || !reply?.trim()}>답글 남기기</button>
           {reply?.trim() && <button type="button" disabled={feedback.busy} onClick={() => updateDraft(null)}>답글 초안 버리기</button>}

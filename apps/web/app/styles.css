@@ -125,7 +125,14 @@ label { font-size: .9rem; color: var(--muted); }
 .dialog h2 { margin: 0; font-size: 1.25rem; }
 .dialog textarea { min-height: 5rem; }
 .upload-status { position: fixed; bottom: 1rem; right: 1rem; display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; max-width: calc(100% - 2rem); padding: .45rem .7rem; z-index: 3; border: 1px solid var(--border); background: var(--bg); border-radius: 8px; box-shadow: 0 4px 16px #1f232820; }
-.version-picker select { max-width: min(100%, 34rem); }
+.version-overview { margin: .6rem 0; overflow-wrap: anywhere; }
+.version-history { margin-top: .5rem; }
+.version-history summary { cursor: pointer; width: fit-content; }
+.version-history ul { max-width: 42rem; margin: .4rem 0; border: 1px solid var(--border); border-radius: 8px; }
+.version-history li { padding: .5rem .7rem; }
+.version-history li + li { border-top: 1px solid var(--border); }
+.version-history a { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .7rem; }
+.version-history [aria-current] { color: var(--accent); }
 @media (max-width: 700px) {
   .media-row { grid-template-columns: minmax(0, 1fr) auto; }
   .media-columns { display: none; }
@@ -174,6 +181,8 @@ label { font-size: .9rem; color: var(--muted); }
 .feedback-composer form { margin-top: .65rem; }
 .feedback-thread { border-left: 2px solid var(--accent); padding: .65rem .75rem; margin: .35rem 0 .75rem; overflow-wrap: anywhere; }
 .feedback-thread p { margin: .4rem 0; }
+.review-task-links { display: grid; gap: .4rem; margin-block: .65rem; }
+.review-task-links ul { display: grid; gap: .4rem; }
 .message-menu { margin-top: .6rem; }
 @media (max-width: 800px) {
   .review-grid { grid-template-columns: minmax(0, 1fr); }
@@ -181,7 +190,9 @@ label { font-size: .9rem; color: var(--muted); }
   .range-handle { width: 44px; }
   .review-grid { padding-bottom: 4.5rem; }
   .player-controls { position: fixed; inset: auto 0 0; margin: 0; z-index: 2; padding: .45rem 1rem max(.45rem, env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--border); }
-  .review-grid:has(textarea:focus) .player-controls { position: static; border: 0; padding-inline: 0; }
+  .review-grid:has(.notes-form) .player-controls { position: static; border: 0; padding-inline: 0; }
+  body:has(.review-grid) .upload-status { bottom: 5.5rem; }
+  body:has(.review-grid .notes-form) .upload-status { position: static; margin: .5rem auto 1rem; width: fit-content; }
 }
 
 .task-rows { list-style: none; margin: 0; padding: 0; }

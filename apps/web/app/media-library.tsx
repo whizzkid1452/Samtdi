@@ -239,18 +239,39 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
         </div>
       </div>
       {item.archived_at && <p className="notice">보관된 음원입니다.</p>}
-      {versions.length > 0 && <div className="row wrap version-picker">
-        <label>버전 선택 <select value={versionId ?? ""} onChange={(event) => {
-          router.push(versionHref({ projectId: project.id, itemId, versionId: event.target.value }));
-        }}>
-          {version && !versions.some(({ id }) => id === version.id) && <option value={version.id}>{version.filename}</option>}
-          {versions.map((entry) => <option key={entry.id} value={entry.id}>{entry.filename} · {states[entry.state]} · {uploadedAt.format(new Date(entry.created_at))}</option>)}
-        </select></label>
-        {more && <button disabled={busy} onClick={() => void loadMore()}>이전 버전 더 보기</button>}
+      {version && <div className="version-overview">
+        <div className="row wrap">
+          <strong>{version.filename}</strong>
+          <VersionStatus version={version} />
+          <time className="muted" dateTime={version.created_at}>{uploadedAt.format(new Date(version.created_at))}</time>
+          {item.latest_ready_id === version.id && <span className="status-label">최신 재생 가능 버전</span>}
+          {version.state === "ready" && item.latest_ready_id && item.latest_ready_id !== version.id &&
+            <Link href={versionHref({ projectId: project.id, itemId, versionId: item.latest_ready_id })}>최신 재생 가능 버전 열기</Link>}
+        </div>
+        {version.description && <p className="review-description muted">{version.description}</p>}
+        {item.latest_ready_id && version.state === "ready" && item.latest_ready_id !== version.id &&
+          <p className="muted review-description">이전 버전 검토 중</p>}
+        {item.latest && item.latest.id !== version.id && item.latest.state !== "ready" &&
+          <p className="review-description"><Link href={versionHref({ projectId: project.id, itemId, versionId: item.latest.id })}>
+            최신 버전 {states[item.latest.state]} 보기
+          </Link></p>}
+        {versions.length > 0 && <details className="version-history">
+          <summary>버전 기록</summary>
+          <ul className="clean-list">
+            {versions.map((entry) => <li key={entry.id}>
+              <Link href={versionHref({ projectId: project.id, itemId, versionId: entry.id })}
+                aria-current={entry.id === version.id ? "page" : undefined}>
+                <strong>{entry.filename}</strong>
+                <span className="muted">{uploadedAt.format(new Date(entry.created_at))}</span>
+                <VersionStatus version={entry} />
+                {entry.id === version.id && <span className="status-label">현재 버전</span>}
+              </Link>
+              {entry.description && <p className="review-description muted">{entry.description}</p>}
+            </li>)}
+          </ul>
+          {more && <button disabled={busy} onClick={() => void loadMore()}>이전 버전 더 보기</button>}
+        </details>}
       </div>}
-      {version?.description && <p className="review-description muted">{version.description}</p>}
-      {version?.state === "failed" && <VersionStatus version={version} />}
-      {item.latest && item.latest.id !== version?.id && <Link href={versionHref({ projectId: project.id, itemId, versionId: item.latest.id })}>최신 버전 {states[item.latest.state]} 보기</Link>}
       {version?.state === "ready" && <VersionReview key={version.id} base={base} version={version} initialAt={initialAt}
         initialNote={initialNote} projectId={project.id} accountId={accountId} canEdit={canEdit} writable={!project.archived_at && !item.archived_at} />}
       {(version?.state === "queued" || version?.state === "processing") && <p role="status">재생 준비 중입니다.</p>}

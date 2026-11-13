@@ -2,6 +2,8 @@
 
 작성일은 2026년 11월 12일이다. 조사 기준은 Samtdi `d338ef5bf9eec40908ad889f6494592a9ef2ee48`과 로컬 실행 화면이다. 아래 계획으로 UI-01~UI-06을 구현했다. PR과 확인한 동작은 문서 끝에서 확인할 수 있다.
 
+2026년 11월 13일 후속 [음원 리뷰 UX 개선 플랜](audio-review-ux-plan.md)을 작성했다. 해당 문서는 Samply·Frame.io를 참고한 음원 리뷰 개편의 구현 범위와 검증 기록을 다룬다.
+
 **프로젝트를 고르고, 음원을 듣고, 피드백을 작업으로 연결하는 순서가 화면에서 보이게 만든다.** GitHub의 프로젝트별 탐색, 목록에서 상세로 들어가는 구조, 같은 작업을 여러 보기로 확인하는 방식을 적용한다. 기본 프로젝트 화면은 음원 목록으로 정한다. [GitHub 저장소 안내](https://docs.github.com/en/repositories) · [GitHub Projects 안내](https://docs.github.com/en/issues/planning-and-tracking-with-projects/learning-about-projects/about-projects)
 
 이 문서는 화면별 구현 범위, 사용자 동작, PR 순서와 완료 조건을 관리한다. 설계 판단과 이유 표, Mermaid 구조도는 [사맛디 Notion](https://app.notion.com/41673b56612a814884cdef5a60bd96d8)에 기록한다. 기존 [MVP 구현 계획](web-implementation-plan.md)과 [MVP PR 계획](web-pr-plan.md)에 이어지는 UI 개선 작업이다.
