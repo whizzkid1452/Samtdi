@@ -1,20 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, describeError } from "../lib/api";
+import { timecode } from "../lib/timecode";
+import { ReviewWaveform } from "./review-waveform";
 import { Dialog } from "./dialog";
-import { VersionNotes, noteLabel, useVersionNotes, type Note } from "./version-notes";
+import { VersionNotes, noteLabel, useVersionNotes } from "./version-notes";
 import type { MediaVersion } from "./media-library";
 
 type Anchor = { start_ms: number; end_ms?: number };
 type Draft = { anchor: Anchor; body: string };
-type WaveformGesture = { pointerId: number; rangeStart?: number };
-
-export function timecode(ms: number) {
-  const value = Math.round(ms);
-  const seconds = Math.floor(value / 1000);
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}.${String(value % 1000).padStart(3, "0")}`;
-}
 
 export function feedbackDraftKey(accountId: string, versionId: string) {
   return "samtdi-note:" + accountId + ":" + versionId;
@@ -32,16 +27,6 @@ export function readDraft(key: string, duration: number): Draft | null {
   }
 }
 
-function groupMarkers(notes: Note[], duration: number) {
-  const groups: Note[][] = [];
-  for (const note of [...notes].filter(({ deleted }) => !deleted).sort((left, right) => left.start_ms - right.start_ms)) {
-    const group = groups.at(-1);
-    if (group && note.start_ms - group[0].start_ms < duration * 0.025) group.push(note);
-    else groups.push([note]);
-  }
-  return groups;
-}
-
 export function VersionReview({ base, version, initialAt, initialNote, projectId, accountId, canEdit, writable }: {
   base: string; version: MediaVersion; initialAt?: number; initialNote?: string;
   projectId: string; accountId: string; canEdit: boolean; writable: boolean;
@@ -51,8 +36,6 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
   const duration = version.duration_ms ?? 0;
   const key = feedbackDraftKey(accountId, version.id);
   const audio = useRef<HTMLAudioElement>(null);
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const waveformGesture = useRef<WaveformGesture | null>(null);
   const [composerTrigger, setComposerTrigger] = useState<HTMLButtonElement | null>(null);
   const [peaks, setPeaks] = useState<number[]>([]);
   const [position, setPosition] = useState(0);
@@ -65,7 +48,6 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const feedback = useVersionNotes({ url: notesURL, linkedNote: initialNote });
-  const markers = duration ? groupMarkers(feedback.notes ?? [], duration) : [];
   const validRange = range && range[1] > range[0];
   const linkedPosition = feedback.selected?.id === initialNote ? feedback.selected?.start_ms : undefined;
 
@@ -91,61 +73,6 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
     return () => player?.pause();
   }, []);
 
-  useEffect(() => {
-    const target = canvas.current;
-    const player = audio.current;
-    const context = target?.getContext("2d");
-    if (!target || !player || !context || !duration) return;
-
-    const { width, height } = target;
-    const waveform = new Path2D();
-    const barWidth = width / (peaks.length || 1);
-    for (const [index, value] of peaks.entries()) {
-      const barHeight = Math.max(2, Math.min(1, value) * height);
-      waveform.rect(index * barWidth, (height - barHeight) / 2, Math.max(1, barWidth - 1), barHeight);
-    }
-
-    let frame = 0;
-    const draw = () => {
-      const progress = Math.min(1, player.currentTime * 1000 / duration);
-      const playheadX = progress * width;
-      context.clearRect(0, 0, width, height);
-      if (range && range[1] > range[0]) {
-        context.fillStyle = "#d7ecdc";
-        context.fillRect(range[0] / duration * width, 0, (range[1] - range[0]) / duration * width, height);
-      }
-
-      context.fillStyle = "#8b99a6";
-      context.fill(waveform);
-      if (playheadX > 0) {
-        context.save();
-        context.beginPath();
-        context.rect(0, 0, playheadX, height);
-        context.clip();
-        context.fillStyle = "#1a7138";
-        context.fill(waveform);
-        context.restore();
-      }
-
-      context.fillStyle = "#1f2328";
-      context.fillRect(Math.min(playheadX, width - 2), 0, 2, height);
-      if (!player.paused && !player.ended) frame = requestAnimationFrame(draw);
-    };
-
-    const refresh = () => {
-      cancelAnimationFrame(frame);
-      draw();
-    };
-    const events = ["loadedmetadata", "play", "pause", "ended", "seeking", "seeked"];
-    for (const event of events) player.addEventListener(event, refresh);
-    refresh();
-
-    return () => {
-      cancelAnimationFrame(frame);
-      for (const event of events) player.removeEventListener(event, refresh);
-    };
-  }, [duration, peaks, range]);
-
   function clamp(ms: number) {
     return Math.round(Math.min(duration, Math.max(0, ms)));
   }
@@ -155,46 +82,6 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
     const next = clamp(ms);
     if (audio.current.currentTime !== next / 1000) audio.current.currentTime = next / 1000;
     setPosition(next);
-  }
-
-  function pointerPosition(event: PointerEvent<HTMLCanvasElement>) {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    return clamp((event.clientX - bounds.left) / bounds.width * duration);
-  }
-
-  function moveWaveformPointer(event: PointerEvent<HTMLCanvasElement>) {
-    const gesture = waveformGesture.current;
-    if (gesture?.pointerId !== event.pointerId) return;
-
-    const point = pointerPosition(event);
-    if (gesture.rangeStart === undefined) seek(point);
-    else setRange([Math.min(point, gesture.rangeStart), Math.max(point, gesture.rangeStart)]);
-  }
-
-  function endWaveformGesture(event: PointerEvent<HTMLCanvasElement>) {
-    if (waveformGesture.current?.pointerId === event.pointerId) waveformGesture.current = null;
-  }
-
-  function seekWithKeyboard(event: KeyboardEvent<HTMLCanvasElement>) {
-    if (!duration) return;
-
-    const current = (audio.current?.currentTime ?? 0) * 1000;
-    const step = Math.min(1000, duration / 100);
-    const targets: Record<string, number> = {
-      ArrowLeft: current - step,
-      ArrowDown: current - step,
-      ArrowRight: current + step,
-      ArrowUp: current + step,
-      PageDown: current - duration / 10,
-      PageUp: current + duration / 10,
-      Home: 0,
-      End: duration,
-    };
-    const target = targets[event.key];
-    if (!Number.isFinite(target)) return;
-
-    event.preventDefault();
-    seek(target);
   }
 
   function updateDraft(value: Draft | null) {
@@ -262,45 +149,12 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
         onError={() => setError("재생 파일에 접근하지 못했습니다.")} />
       {error && <div className="row wrap" role="alert"><span className="error">{error}</span>
         <button onClick={() => { setError(""); setAttempt((value) => value + 1); audio.current?.load(); }}>다시 시도</button></div>}
-      <div className="waveform-frame">
-        <canvas ref={canvas} width={1024} height={180} className={"waveform" + (range ? " selecting" : "")}
-          role="slider" tabIndex={duration ? 0 : -1} aria-label="재생 위치" aria-disabled={!duration}
-          aria-valuemin={0} aria-valuemax={duration} aria-valuenow={position} aria-valuetext={timecode(position)}
-          onKeyDown={seekWithKeyboard}
-          onPointerDown={(event) => {
-            if (!duration || !event.isPrimary || event.button !== 0) return;
-
-            const point = pointerPosition(event);
-            waveformGesture.current = { pointerId: event.pointerId, rangeStart: range ? point : undefined };
-            event.currentTarget.focus({ preventScroll: true });
-            event.currentTarget.setPointerCapture(event.pointerId);
-            moveWaveformPointer(event);
-          }}
-          onPointerMove={moveWaveformPointer}
-          onPointerUp={(event) => {
-            moveWaveformPointer(event);
-            endWaveformGesture(event);
-          }}
-          onPointerCancel={endWaveformGesture}
-          onLostPointerCapture={endWaveformGesture} />
-        {!range && markers.map((group) => {
-          const first = group[0];
-          return <button type="button" className="wave-marker" key={first.id}
-            style={{ left: `clamp(16px, ${first.start_ms / duration * 100}%, calc(100% - 16px))` }}
-            aria-label={noteLabel(first) + " 피드백 " + group.length + "개"} onClick={() => {
-              const index = group.findIndex(({ id }) => id === feedback.selected?.id);
-              const note = group[(index + 1) % group.length];
-              feedback.select(note.id);
-              seek(note.start_ms);
-            }}>{group.length}</button>;
-        })}
-      </div>
-      <div className="row spread waveform-ticks" aria-hidden="true">
-        {[0, .25, .5, .75, 1].map((part) => <span key={part}>{duration < 4000 ? (duration * part / 1000).toFixed(1) + "초" : timecode(duration * part).split(".")[0]}</span>)}
-      </div>
+      <ReviewWaveform audio={audio} duration={duration} peaks={peaks} position={position} range={range}
+        setRange={setRange} seek={seek} notes={feedback.notes} selectedId={feedback.selected?.id}
+        openNote={(note) => { feedback.select(note.id); seek(note.start_ms); }} />
       <div className="row spread wrap player-controls">
         <div className="row wrap">
-          <button type="button" disabled={!metadataReady} onClick={() => void togglePlayback()}>{playing ? "일시정지" : "재생"}</button>
+          <button type="button" className="primary review-play" disabled={!metadataReady} onClick={() => void togglePlayback()}>{playing ? "일시정지" : "재생"}</button>
           <span className="feedback-time">{timecode(position)} / {timecode(duration)}</span>
         </div>
         <label className="row">음량<input type="range" min={0} max={1} step={.05} value={volume} onChange={(event) => {
@@ -310,7 +164,7 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
         }} /></label>
       </div>
       {writable && <div className="row wrap player-actions">
-        <button className="primary" onClick={(event) => compose(false, event.currentTarget)}>{draft ? "피드백 계속 작성" : "현재 위치에 피드백"}</button>
+        <button onClick={(event) => compose(false, event.currentTarget)}>{draft ? "피드백 계속 작성" : "현재 위치에 피드백"}</button>
         <button type="button" aria-pressed={!!range} onClick={() => setRange(range ? undefined : [position, position])}>
           {range ? "구간 선택 취소" : "구간 선택"}
         </button>

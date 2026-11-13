@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { projectHref, versionHref } from "../lib/routes";
-import { timecode } from "./version-review";
+import { timecode } from "../lib/timecode";
 
 type Message = components["schemas"]["Message"];
 export type Note = components["schemas"]["Note"];

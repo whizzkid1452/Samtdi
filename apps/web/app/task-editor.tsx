@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { Dialog } from "./dialog";
-import { timecode } from "./version-review";
+import { timecode } from "../lib/timecode";
 import { useWorkspace, type Member } from "./workspace";
 
 export type Task = components["schemas"]["Task"];
