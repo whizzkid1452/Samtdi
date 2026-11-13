@@ -113,9 +113,6 @@ func NewServer(ctx context.Context, pool *pgxpool.Pool, config Config) (*Server,
 		}
 	}
 	if config.S3 != (S3Config{}) {
-		if server.git == nil {
-			return nil, errors.New("object storage requires Git to be configured")
-		}
 		server.blobs, err = newS3Store(ctx, config.S3, config.AllowLoopbackHTTP)
 		if err != nil {
 			return nil, err
@@ -176,11 +173,8 @@ func (s *Server) routes() {
 		s.reviewWebRoutes()
 	}
 
-	if s.blobs != nil {
-		s.lfsSlots = make(chan struct{}, 4)
-	}
-
 	if s.git != nil {
+		s.lfsSlots = make(chan struct{}, 4)
 		s.mux.HandleFunc("/git/{repository}/{operation...}", s.withGitSession(s.gitHTTP))
 	}
 
