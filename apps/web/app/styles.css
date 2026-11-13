@@ -69,3 +69,10 @@ label { font-size: .9rem; color: var(--muted); }
 .waveform { display: block; width: 100%; height: 6rem; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; cursor: crosshair; }
 .seek { display: grid; gap: .35rem; font-variant-numeric: tabular-nums; }
 .seek input { width: 100%; padding: 0; accent-color: var(--accent); }
+.notes { border-top: 1px solid var(--border); padding-top: .8rem; }
+.notes h3 { margin: 0 0 .75rem; }
+.notes-form { display: grid; gap: .5rem; justify-items: start; }
+.notes-form textarea { width: 100%; min-height: 4rem; }
+.message-body { white-space: pre-wrap; overflow-wrap: anywhere; margin-block: .65rem; }
+.replies { padding-left: 1rem; border-left: 2px solid var(--border); }
+.notes [data-highlighted="true"] { outline: 1px solid var(--accent); padding-inline: .5rem; }

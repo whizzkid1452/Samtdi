@@ -20,7 +20,7 @@ type Upload = { id: string; url: string; headers: Record<string, string[]> };
 
 const states = { queued: "처리 대기", processing: "처리 중", ready: "재생 가능", failed: "처리 실패" };
 
-export function MediaLibrary({ project, initialVersion, initialAt }: { project: Project; initialVersion?: string; initialAt?: number }) {
+export function MediaLibrary({ project, initialVersion, initialAt, initialNote, accountId }: { project: Project; initialVersion?: string; initialAt?: number; initialNote?: string; accountId: string }) {
   const base = `/v1/projects/${project.id}`;
   const [items, setItems] = useState<MediaItem[]>([]);
   const [itemId, setItemId] = useState("");
@@ -183,7 +183,9 @@ export function MediaLibrary({ project, initialVersion, initialAt }: { project: 
         {versions.map((entry) => <option key={entry.id} value={entry.id}>{entry.filename} · {states[entry.state]}</option>)}
       </select></label>}
       {version && <p role="status">{states[version.state]}{version.description ? " · " + version.description : ""}</p>}
-      {version?.state === "ready" && <VersionReview key={version.id} base={base} version={version} initialAt={version.id === initialVersion ? initialAt : undefined} />}
+      {version?.state === "ready" && <VersionReview key={version.id} base={base} version={version} initialAt={version.id === initialVersion ? initialAt : undefined}
+        initialNote={version.id === initialVersion ? initialNote : undefined} projectId={project.id} accountId={accountId}
+        canEdit={canEdit} writable={!project.archived_at && !item?.archived_at} />}
       {version?.state === "failed" && <div className="row wrap">
         <p className="muted">{version.failure === "invalid_audio" ? "지원되는 형식과 길이를 확인해 주세요." : "미디어를 처리하지 못했습니다."}</p>
         {canEdit && version.failure === "processing_failed" && <button disabled={busy} onClick={() => void run(async () => {
