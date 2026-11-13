@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { MediaLibrary } from "./media-library";
+import { DashboardPanel, ProjectActivity } from "./workspace-activity";
 import { TaskBoard } from "./task-board";
 import { ProjectMembers } from "./project-members";
 
@@ -18,6 +19,7 @@ export function Workspace({ initial }: { initial: Location }) {
   const [projectId, setProjectId] = useState(initial.project ?? "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [revision, setRevision] = useState(0);
   const current = projects.find((project) => project.id === projectId);
 
   const reload = useCallback(async () => {
@@ -49,6 +51,7 @@ export function Workspace({ initial }: { initial: Location }) {
     setError("");
     try {
       await change();
+      setRevision((value) => value + 1);
     } catch (cause) {
       setError(describeError(cause));
     } finally {
@@ -107,6 +110,7 @@ export function Workspace({ initial }: { initial: Location }) {
         </aside>
         <main className="main-content">
           {error && <p className="error" role="alert">{error}</p>}
+          <DashboardPanel revision={revision} />
           {current ? <>
             <div className="row spread">
               <h1>{current.title}</h1>
@@ -117,7 +121,8 @@ export function Workspace({ initial }: { initial: Location }) {
             </div>
             {current.archived_at && <p role="status">보관된 프로젝트입니다. 기존 내용을 열 수 있습니다.</p>}
             <MediaLibrary key={current.id} project={current} accountId={session.account_id} initialNote={initial.note} initialVersion={current.id === initial.project ? initial.version : undefined} initialAt={initial.at === undefined ? undefined : Number(initial.at)} />
-            <TaskBoard key={current.id} project={current} initialNote={current.id === initial.project ? initial.task_note : undefined} />
+            <TaskBoard key={current.id} project={current} initialNote={current.id === initial.project ? initial.task_note : undefined} onChange={() => setRevision((value) => value + 1)} />
+            <ProjectActivity key={current.id} projectId={current.id} revision={revision} />
             <ProjectMembers key={current.id} project={current} />
           </> : <div className="empty"><h1>프로젝트를 만들어 보세요</h1><p className="muted">프로젝트에서 팀원과 수정본을 공유할 수 있습니다.</p></div>}
         </main>

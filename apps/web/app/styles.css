@@ -88,3 +88,6 @@ label { font-size: .9rem; color: var(--muted); }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .7rem; }
 .form-grid label { display: grid; gap: .35rem; }
 .form-grid select { margin-inline-start: 0; }
+.summary-counts { margin-block: .8rem; gap: 1.5rem; }
+.summary-counts strong { color: var(--accent); margin-left: .35rem; }
+.activity { font-size: .9rem; }

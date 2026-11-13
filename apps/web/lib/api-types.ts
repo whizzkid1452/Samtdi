@@ -1324,6 +1324,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Assigned work and deadline summary */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Dashboard"];
+                    };
+                };
+                /** @description Request rejected */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Project change history */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Activity"][];
+                    };
+                };
+                /** @description Request rejected */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1424,6 +1510,28 @@ export interface components {
         NoteConfirmation: {
             id: string;
             revision: number;
+        };
+        Activity: {
+            id: string;
+            action: string;
+            subject_id: string;
+            actor: string;
+            detail: Record<string, never>;
+            created_at: string;
+        };
+        DashboardTask: {
+            id: string;
+            project_id: string;
+            project_title: string;
+            title: string;
+            status: string;
+            due_on: string;
+        };
+        Dashboard: {
+            tasks: components["schemas"]["DashboardTask"][];
+            review_count: number;
+            due_soon_count: number;
+            late_count: number;
         };
     };
     responses: never;
