@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
-import { projectHref, versionHref } from "../lib/routes";
+import { itemHref, projectHref, versionHref } from "../lib/routes";
 import { Dialog } from "./dialog";
 
 type MediaVersion = components["schemas"]["MediaVersion"];
@@ -112,7 +112,9 @@ export function UploadProvider({ accountId, children }: { accountId: string; chi
     setVisible(false);
     setCompleted(href);
     setUploadRevision((value) => value + 1);
-    if (currentPath.current.startsWith(projectHref(pending.projectId))) router.push(href);
+    const projectPath = projectHref(pending.projectId);
+    const reviewPath = itemHref(pending.projectId, version.item_id) + "/versions/";
+    if (currentPath.current.startsWith(projectPath) && !currentPath.current.startsWith(reviewPath)) router.push(href);
   }
 
   async function submit(event?: FormEvent) {
