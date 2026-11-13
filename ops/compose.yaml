@@ -1,0 +1,33 @@
+name: samtdi-dev
+services:
+  postgres:
+    image: postgres:14
+    ports: ["127.0.0.1:56444:5432"]
+    environment:
+      POSTGRES_DB: samtdi
+      POSTGRES_USER: samtdi
+      POSTGRES_PASSWORD: samtdi-local-only
+    volumes: ["pg-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U samtdi -d samtdi"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+  storage:
+    image: ghcr.io/versity/versitygw@sha256:8319a530d08d537426e2f855bae5280709795dc73a3f0c347973ef915d6343c5
+    ports: ["127.0.0.1:57070:7070"]
+    environment:
+      ROOT_ACCESS_KEY: samtdi-local
+      ROOT_SECRET_KEY: samtdi-local-storage-only
+      VGW_BACKEND: posix
+      VGW_BACKEND_ARGS: /data
+      VGW_ARGS: "--port :7070 --cors-allow-origin http://127.0.0.1:3100 --quiet"
+    volumes: ["s3-data:/data"]
+  oidc:
+    image: ghcr.io/dexidp/dex:v2.44.0@sha256:5d0656fce7d453c0e3b2706abf40c0d0ce5b371fb0b73b3cf714d05f35fa5f86
+    ports: ["127.0.0.1:5556:5556"]
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    volumes: ["./dex.local.yaml:/etc/dex/config.yaml:ro"]
+volumes:
+  pg-data:
+  s3-data:

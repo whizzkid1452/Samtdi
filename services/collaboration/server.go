@@ -179,6 +179,10 @@ func (s *Server) routes() {
 	}
 
 	s.mux.HandleFunc("GET /v1/operations", s.withSession(s.operations))
+	s.mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "alive"})
+	})
+	s.mux.HandleFunc("GET /readyz", s.readiness)
 	s.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.pool.Ping(r.Context()); err != nil {
 			problem(w, http.StatusServiceUnavailable, "database_unavailable")
@@ -200,6 +204,24 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /v1/projects/{project}/members/{account}", s.withSession(s.changeMember))
 	s.mux.HandleFunc("POST /v1/projects/{project}/invitations", s.withSession(s.invite))
 	s.mux.HandleFunc("DELETE /v1/projects/{project}/invitations/{invite}", s.withSession(s.revokeInvite))
+}
+
+func (s *Server) readiness(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+
+	if err := s.pool.Ping(ctx); err != nil {
+		problem(w, http.StatusServiceUnavailable, "database_unavailable")
+		return
+	}
+	if store, ok := s.blobs.(*s3Store); ok {
+		if err := store.ping(ctx); err != nil {
+			problem(w, http.StatusServiceUnavailable, "storage_unavailable")
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 }
 
 type failure struct {
