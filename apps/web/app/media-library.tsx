@@ -230,11 +230,12 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
           {canEdit && !item.archived_at && <button className="primary" onClick={() => openUpload({ projectId: project.id, itemId })}>수정본 업로드</button>}
           {canEdit && <details className="inbox">
             <summary aria-label="음원 관리">관리</summary>
-            <div className="inbox-body panel"><button disabled={busy} onClick={() => {
+            <div className="inbox-body panel"><div className="row wrap">{version?.state === "ready" && <a className="button" href={base + "/versions/" + version.id + "/files/original"}>원본 다운로드</a>}<button disabled={busy} onClick={() => {
               if (!window.confirm(item.archived_at ? "음원을 복원할까요?" : "음원을 보관할까요?")) return;
               void change(() => api(itemPath, { method: "PATCH", body: JSON.stringify({ archived: !item.archived_at }) }));
-            }}>{item.archived_at ? "음원 복원" : "음원 보관"}</button></div>
+            }}>{item.archived_at ? "음원 복원" : "음원 보관"}</button></div></div>
           </details>}
+          {!canEdit && version?.state === "ready" && <a className="button" href={base + "/versions/" + version.id + "/files/original"}>원본 다운로드</a>}
         </div>
       </div>
       {item.archived_at && <p className="notice">보관된 음원입니다.</p>}
