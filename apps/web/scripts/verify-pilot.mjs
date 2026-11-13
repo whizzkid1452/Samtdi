@@ -98,6 +98,50 @@ async function ensureFits(page) {
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Page must fit the viewport");
 }
 
+async function verifyWaveformSeeking(page, durationMs) {
+  const waveform = page.getByRole("slider", { name: "재생 위치", exact: true });
+  const bounds = await waveform.boundingBox();
+  assert.ok(bounds);
+  assert.equal(await page.getByRole("region", { name: "음원 플레이어" }).locator('input[type="range"]').count(), 1);
+
+  const y = bounds.y + bounds.height / 4;
+  const start = bounds.x + bounds.width * .2;
+  const end = bounds.x + bounds.width * .75;
+  await page.mouse.click(start, y);
+  await page.waitForFunction(ms => Math.abs(document.querySelector("audio").currentTime * 1000 - ms) < 20, durationMs * .2);
+  await page.mouse.move(start, y);
+  await page.mouse.down();
+  await page.mouse.move(end, y, { steps: 8 });
+  await page.waitForFunction(ms => Math.abs(document.querySelector("audio").currentTime * 1000 - ms) < 20, durationMs * .75);
+  await page.mouse.up();
+
+  await waveform.press("End");
+  assert.equal(Number(await waveform.getAttribute("aria-valuenow")), durationMs);
+  await waveform.press("Home");
+}
+
+async function verifyMovingPlayhead(page) {
+  const canvas = page.getByRole("slider", { name: "재생 위치", exact: true });
+  const sample = await canvas.evaluate(async (element) => {
+    const context = element.getContext("2d");
+    const audio = element.closest("section").querySelector("audio");
+    const start = audio.currentTime;
+    const pixels = new Set();
+    const deadline = performance.now() + 2000;
+    while (audio.currentTime < start + .5 && performance.now() < deadline) {
+      await new Promise(requestAnimationFrame);
+      const row = context.getImageData(0, 0, element.width, 1).data;
+      for (let index = 3; index < row.length; index += 4) {
+        if (row[index] === 0) continue;
+        pixels.add((index - 3) / 4);
+        break;
+      }
+    }
+    return pixels.size;
+  });
+  assert.ok(sample >= 5, `Expected smooth playhead movement, observed ${sample} positions`);
+}
+
 async function verifyFeedbackPagination({ owner, first, note }) {
   for (let index = 0; index < 100; index++) {
     const response = await owner.request.post(first.path + "/notes", {
@@ -154,12 +198,9 @@ try {
 
   await link(editor, "mix-v1").click();
   await editor.waitForURL(first.url);
-  const slider = editor.getByRole("slider", { name: "재생 위치", exact: true });
-  await slider.press("End");
-  assert.equal(Number(await slider.inputValue()), first.duration_ms);
-  await slider.press("Home");
+  await verifyWaveformSeeking(editor, first.duration_ms);
   await button(editor, "재생").click();
-  await editor.waitForFunction(() => document.querySelector("audio")?.currentTime > .12);
+  await verifyMovingPlayhead(editor);
   const message = "인트로 볼륨을 조금 낮춰 주세요.";
   const createdNote = await writeFeedback(editor, message, { playing: true });
   const feedbackURL = first.url + "?note=" + createdNote.id;

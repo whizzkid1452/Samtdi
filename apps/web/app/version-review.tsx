@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent } from "react";
 import { api, describeError } from "../lib/api";
 import { Dialog } from "./dialog";
 import { VersionNotes, noteLabel, useVersionNotes, type Note } from "./version-notes";
@@ -8,6 +8,7 @@ import type { MediaVersion } from "./media-library";
 
 type Anchor = { start_ms: number; end_ms?: number };
 type Draft = { anchor: Anchor; body: string };
+type WaveformGesture = { pointerId: number; rangeStart?: number };
 
 export function timecode(ms: number) {
   const value = Math.round(ms);
@@ -51,7 +52,7 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
   const key = feedbackDraftKey(accountId, version.id);
   const audio = useRef<HTMLAudioElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const dragStart = useRef<number | null>(null);
+  const waveformGesture = useRef<WaveformGesture | null>(null);
   const [composerTrigger, setComposerTrigger] = useState<HTMLButtonElement | null>(null);
   const [peaks, setPeaks] = useState<number[]>([]);
   const [position, setPosition] = useState(0);
@@ -92,26 +93,58 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
 
   useEffect(() => {
     const target = canvas.current;
+    const player = audio.current;
     const context = target?.getContext("2d");
-    if (!target || !context || !duration) return;
+    if (!target || !player || !context || !duration) return;
 
     const { width, height } = target;
-    context.clearRect(0, 0, width, height);
-    if (range && range[1] > range[0]) {
-      context.fillStyle = "#d7ecdc";
-      context.fillRect(range[0] / duration * width, 0, (range[1] - range[0]) / duration * width, height);
-    }
-
+    const waveform = new Path2D();
     const barWidth = width / (peaks.length || 1);
     for (const [index, value] of peaks.entries()) {
       const barHeight = Math.max(2, Math.min(1, value) * height);
-      context.fillStyle = index / peaks.length <= position / duration ? "#1a7138" : "#8b99a6";
-      context.fillRect(index * barWidth, (height - barHeight) / 2, Math.max(1, barWidth - 1), barHeight);
+      waveform.rect(index * barWidth, (height - barHeight) / 2, Math.max(1, barWidth - 1), barHeight);
     }
 
-    context.fillStyle = "#1f2328";
-    context.fillRect(position / duration * width, 0, 2, height);
-  }, [duration, peaks, position, range]);
+    let frame = 0;
+    const draw = () => {
+      const progress = Math.min(1, player.currentTime * 1000 / duration);
+      const playheadX = progress * width;
+      context.clearRect(0, 0, width, height);
+      if (range && range[1] > range[0]) {
+        context.fillStyle = "#d7ecdc";
+        context.fillRect(range[0] / duration * width, 0, (range[1] - range[0]) / duration * width, height);
+      }
+
+      context.fillStyle = "#8b99a6";
+      context.fill(waveform);
+      if (playheadX > 0) {
+        context.save();
+        context.beginPath();
+        context.rect(0, 0, playheadX, height);
+        context.clip();
+        context.fillStyle = "#1a7138";
+        context.fill(waveform);
+        context.restore();
+      }
+
+      context.fillStyle = "#1f2328";
+      context.fillRect(Math.min(playheadX, width - 2), 0, 2, height);
+      if (!player.paused && !player.ended) frame = requestAnimationFrame(draw);
+    };
+
+    const refresh = () => {
+      cancelAnimationFrame(frame);
+      draw();
+    };
+    const events = ["loadedmetadata", "play", "pause", "ended", "seeking", "seeked"];
+    for (const event of events) player.addEventListener(event, refresh);
+    refresh();
+
+    return () => {
+      cancelAnimationFrame(frame);
+      for (const event of events) player.removeEventListener(event, refresh);
+    };
+  }, [duration, peaks, range]);
 
   function clamp(ms: number) {
     return Math.round(Math.min(duration, Math.max(0, ms)));
@@ -120,13 +153,48 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
   function seek(ms: number) {
     if (!audio.current || !Number.isFinite(ms)) return;
     const next = clamp(ms);
-    audio.current.currentTime = next / 1000;
+    if (audio.current.currentTime !== next / 1000) audio.current.currentTime = next / 1000;
     setPosition(next);
   }
 
   function pointerPosition(event: PointerEvent<HTMLCanvasElement>) {
     const bounds = event.currentTarget.getBoundingClientRect();
     return clamp((event.clientX - bounds.left) / bounds.width * duration);
+  }
+
+  function moveWaveformPointer(event: PointerEvent<HTMLCanvasElement>) {
+    const gesture = waveformGesture.current;
+    if (gesture?.pointerId !== event.pointerId) return;
+
+    const point = pointerPosition(event);
+    if (gesture.rangeStart === undefined) seek(point);
+    else setRange([Math.min(point, gesture.rangeStart), Math.max(point, gesture.rangeStart)]);
+  }
+
+  function endWaveformGesture(event: PointerEvent<HTMLCanvasElement>) {
+    if (waveformGesture.current?.pointerId === event.pointerId) waveformGesture.current = null;
+  }
+
+  function seekWithKeyboard(event: KeyboardEvent<HTMLCanvasElement>) {
+    if (!duration) return;
+
+    const current = (audio.current?.currentTime ?? 0) * 1000;
+    const step = Math.min(1000, duration / 100);
+    const targets: Record<string, number> = {
+      ArrowLeft: current - step,
+      ArrowDown: current - step,
+      ArrowRight: current + step,
+      ArrowUp: current + step,
+      PageDown: current - duration / 10,
+      PageUp: current + duration / 10,
+      Home: 0,
+      End: duration,
+    };
+    const target = targets[event.key];
+    if (!Number.isFinite(target)) return;
+
+    event.preventDefault();
+    seek(target);
   }
 
   function updateDraft(value: Draft | null) {
@@ -195,21 +263,26 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
       {error && <div className="row wrap" role="alert"><span className="error">{error}</span>
         <button onClick={() => { setError(""); setAttempt((value) => value + 1); audio.current?.load(); }}>다시 시도</button></div>}
       <div className="waveform-frame">
-        <canvas ref={canvas} width={1024} height={180} className={"waveform" + (range ? " selecting" : "")} aria-hidden="true"
+        <canvas ref={canvas} width={1024} height={180} className={"waveform" + (range ? " selecting" : "")}
+          role="slider" tabIndex={duration ? 0 : -1} aria-label="재생 위치" aria-disabled={!duration}
+          aria-valuemin={0} aria-valuemax={duration} aria-valuenow={position} aria-valuetext={timecode(position)}
+          onKeyDown={seekWithKeyboard}
           onPointerDown={(event) => {
+            if (!duration || !event.isPrimary || event.button !== 0) return;
+
             const point = pointerPosition(event);
-            if (!range) { seek(point); return; }
-            dragStart.current = point;
+            waveformGesture.current = { pointerId: event.pointerId, rangeStart: range ? point : undefined };
+            event.currentTarget.focus({ preventScroll: true });
             event.currentTarget.setPointerCapture(event.pointerId);
-            setRange([point, point]);
+            moveWaveformPointer(event);
           }}
-          onPointerMove={(event) => {
-            if (dragStart.current === null) return;
-            const point = pointerPosition(event);
-            setRange([Math.min(point, dragStart.current), Math.max(point, dragStart.current)]);
+          onPointerMove={moveWaveformPointer}
+          onPointerUp={(event) => {
+            moveWaveformPointer(event);
+            endWaveformGesture(event);
           }}
-          onPointerUp={() => { dragStart.current = null; }}
-          onPointerCancel={() => { dragStart.current = null; }} />
+          onPointerCancel={endWaveformGesture}
+          onLostPointerCapture={endWaveformGesture} />
         {!range && markers.map((group) => {
           const first = group[0];
           return <button type="button" className="wave-marker" key={first.id}
@@ -225,8 +298,6 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
       <div className="row spread waveform-ticks" aria-hidden="true">
         {[0, .25, .5, .75, 1].map((part) => <span key={part}>{duration < 4000 ? (duration * part / 1000).toFixed(1) + "초" : timecode(duration * part).split(".")[0]}</span>)}
       </div>
-      <input aria-label="재생 위치" className="playhead-input" type="range" min={0} max={duration} step={1}
-        value={position} aria-valuetext={timecode(position)} onChange={(event) => seek(Number(event.target.value))} />
       <div className="row spread wrap player-controls">
         <div className="row wrap">
           <button type="button" disabled={!metadataReady} onClick={() => void togglePlayback()}>{playing ? "일시정지" : "재생"}</button>
