@@ -24,3 +24,5 @@ aws --endpoint-url "$AYOTBI_S3_ENDPOINT" s3 mb "s3://$AYOTBI_S3_BUCKET"
 스토리지 버킷이 이미 있으면 생성 대신 조회로 확인합니다. `curl http://127.0.0.1:8080/livez`는 프로세스 상태, `/readyz`는 DB·설정된 스토리지 연결 상태를 확인합니다. 기존 `/healthz`는 DB 상태를 유지합니다.
 
 `ops/verify-web.sh`는 격리 PostgreSQL로 실행합니다. API 형식은 `contracts/openapi.json`을 수정하고 `apps/web`에서 `pnpm generate:api`를 실행해 갱신합니다.
+
+미디어 처리에는 FFmpeg·FFprobe가 필요합니다. API와 같은 환경을 별도 터미널에 적용하고 `services/collaboration`에서 `go run ./cmd/ayotbi-collaboration media-worker`를 실행합니다. 처리 작업은 최대 8분, 임대는 10분입니다. 전송이나 저장 오류는 최대 세 번 시도하며, 형식 오류는 새 업로드가 필요합니다. 로컬 설정은 파일당 500 MB, 30분, 모노·스테레오를 허용합니다.

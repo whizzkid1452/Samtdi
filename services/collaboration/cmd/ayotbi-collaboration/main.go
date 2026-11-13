@@ -33,8 +33,15 @@ func main() {
 		}
 		return
 	}
+	if len(os.Args) == 2 && os.Args[1] == "media-worker" {
+		if err := mediaWorker(); err != nil {
+			slog.Error("media worker stopped", "reason", err.Error())
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: ayotbi-collaboration [snapshot|restore <folder>]")
+		fmt.Fprintln(os.Stderr, "usage: ayotbi-collaboration [media-worker|snapshot <folder>|restore <folder>]")
 		os.Exit(2)
 	}
 
@@ -151,4 +158,16 @@ func run() error {
 		defer finish()
 		return server.Shutdown(shutdown)
 	}
+}
+
+func mediaWorker() error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	pool, err := openDatabase(ctx)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	settings := storageSettings()
+	return collaboration.RunWebMediaWorker(ctx, pool, settings.S3, settings.AllowLoopbackHTTP)
 }
