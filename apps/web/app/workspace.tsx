@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
+import { MediaLibrary } from "./media-library";
 import { ProjectMembers } from "./project-members";
 
 type Session = components["schemas"]["Session"];
@@ -114,6 +115,7 @@ export function Workspace({ initial }: { initial: Location }) {
               })}>{current.archived_at ? "복원" : "보관"}</button>}
             </div>
             {current.archived_at && <p role="status">보관된 프로젝트입니다. 기존 내용을 열 수 있습니다.</p>}
+            <MediaLibrary key={current.id} project={current} initialVersion={current.id === initial.project ? initial.version : undefined} />
             <ProjectMembers key={current.id} project={current} />
           </> : <div className="empty"><h1>프로젝트를 만들어 보세요</h1><p className="muted">프로젝트에서 팀원과 수정본을 공유할 수 있습니다.</p></div>}
         </main>

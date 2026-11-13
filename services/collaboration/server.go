@@ -167,6 +167,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) routes() {
+	s.webUploadRoutes()
 	if s.receive != nil {
 		s.reviewRoutes()
 		s.reviewMediaRoutes()
