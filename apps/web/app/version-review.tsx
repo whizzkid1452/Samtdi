@@ -4,28 +4,10 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, describeError } from "../lib/api";
 import { timecode } from "../lib/timecode";
 import { ReviewWaveform } from "./review-waveform";
-import { Dialog } from "./dialog";
-import { VersionNotes, noteLabel, useVersionNotes } from "./version-notes";
+import { FeedbackComposer } from "./feedback-composer";
+import { feedbackDraftKey, readFeedbackDraft, useFeedbackDraft, type FeedbackDraft } from "./feedback-drafts";
+import { VersionNotes, useVersionNotes } from "./version-notes";
 import type { MediaVersion } from "./media-library";
-
-type Anchor = { start_ms: number; end_ms?: number };
-type Draft = { anchor: Anchor; body: string };
-
-export function feedbackDraftKey(accountId: string, versionId: string) {
-  return "samtdi-note:" + accountId + ":" + versionId;
-}
-
-export function readDraft(key: string, duration: number): Draft | null {
-  try {
-    const draft = JSON.parse(sessionStorage.getItem(key) ?? "null") as Draft | null;
-    if (!draft || typeof draft.body !== "string" || !draft.anchor ||
-        !Number.isInteger(draft.anchor.start_ms) || draft.anchor.start_ms < 0 || draft.anchor.start_ms > duration) return null;
-    const end = draft.anchor.end_ms;
-    return end === undefined || (Number.isInteger(end) && end > draft.anchor.start_ms && end <= duration) ? draft : null;
-  } catch {
-    return null;
-  }
-}
 
 export function VersionReview({ base, version, initialAt, initialNote, projectId, accountId, canEdit, writable }: {
   base: string; version: MediaVersion; initialAt?: number; initialNote?: string;
@@ -36,15 +18,18 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
   const duration = version.duration_ms ?? 0;
   const key = feedbackDraftKey(accountId, version.id);
   const audio = useRef<HTMLAudioElement>(null);
-  const [composerTrigger, setComposerTrigger] = useState<HTMLButtonElement | null>(null);
+  const composerTrigger = useRef<HTMLButtonElement>(null);
   const [peaks, setPeaks] = useState<number[]>([]);
   const [position, setPosition] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [metadataReady, setMetadataReady] = useState(false);
   const [volume, setVolume] = useState(1);
   const [range, setRange] = useState<[number, number]>();
-  const [draft, setDraft] = useState(() => readDraft(key, duration));
-  const [composerOpen, setComposerOpen] = useState(false);
+  const { draft, updateDraft, storageError } = useFeedbackDraft<FeedbackDraft>({
+    key, read: () => readFeedbackDraft({ key, duration }),
+  });
+  const [editor, setEditor] = useState<"note" | { replyTo: string }>();
+  const composerOpen = editor === "note";
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const feedback = useVersionNotes({ url: notesURL, linkedNote: initialNote });
@@ -84,24 +69,21 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
     setPosition(next);
   }
 
-  function updateDraft(value: Draft | null) {
-    setDraft(value);
-    try {
-      if (value) sessionStorage.setItem(key, JSON.stringify(value));
-      else sessionStorage.removeItem(key);
-    } catch {
-      setError("브라우저 저장 공간을 사용할 수 없습니다. 이 화면에서 피드백을 저장해 주세요.");
-    }
+  function currentPosition() {
+    return clamp((audio.current?.currentTime ?? 0) * 1000);
   }
 
-  function compose(useRange: boolean, trigger: HTMLButtonElement) {
-    setComposerTrigger(trigger);
-    if (!draft) {
-      const now = clamp((audio.current?.currentTime ?? 0) * 1000);
-      const anchor = useRange && range ? { start_ms: range[0], end_ms: range[1] } : { start_ms: now };
-      updateDraft({ anchor, body: "" });
-    }
-    setComposerOpen(true);
+  function compose(useRange: boolean) {
+    const anchor = useRange && validRange ? { start_ms: range[0], end_ms: range[1] } : { start_ms: currentPosition() };
+    if (!draft?.body.trim()) updateDraft({ anchor, body: "" });
+
+    audio.current?.pause();
+    setEditor("note");
+  }
+
+  function closeComposer() {
+    setEditor(undefined);
+    composerTrigger.current?.focus();
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -110,16 +92,9 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
 
     if (await feedback.create(draft.anchor, draft.body)) {
       updateDraft(null);
-      setComposerOpen(false);
+      setRange(undefined);
+      closeComposer();
     }
-  }
-
-  function closeDraft() {
-    if (feedback.busy) return;
-    if (draft?.body.trim() && !window.confirm("작성 중인 피드백을 버릴까요?")) return;
-
-    updateDraft(null);
-    setComposerOpen(false);
   }
 
   async function togglePlayback() {
@@ -164,7 +139,6 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
         }} /></label>
       </div>
       {writable && <div className="row wrap player-actions">
-        <button onClick={(event) => compose(false, event.currentTarget)}>{draft ? "피드백 계속 작성" : "현재 위치에 피드백"}</button>
         <button type="button" aria-pressed={!!range} onClick={() => setRange(range ? undefined : [position, position])}>
           {range ? "구간 선택 취소" : "구간 선택"}
         </button>
@@ -176,19 +150,25 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
             setRange(index === 0 ? [value, range[1]] : [range[0], value]);
           }} />
         </label>)}
-        <button disabled={!validRange} onClick={(event) => compose(true, event.currentTarget)}>선택 구간에 피드백</button>
+        <button disabled={!validRange} onClick={() => compose(true)}>선택 구간에 피드백</button>
       </div>}
     </section>
     <VersionNotes feedback={feedback} url={notesURL} projectId={projectId} itemId={version.item_id}
-      versionId={version.id} accountId={accountId} canEdit={canEdit} writable={writable} seek={seek} />
-    {composerOpen && draft && writable && <Dialog title="피드백 남기기" close={closeDraft} returnFocus={composerTrigger}>
-      <form className="notes-form" onSubmit={save}>
-        <p className="feedback-time">{noteLabel(draft.anchor)}</p>
-        <textarea aria-label="피드백 내용" placeholder="이 부분에서 들은 내용을 남겨 주세요" maxLength={4000}
-          value={draft.body} onChange={(event) => updateDraft({ ...draft, body: event.target.value })} required />
-        {feedback.error && <p role="alert" className="error">{feedback.error}</p>}
-        <button className="primary" disabled={feedback.busy || !draft.body.trim()}>피드백 저장</button>
-      </form>
-    </Dialog>}
+      versionId={version.id} accountId={accountId} canEdit={canEdit} writable={writable} seek={seek}
+      replyActive={typeof editor === "object" && editor.replyTo === feedback.selected?.id}
+      onReply={() => {
+        if (feedback.selected) setEditor({ replyTo: feedback.selected.id });
+        audio.current?.pause();
+      }}
+      composer={writable && <div className="feedback-composer">
+        <button ref={composerTrigger} aria-expanded={composerOpen} disabled={!metadataReady || feedback.busy} onClick={() => composerOpen ? closeComposer() : compose(false)}>
+          {composerOpen ? "새 피드백" : draft?.body.trim() ? "피드백 계속 작성" : "이 위치에 피드백 남기기"}
+        </button>
+        {storageError && <p className="error" role="alert">{storageError}</p>}
+        {composerOpen && draft && <FeedbackComposer draft={draft} busy={feedback.busy} error={feedback.error}
+          save={save} close={closeComposer} discard={() => { updateDraft(null); closeComposer(); }}
+          changeBody={(body) => updateDraft({ ...draft, body })}
+          moveAnchor={() => updateDraft({ ...draft, anchor: { start_ms: currentPosition() } })} />}
+      </div>} />
   </div>;
 }

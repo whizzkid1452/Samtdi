@@ -7,7 +7,7 @@ import { api, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { itemHref, projectHref, versionHref } from "../lib/routes";
 import { useUpload } from "./upload";
-import { VersionReview, feedbackDraftKey, readDraft } from "./version-review";
+import { VersionReview } from "./version-review";
 import type { Project } from "./workspace";
 
 type MediaItem = components["schemas"]["MediaItem"];
@@ -218,16 +218,6 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
     }
   }
 
-  function canLeaveVersion() {
-    if (!version) return true;
-    const key = feedbackDraftKey(accountId, version.id);
-    if (!readDraft(key, version.duration_ms ?? 0)?.body.trim()) return true;
-    if (!window.confirm("작성 중인 피드백을 버리고 다른 버전을 열까요?")) return false;
-
-    sessionStorage.removeItem(key);
-    return true;
-  }
-
   return <section aria-label="음원 상세">
     <Link href={projectHref(project.id)}>음원 목록</Link>
     {error && <div className="row wrap" role="alert"><span className="error">{error}</span>
@@ -251,7 +241,7 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
       {item.archived_at && <p className="notice">보관된 음원입니다.</p>}
       {versions.length > 0 && <div className="row wrap version-picker">
         <label>버전 선택 <select value={versionId ?? ""} onChange={(event) => {
-          if (canLeaveVersion()) router.push(versionHref({ projectId: project.id, itemId, versionId: event.target.value }));
+          router.push(versionHref({ projectId: project.id, itemId, versionId: event.target.value }));
         }}>
           {version && !versions.some(({ id }) => id === version.id) && <option value={version.id}>{version.filename}</option>}
           {versions.map((entry) => <option key={entry.id} value={entry.id}>{entry.filename} · {states[entry.state]} · {uploadedAt.format(new Date(entry.created_at))}</option>)}
@@ -260,9 +250,7 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
       </div>}
       {version?.description && <p className="review-description muted">{version.description}</p>}
       {version?.state === "failed" && <VersionStatus version={version} />}
-      {item.latest && item.latest.id !== version?.id && <Link href={versionHref({ projectId: project.id, itemId, versionId: item.latest.id })} onNavigate={(event) => {
-        if (!canLeaveVersion()) event.preventDefault();
-      }}>최신 버전 {states[item.latest.state]} 보기</Link>}
+      {item.latest && item.latest.id !== version?.id && <Link href={versionHref({ projectId: project.id, itemId, versionId: item.latest.id })}>최신 버전 {states[item.latest.state]} 보기</Link>}
       {version?.state === "ready" && <VersionReview key={version.id} base={base} version={version} initialAt={initialAt}
         initialNote={initialNote} projectId={project.id} accountId={accountId} canEdit={canEdit} writable={!project.archived_at && !item.archived_at} />}
       {(version?.state === "queued" || version?.state === "processing") && <p role="status">재생 준비 중입니다.</p>}

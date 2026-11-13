@@ -67,12 +67,14 @@ async function upload(page, { file, action, expected }) {
 }
 
 async function writeFeedback(page, message, { playing = false } = {}) {
-  await button(page, "현재 위치에 피드백").click();
-  const composer = page.getByRole("dialog", { name: "피드백 남기기" });
+  await button(page, "이 위치에 피드백 남기기").click();
+  const composer = page.getByRole("form", { name: "피드백 남기기" });
   const [minutes, seconds] = (await composer.locator(".feedback-time").textContent()).split(":");
   const anchor = Math.round((Number(minutes) * 60 + Number(seconds)) * 1000);
   await composer.getByLabel("피드백 내용").fill(message);
   if (playing) {
+    assert.equal(await page.locator("audio").evaluate(audio => audio.paused), true);
+    await button(page, "재생").click();
     await page.waitForFunction((ms) => document.querySelector("audio")?.currentTime > ms / 1000 + .25, anchor);
   }
 
@@ -293,6 +295,7 @@ try {
   console.log("Assignment notification, MP3 revision, review, completion and board navigation passed");
 
   await owner.goto(feedbackURL);
+  await button(owner, "답글").click();
   await owner.getByRole("textbox", { name: "답글", exact: true }).fill("수정본을 올렸습니다.");
   await button(owner, "답글 남기기").click();
   await owner.locator("p.message-body").filter({ hasText: /^수정본을 올렸습니다\.$/ }).waitFor();
@@ -331,10 +334,10 @@ try {
     await touch.goto(first.url);
     await touch.waitForFunction(() => document.querySelector("audio")?.readyState >= 1);
     await ensureFits(touch);
-    await button(touch, "현재 위치에 피드백").click();
+    await button(touch, "이 위치에 피드백 남기기").click();
     await touch.keyboard.press("Escape");
-    await touch.getByRole("dialog").waitFor({ state: "hidden" });
-    assert.equal(await button(touch, "현재 위치에 피드백").evaluate((element) => element === document.activeElement), true);
+    await touch.getByRole("form", { name: "피드백 남기기" }).waitFor({ state: "hidden" });
+    assert.equal(await button(touch, "이 위치에 피드백 남기기").evaluate((element) => element === document.activeElement), true);
     await writeFeedback(touch, "모바일 화면에서 확인했습니다.");
     await tab(touch, "작업").click();
     await link(touch, taskTitle).waitFor();
