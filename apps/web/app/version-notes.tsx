@@ -134,9 +134,10 @@ export function useVersionNotes({ url, linkedNote }: { url: string; linkedNote?:
   };
 }
 
-export function VersionNotes({ feedback, url, projectId, itemId, versionId, accountId, canEdit, writable, seek, replyActive, onReply, composer }: {
+export function VersionNotes({ feedback, url, projectId, itemId, versionId, accountId, canEdit, writable, seek, playRange, replyActive, onReply, composer }: {
   feedback: ReturnType<typeof useVersionNotes>; url: string; projectId: string; itemId: string; versionId: string; accountId: string;
   canEdit: boolean; writable: boolean; seek: (position: number) => void;
+  playRange: (range: { start_ms: number; end_ms: number }) => Promise<void>;
   replyActive: boolean; onReply: () => void; composer: ReactNode;
 }) {
   const { notes, selected, filter, busy, error } = feedback;
@@ -148,7 +149,7 @@ export function VersionNotes({ feedback, url, projectId, itemId, versionId, acco
 
   const thread = selected && <FeedbackThread key={selected.id} note={selected} url={url} projectId={projectId} itemId={itemId}
     versionId={versionId} canEdit={canEdit} accountId={accountId} writable={writable}
-    feedback={feedback} replyActive={replyActive} onReply={onReply} />;
+    feedback={feedback} playRange={playRange} replyActive={replyActive} onReply={onReply} />;
 
   return <aside className="feedback-panel" aria-label="피드백">
     <div className="row spread wrap">
@@ -186,9 +187,10 @@ export function VersionNotes({ feedback, url, projectId, itemId, versionId, acco
   </aside>;
 }
 
-function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, accountId, writable, feedback, replyActive, onReply }: {
+function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, accountId, writable, feedback, playRange, replyActive, onReply }: {
   note: Note; url: string; projectId: string; itemId: string; versionId: string; canEdit: boolean; accountId: string;
   writable: boolean; feedback: ReturnType<typeof useVersionNotes>;
+  playRange: (range: { start_ms: number; end_ms: number }) => Promise<void>;
   replyActive: boolean; onReply: () => void;
 }) {
   const target = url + "/" + note.id;
@@ -221,6 +223,9 @@ function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, acco
     <p className="message-body">{note.deleted ? "삭제된 피드백" : note.body}</p>
     <div className="row wrap">
       <Link href={link}>피드백 링크</Link>
+      {note.end_ms != null && !note.deleted && <button type="button" onClick={() => {
+        if (note.end_ms != null) void playRange({ start_ms: note.start_ms, end_ms: note.end_ms });
+      }}>구간 듣기</button>}
       {writable && canEdit && !note.deleted && <Link href={projectHref(projectId, "tasks") + "?task_note=" + note.id}>작업 만들기</Link>}
       {writable && !note.deleted && (canEdit || note.author_id === accountId) && <button disabled={feedback.busy}
         onClick={() => void feedback.change(note, target, note.revision, { resolved: !note.resolved })}>

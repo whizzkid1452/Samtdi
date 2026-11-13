@@ -18,6 +18,7 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
   const duration = version.duration_ms ?? 0;
   const key = feedbackDraftKey(accountId, version.id);
   const audio = useRef<HTMLAudioElement>(null);
+  const previewEnd = useRef<number | null>(null);
   const composerTrigger = useRef<HTMLButtonElement>(null);
   const [peaks, setPeaks] = useState<number[]>([]);
   const [position, setPosition] = useState(0);
@@ -64,6 +65,11 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
 
   function seek(ms: number) {
     if (!audio.current || !Number.isFinite(ms)) return;
+    if (previewEnd.current !== null) {
+      previewEnd.current = null;
+      audio.current.pause();
+    }
+
     const next = clamp(ms);
     if (audio.current.currentTime !== next / 1000) audio.current.currentTime = next / 1000;
     setPosition(next);
@@ -77,6 +83,7 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
     const anchor = useRange && validRange ? { start_ms: range[0], end_ms: range[1] } : { start_ms: currentPosition() };
     if (!draft?.body.trim()) updateDraft({ anchor, body: "" });
 
+    previewEnd.current = null;
     audio.current?.pause();
     setEditor("note");
   }
@@ -97,10 +104,25 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
     }
   }
 
+  async function playRange({ start_ms, end_ms }: { start_ms: number; end_ms: number }) {
+    const player = audio.current;
+    if (!player || !metadataReady || end_ms <= start_ms) return;
+
+    seek(start_ms);
+    previewEnd.current = end_ms;
+    try {
+      await player.play();
+    } catch {
+      previewEnd.current = null;
+      setError("구간을 재생할 수 없습니다. 파일 연결을 확인해 주세요.");
+    }
+  }
+
   async function togglePlayback() {
     const player = audio.current;
     if (!player) return;
     if (!player.paused) {
+      previewEnd.current = null;
       player.pause();
       return;
     }
@@ -113,19 +135,25 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
   }
 
   return <div className="review-grid">
-    <section className="player-panel" aria-label="음원 플레이어">
+    <section className="player-panel" aria-label="음원 플레이어" onKeyDown={(event) => {
+      if (event.key === "Escape" && range) setRange(undefined);
+      if (event.key === " " && event.target instanceof HTMLCanvasElement && metadataReady) {
+        event.preventDefault();
+        void togglePlayback();
+      }
+    }}>
       <audio ref={audio} aria-label="버전 재생" preload="metadata" src={path + "/files/playback"}
         onLoadedMetadata={() => {
           setMetadataReady(true);
           if (initialAt !== undefined) seek(initialAt);
         }}
         onTimeUpdate={(event) => setPosition(clamp(event.currentTarget.currentTime * 1000))}
-        onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)}
+        onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => { previewEnd.current = null; setPlaying(false); }}
         onError={() => setError("재생 파일에 접근하지 못했습니다.")} />
       {error && <div className="row wrap" role="alert"><span className="error">{error}</span>
         <button onClick={() => { setError(""); setAttempt((value) => value + 1); audio.current?.load(); }}>다시 시도</button></div>}
       <ReviewWaveform audio={audio} duration={duration} peaks={peaks} position={position} range={range}
-        setRange={setRange} seek={seek} notes={feedback.notes} selectedId={feedback.selected?.id}
+        setRange={setRange} seek={seek} notes={feedback.notes} selected={feedback.selected} previewEnd={previewEnd}
         openNote={(note) => { feedback.select(note.id); seek(note.start_ms); }} />
       <div className="row spread wrap player-controls">
         <div className="row wrap">
@@ -138,26 +166,32 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
           if (audio.current) audio.current.volume = value;
         }} /></label>
       </div>
-      {writable && <div className="row wrap player-actions">
-        <button type="button" aria-pressed={!!range} onClick={() => setRange(range ? undefined : [position, position])}>
-          {range ? "구간 선택 취소" : "구간 선택"}
+      <div className="row wrap player-actions">
+        <button type="button" aria-pressed={!!range} disabled={!metadataReady || !duration}
+          onClick={() => setRange(range ? undefined : [currentPosition(), currentPosition()])}>
+          {range ? "구간 해제" : "구간 지정"}
         </button>
-      </div>}
-      {range && writable && <div className="row wrap range-fields">
+      </div>
+      {range && <div className="row wrap range-fields">
+        <p className="muted">파형에서 구간을 드래그하거나 시작·끝 시간을 입력하세요.</p>
         {(["시작", "끝"] as const).map((label, index) => <label key={label}>{label} (초)
           <input type="number" min={0} max={duration / 1000} step={.001} value={range[index] / 1000} onChange={(event) => {
             const value = clamp(Number(event.target.value));
             setRange(index === 0 ? [value, range[1]] : [range[0], value]);
           }} />
         </label>)}
-        <button disabled={!validRange} onClick={() => compose(true)}>선택 구간에 피드백</button>
+        <button type="button" disabled={!validRange || !metadataReady}
+          onClick={() => void playRange({ start_ms: range[0], end_ms: range[1] })}>구간 듣기</button>
+        {writable && <button type="button" disabled={!validRange || feedback.busy || !metadataReady}
+          onClick={() => compose(true)}>구간에 피드백</button>}
       </div>}
     </section>
     <VersionNotes feedback={feedback} url={notesURL} projectId={projectId} itemId={version.item_id}
-      versionId={version.id} accountId={accountId} canEdit={canEdit} writable={writable} seek={seek}
+      versionId={version.id} accountId={accountId} canEdit={canEdit} writable={writable} seek={seek} playRange={playRange}
       replyActive={typeof editor === "object" && editor.replyTo === feedback.selected?.id}
       onReply={() => {
         if (feedback.selected) setEditor({ replyTo: feedback.selected.id });
+        previewEnd.current = null;
         audio.current?.pause();
       }}
       composer={writable && <div className="feedback-composer">

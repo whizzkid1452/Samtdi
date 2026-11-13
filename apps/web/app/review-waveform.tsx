@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
 import { timecode } from "../lib/timecode";
 import { noteLabel, type Note } from "./version-notes";
 
@@ -16,7 +16,7 @@ function groupMarkers(notes: Note[], duration: number) {
   return groups;
 }
 
-export function ReviewWaveform({ audio, duration, peaks, position, range, setRange, seek, notes, selectedId, openNote }: {
+export function ReviewWaveform({ audio, duration, peaks, position, range, setRange, seek, notes, selected, previewEnd, openNote }: {
   audio: RefObject<HTMLAudioElement | null>;
   duration: number;
   peaks: number[];
@@ -25,11 +25,15 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
   setRange: (range: [number, number]) => void;
   seek: (position: number) => void;
   notes?: Note[];
-  selectedId?: string;
+  selected?: Note;
+  previewEnd: RefObject<number | null>;
   openNote: (note: Note) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const waveformGesture = useRef<WaveformGesture | null>(null);
+  const [openMarker, setOpenMarker] = useState<string>();
+  const selectedStart = selected?.start_ms;
+  const selectedEnd = selected?.end_ms;
   const markers = duration ? groupMarkers(notes ?? [], duration) : [];
 
   useEffect(() => {
@@ -48,9 +52,21 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
 
     let frame = 0;
     const draw = () => {
+      if (previewEnd.current !== null && player.currentTime * 1000 >= previewEnd.current) {
+        const end = previewEnd.current;
+        previewEnd.current = null;
+        player.pause();
+        player.currentTime = end / 1000;
+      }
+
       const progress = Math.min(1, player.currentTime * 1000 / duration);
       const playheadX = progress * width;
       context.clearRect(0, 0, width, height);
+      if (selectedStart !== undefined) {
+        context.fillStyle = "#bddde9";
+        const x = Math.min(width - 2, selectedStart / duration * width);
+        context.fillRect(x, 0, Math.max(2, ((selectedEnd ?? selectedStart) - selectedStart) / duration * width), height);
+      }
       if (range && range[1] > range[0]) {
         context.fillStyle = "#d7ecdc";
         context.fillRect(range[0] / duration * width, 0, (range[1] - range[0]) / duration * width, height);
@@ -85,14 +101,15 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
       cancelAnimationFrame(frame);
       for (const event of events) player.removeEventListener(event, refresh);
     };
-  }, [audio, duration, peaks, range]);
+  }, [audio, duration, peaks, previewEnd, range, selectedStart, selectedEnd]);
 
   function clamp(ms: number) {
     return Math.round(Math.min(duration, Math.max(0, ms)));
   }
 
-  function pointerPosition(event: PointerEvent<HTMLCanvasElement>) {
-    const bounds = event.currentTarget.getBoundingClientRect();
+  function pointerPosition(event: PointerEvent<HTMLElement>) {
+    const bounds = event.currentTarget.parentElement?.getBoundingClientRect();
+    if (!bounds?.width) return 0;
     return clamp((event.clientX - bounds.left) / bounds.width * duration);
   }
 
@@ -131,6 +148,14 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
     seek(target);
   }
 
+  function moveRangeEdge(index: 0 | 1, value: number) {
+    if (!range) return;
+    const point = clamp(value);
+    setRange(index === 0 ? [Math.min(point, range[1]), range[1]] : [range[0], Math.max(point, range[0])]);
+  }
+
+  const markerGroup = !range ? markers.find((group) => group[0].id === openMarker) : undefined;
+
   return <>
       <div className="waveform-frame">
         <canvas ref={canvas} width={1024} height={180} className={"waveform" + (range ? " selecting" : "")}
@@ -153,19 +178,55 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
           }}
           onPointerCancel={endWaveformGesture}
           onLostPointerCapture={endWaveformGesture} />
+        {range && ([0, 1] as const).map((index) => {
+          const label = index === 0 ? "구간 시작" : "구간 끝";
+          return <button key={index} type="button" className="range-handle" role="slider"
+            style={{ left: `clamp(12px, ${range[index] / duration * 100}%, calc(100% - 12px))` }}
+            aria-label={label} aria-valuemin={0} aria-valuemax={duration}
+            aria-valuenow={range[index]} aria-valuetext={timecode(range[index])}
+            onKeyDown={(event) => {
+              const step = Math.min(1000, Math.max(1, Math.round(duration / 100)));
+              const target = { ArrowLeft: range[index] - step, ArrowDown: range[index] - step,
+                ArrowRight: range[index] + step, ArrowUp: range[index] + step, Home: 0, End: duration }[event.key];
+              if (target === undefined) return;
+              event.preventDefault();
+              moveRangeEdge(index, target);
+            }}
+            onPointerDown={(event) => {
+              if (event.button !== 0 || !event.isPrimary) return;
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) moveRangeEdge(index, pointerPosition(event));
+            }}
+            onPointerUp={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) moveRangeEdge(index, pointerPosition(event));
+            }} />
+        })}
         {!range && markers.map((group) => {
           const first = group[0];
+          const active = group.some(({ id }) => id === selected?.id);
           return <button type="button" className="wave-marker" key={first.id}
-            style={{ left: `clamp(16px, ${first.start_ms / duration * 100}%, calc(100% - 16px))` }}
-            aria-label={noteLabel(first) + " 피드백 " + group.length + "개"} onClick={() => {
-              const index = group.findIndex(({ id }) => id === selectedId);
-              const note = group[(index + 1) % group.length];
-              openNote(note);
+            style={{ left: `clamp(22px, ${first.start_ms / duration * 100}%, calc(100% - 22px))` }}
+            aria-label={noteLabel(first) + " 피드백 " + group.length + "개"} aria-current={active || undefined}
+            aria-expanded={group.length > 1 ? openMarker === first.id : undefined} onClick={() => {
+              if (group.length === 1) {
+                setOpenMarker(undefined);
+                openNote(first);
+              } else {
+                setOpenMarker(openMarker === first.id ? undefined : first.id);
+              }
             }}>{group.length}</button>;
         })}
       </div>
       <div className="row spread waveform-ticks" aria-hidden="true">
         {[0, .25, .5, .75, 1].map((part) => <span key={part}>{duration < 4000 ? (duration * part / 1000).toFixed(1) + "초" : timecode(duration * part).split(".")[0]}</span>)}
       </div>
+      {markerGroup && <div className="marker-choices" aria-label="겹친 피드백">
+        {markerGroup.map((note) => <button type="button" key={note.id} onClick={() => {
+          setOpenMarker(undefined);
+          openNote(note);
+        }}><strong className="feedback-time">{noteLabel(note)}</strong> {note.body}</button>)}
+      </div>}
   </>;
 }
