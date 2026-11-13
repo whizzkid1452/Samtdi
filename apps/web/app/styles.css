@@ -137,12 +137,11 @@ label { font-size: .9rem; color: var(--muted); }
 .review-grid { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(17rem, 1fr); align-items: start; gap: 1rem; margin-block: 1rem 2rem; }
 .player-panel, .feedback-panel { min-width: 0; border: 1px solid var(--border); border-radius: 8px; padding: .85rem; }
 .waveform-frame { position: relative; }
-.waveform { height: 9rem; background: var(--surface); }
-.waveform.selecting { touch-action: none; }
+.waveform { height: 9rem; background: var(--surface); cursor: ew-resize; touch-action: pan-y; }
+.waveform.selecting { cursor: crosshair; touch-action: none; }
 .wave-marker { position: absolute; bottom: .25rem; transform: translateX(-50%); padding: 0 .3rem; min-width: 1.5rem; min-height: 1.5rem; background: var(--bg); border-color: var(--accent); color: var(--accent); border-radius: 999px; font-size: .75rem; font-weight: 700; }
 .waveform-ticks, .feedback-time { font-variant-numeric: tabular-nums; }
 .waveform-ticks { margin-top: .35rem; color: var(--muted); font-size: .8rem; }
-.playhead-input { width: 100%; padding: 0; accent-color: var(--accent); }
 .player-controls, .player-actions, .range-fields { margin-top: .6rem; }
 .player-controls input[type="range"] { width: 6rem; padding: 0; }
 .range-fields label { display: grid; gap: .25rem; }
