@@ -76,3 +76,15 @@ label { font-size: .9rem; color: var(--muted); }
 .message-body { white-space: pre-wrap; overflow-wrap: anywhere; margin-block: .65rem; }
 .replies { padding-left: 1rem; border-left: 2px solid var(--border); }
 .notes [data-highlighted="true"] { outline: 1px solid var(--accent); padding-inline: .5rem; }
+.board { display: grid; grid-template-columns: repeat(4, minmax(10rem, 1fr)); gap: .7rem; overflow-x: auto; padding-bottom: .5rem; }
+.lane { min-height: 9rem; background: var(--bg); border-radius: 8px; padding: .65rem; }
+.lane h3, .task-card h4 { margin: 0 0 .6rem; }
+.lane h3 { font-size: .93rem; }
+.task-card, .task-form { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .7rem; margin-bottom: .6rem; }
+.task-card p, .task-card a, .task-card button { font-size: .85rem; overflow-wrap: anywhere; }
+.task-card a { display: inline-block; margin: 0 .35rem .4rem 0; }
+.task-form { display: grid; gap: .8rem; }
+.task-form h3 { margin: 0; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .7rem; }
+.form-grid label { display: grid; gap: .35rem; }
+.form-grid select { margin-inline-start: 0; }

@@ -104,6 +104,7 @@ export function VersionNotes({ path, projectId, versionId, accountId, initialNot
                 <span className="muted">{note.email}</span>
                 {note.resolved && <span>해결됨</span>}
                 <a href={link}>노트 링크</a>
+                {writable && canEdit && <a href={link + "&task_note=" + note.id + "#task-board"}>작업으로 연결</a>}
                 {writable && !note.deleted && (canEdit || note.author_id === accountId) &&
                   <button disabled={saving} onClick={() => void updateMessage(target, note, { resolved: !note.resolved })}>{note.resolved ? "다시 열기" : "해결"}</button>}
               </div>

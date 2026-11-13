@@ -221,6 +221,17 @@ func (s *Server) changeMember(w http.ResponseWriter, r *http.Request, session Se
 		internal(w, "write_membership", err)
 		return
 	}
+	if r.Method == http.MethodDelete || input.Role == Reviewer {
+		_, err := tx.Exec(ctx, `WITH changed AS (
+ UPDATE web_tasks SET assignee_id=NULL,revision=revision+1 WHERE project_id=$1 AND assignee_id=$2 RETURNING id
+ )
+ INSERT INTO web_activity(project_id,actor_id,action,subject_id)
+ SELECT $1,$3,'task.unassigned',id FROM changed`, projectID, accountID, session.AccountID)
+		if err != nil {
+			internal(w, "unassign_member_tasks", err)
+			return
+		}
+	}
 	if err := appendWebActivity(ctx, tx, projectID, session.AccountID, "membership.changed", accountID,
 		map[string]any{"role": input.Role, "removed": r.Method == http.MethodDelete}); err != nil {
 		internal(w, "record_membership_change", err)
