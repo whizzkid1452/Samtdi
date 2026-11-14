@@ -6,6 +6,8 @@ Go 협업 서비스와 기존 데이터 마이그레이션의 이관 출처는 [
 
 서버 빌드는 `services/collaboration`에서 `go build ./...`로 실행합니다. 네이티브 호환 검사는 격리 PostgreSQL과 Ayotbi가 빌드한 프로젝트 도구·버전 도구·렌더 작업자 경로를 환경에 설정한 뒤 `ops/verify-collaboration.sh`를 실행합니다.
 
+리뷰 렌더는 Ayotbi의 `render.json` 형식 v1과 v2를 지원합니다. v2는 `sourceDocumentHash`가 리뷰 대상 커밋의 `project.json` SHA-256과 일치해야 저장됩니다.
+
 ## 로컬 웹 실행
 
 Go 1.25, Node.js 22, pnpm 10.15, Docker Compose와 AWS CLI가 필요합니다. 로컬 Compose는 PostgreSQL·Versity S3 Gateway·Dex를 루프백에만 게시합니다.
