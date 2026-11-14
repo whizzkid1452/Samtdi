@@ -16,6 +16,10 @@ type webNotification struct {
 	SubjectID    string     `json:"subject_id"`
 	VersionID    string     `json:"version_id"`
 	NoteID       string     `json:"note_id"`
+	ActorID      string     `json:"actor_id"`
+	ActorName    string     `json:"actor_name"`
+	ActorEmail   string     `json:"actor_email"`
+	Title        string     `json:"title"`
 	CreatedAt    time.Time  `json:"created_at"`
 	ReadAt       *time.Time `json:"read_at,omitempty"`
 }
@@ -43,7 +47,7 @@ func (s *Server) listWebNotifications(w http.ResponseWriter, r *http.Request, se
 	}
 	defer tx.Rollback(ctx)
 	const visible = ` FROM web_notifications n JOIN web_activity e ON e.id=n.activity_id
- JOIN projects p ON p.id=e.project_id JOIN memberships m ON m.project_id=p.id AND m.account_id=n.recipient_id
+ JOIN projects p ON p.id=e.project_id LEFT JOIN accounts actor ON actor.id=e.actor_id JOIN memberships m ON m.project_id=p.id AND m.account_id=n.recipient_id
  WHERE n.recipient_id=$1`
 	var unread int
 	err = tx.QueryRow(ctx, "SELECT count(*)"+visible+" AND n.read_at IS NULL", session.AccountID).Scan(&unread)
@@ -52,7 +56,11 @@ func (s *Server) listWebNotifications(w http.ResponseWriter, r *http.Request, se
 		return
 	}
 	rows, err := tx.Query(ctx, `SELECT e.id::text,p.id::text,p.title,e.action,e.subject_id::text,
- COALESCE(e.detail->>'version_id',''),COALESCE(e.detail->>'note_id',''),e.created_at,n.read_at`+visible+
+ COALESCE(e.detail->>'version_id',''),COALESCE(e.detail->>'note_id',''),
+ COALESCE(actor.id::text,''),COALESCE(actor.display_name,''),COALESCE(actor.email,''),
+ COALESCE(CASE WHEN split_part(e.action,'.',1)='task' THEN (SELECT t.title FROM web_tasks t WHERE t.project_id=e.project_id AND t.id=e.subject_id)
+ WHEN e.action='reply.created' THEN (SELECT left(r.body,120) FROM web_note_replies r WHERE r.project_id=e.project_id AND r.id=e.subject_id AND NOT r.deleted) END,''),
+ e.created_at,n.read_at`+visible+
 		" AND ($2::bigint=0 OR e.id<$2) ORDER BY e.id DESC LIMIT 50", session.AccountID, cursor)
 	if err != nil {
 		internal(w, "list_notifications", err)

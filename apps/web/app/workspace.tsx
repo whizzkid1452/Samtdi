@@ -2,20 +2,23 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
+import { displayName } from "../lib/people";
 import { Notifications } from "./notifications";
+import { Avatar, Icon, Menu } from "./ui";
 import { UploadProvider } from "./upload";
 
 type Session = components["schemas"]["Session"];
 export type Project = components["schemas"]["Project"] & { archived_at?: string };
-export type Member = { account_id: string; email: string; role: Project["role"] };
+export type Member = components["schemas"]["Member"];
 
 const WorkspaceContext = createContext<{
   session: Session;
   projects: Project[];
   refreshProjects: () => Promise<void>;
+  setSession: (session: Session) => void;
 } | null>(null);
 
 export function useWorkspace() {
@@ -93,29 +96,64 @@ export function Workspace({ children }: { children: ReactNode }) {
     </main>;
   }
 
-  return <WorkspaceContext.Provider value={{ session, projects, refreshProjects }}>
+  return <WorkspaceContext.Provider value={{ session, projects, refreshProjects, setSession }}>
     <UploadProvider key={session.account_id} accountId={session.account_id}>
     <header className="topbar">
-      <div className="row">
-        <Link href="/projects" className="brand">사맛디</Link>
+      <div className="row topbar-start">
+        <Link href="/work" className="brand"><span className="brand-mark" aria-hidden="true"><Icon name="music" size={16} /></span>사맛디</Link>
         <nav className="top-links" aria-label="주 메뉴">
-          <Link href="/projects" aria-current={pathname === "/projects" ? "page" : undefined}>프로젝트</Link>
-          <Link href="/work" aria-current={pathname === "/work" ? "page" : undefined}>내 작업</Link>
+          <Link href="/work" aria-current={pathname === "/work" ? "page" : undefined}>내 대시보드</Link>
+          <Link href="/projects" aria-current={pathname.startsWith("/projects") ? "page" : undefined}>프로젝트</Link>
         </nav>
       </div>
-      <div className="row">
+      <div className="row topbar-end">
         <Notifications />
-        <details className="inbox">
-          <summary className="account-label">계정</summary>
-          <div className="inbox-body panel">
-            <p className="muted">{session.email}</p>
-            <button disabled={loggingOut} onClick={() => void logout()}>로그아웃</button>
-          </div>
-        </details>
+        <Menu buttonLabel={"계정: " + displayName(session)} buttonClassName="account-button" label={<>
+          <Avatar id={session.account_id} person={session} size="md" />
+          <span className="account-name">{displayName(session)}</span>
+        </>}>{(close) => <AccountPanel session={session} busy={loggingOut} logout={() => { close(); void logout(); }} />}</Menu>
       </div>
     </header>
     {error && <p className="error main-content" role="alert">{error}</p>}
     {children}
     </UploadProvider>
   </WorkspaceContext.Provider>;
+}
+
+function AccountPanel({ session, busy, logout }: { session: Session; busy: boolean; logout: () => void }) {
+  const { setSession } = useWorkspace();
+  const [name, setName] = useState(session.name);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      setSession(await api<Session>("/v1/me", { method: "PATCH", body: JSON.stringify({ name }) }));
+      setMessage("표시 이름을 저장했습니다.");
+    } catch (cause) {
+      setError(describeError(cause));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <section className="account-panel" aria-label="계정">
+    <div className="row">
+      <Avatar id={session.account_id} person={{ ...session, name }} size="lg" />
+      <div className="account-identity"><strong>{displayName({ ...session, name })}</strong><span className="muted">{session.email}</span></div>
+    </div>
+    <form className="account-form" onSubmit={save}>
+      <label>표시 이름<input value={name} maxLength={40} placeholder={session.email.split("@")[0]} onChange={(event) => setName(event.target.value)} /></label>
+      <button disabled={saving || name.trim() === session.name}>저장</button>
+    </form>
+    <p className="muted small">팀원에게 아바타와 함께 보이는 이름입니다. 비워 두면 이메일 앞부분을 사용합니다.</p>
+    {message && <p role="status" className="small">{message}</p>}
+    {error && <p role="alert" className="error small">{error}</p>}
+    <button className="menu-item" disabled={busy} onClick={logout}><Icon name="logout" />로그아웃</button>
+  </section>;
 }

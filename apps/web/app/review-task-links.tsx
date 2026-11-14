@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { api, describeError } from "../lib/api";
 import { taskHref } from "../lib/routes";
-import { TaskEditor, statusLabel, type Task, type TaskNote } from "./task-editor";
+import { TaskEditor, type Task, type TaskNote } from "./task-editor";
+import { StatusChip } from "./ui";
 import type { Member } from "./workspace";
 
 const pageSize = 100;
@@ -89,7 +90,7 @@ export function ReviewTaskLinks({ projectId, note, canCreate, pause }: {
     {tasks && tasks.length > 0 && <ul className="clean-list">
       {tasks.map((task) => <li className="row wrap" key={task.id}>
         <Link href={taskHref(projectId, task.id)}>{task.title}</Link>
-        <span className="status-label">{statusLabel(task.status)}{task.archived ? " · 보관됨" : ""}</span>
+        <StatusChip status={task.status} suffix={task.archived ? " · 보관됨" : ""} />
       </li>)}
     </ul>}
     {error && <div className="row wrap"><span className="error" role="alert">{error}</span>

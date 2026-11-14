@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 import { api, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { itemHref, projectHref, taskHref, versionLink } from "../lib/routes";
-import { statusLabel } from "./task-editor";
+import { displayName } from "../lib/people";
+import { Avatar, DueChip, StatusChip } from "./ui";
 
 type Dashboard = components["schemas"]["Dashboard"];
 type Activity = components["schemas"]["Activity"];
@@ -87,8 +88,7 @@ function DashboardTasks({ filter }: { filter: typeof filters[number][0] }) {
       {dashboard?.tasks.map((task) => <li className="row spread wrap" key={task.id}>
         <div><Link className="resource-title" href={taskHref(task.project_id, task.id)}>{task.title}</Link>
           <div className="muted">{task.project_title}</div></div>
-        <div className="row wrap"><span className="status-label">{statusLabel(task.status)}</span>
-          {task.due_on && <time dateTime={task.due_on}>{task.due_on}</time>}</div>
+        <div className="row wrap"><StatusChip status={task.status} /><DueChip due={task.due_on} status={task.status} /></div>
       </li>)}
     </ul>
     {dashboard?.next_cursor && <button disabled={loadingMore} onClick={() => void loadMore()}>작업 더 보기</button>}
@@ -180,10 +180,13 @@ function ActivityEntries({ projectId, type }: { projectId: string; type: string 
           const href = activityHref(projectId, entry);
           const label = actions[entry.action] ?? entry.action;
           const status = entry.detail.status;
-          return <li className="row spread wrap" key={entry.id}>
-            <span>{href ? <Link href={href} className="resource-title">{label}</Link> : label}
-              {typeof status === "string" && " · " + statusLabel(status)}
-              <span className="muted"> · {entry.actor}</span>
+          const actor = { name: entry.actor_name, email: entry.actor_id ? entry.actor : undefined };
+          return <li className="row spread wrap activity-row" key={entry.id}>
+            <span className="row wrap">
+              {entry.actor_id ? <Avatar id={entry.actor_id} person={actor} /> : <span className="avatar avatar-md avatar-system" aria-hidden="true">♪</span>}
+              <span className="activity-actor">{entry.actor_id ? displayName(actor) : entry.actor}</span>
+              {href ? <Link href={href} className="resource-title">{label}</Link> : label}
+              {typeof status === "string" && <StatusChip status={status} />}
             </span>
             <time className="muted" dateTime={entry.created_at}>{localTime.format(new Date(entry.created_at))}</time>
           </li>;

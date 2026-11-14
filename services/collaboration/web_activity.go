@@ -14,6 +14,8 @@ type webActivity struct {
 	Action    string          `json:"action"`
 	SubjectID string          `json:"subject_id"`
 	Actor     string          `json:"actor"`
+	ActorID   string          `json:"actor_id"`
+	ActorName string          `json:"actor_name"`
 	Detail    json.RawMessage `json:"detail"`
 	CreatedAt time.Time       `json:"created_at"`
 }
@@ -91,7 +93,8 @@ func (s *Server) listWebActivity(w http.ResponseWriter, r *http.Request, session
 		problem(w, 400, "invalid_activity_type")
 		return
 	}
-	rows, err := s.pool.Query(r.Context(), `SELECT e.id::text,e.action,e.subject_id::text,COALESCE(a.email,'미디어 작업자'),e.detail,e.created_at
+	rows, err := s.pool.Query(r.Context(), `SELECT e.id::text,e.action,e.subject_id::text,COALESCE(a.email,'미디어 작업자'),COALESCE(a.id::text,''),
+ COALESCE(a.display_name,''),e.detail,e.created_at
  FROM web_activity e LEFT JOIN accounts a ON a.id=e.actor_id
  WHERE e.project_id=$1 AND ($2=0 OR e.id<$2) AND ($3='' OR split_part(e.action,'.',1)=$3)
  ORDER BY e.id DESC LIMIT 50`, r.PathValue("project"), before, family)

@@ -5,11 +5,13 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
+import { displayName } from "../lib/people";
 import { versionHref } from "../lib/routes";
 import { timecode } from "../lib/timecode";
 import { ReviewTaskLinks } from "./review-task-links";
 import { readReplyDraft, useFeedbackDraft } from "./feedback-drafts";
 import { submitFeedbackShortcut } from "./feedback-shortcut";
+import { Avatar, Icon, Menu, Person } from "./ui";
 
 type Message = components["schemas"]["Message"];
 export type Note = components["schemas"]["Note"];
@@ -212,13 +214,14 @@ export function VersionNotes({ feedback, url, projectId, itemId, versionId, acco
       {notes?.map((note) => <li key={note.id}>
         <button type="button" aria-expanded={selected?.id === note.id} onClick={() => selected?.id === note.id ? feedback.select(undefined) : open(note)}>
           <span className="feedback-meta">
-            <span className="feedback-time">{noteLabel(note)}</span>
-            <span className="muted">{note.email}</span>
+            <Avatar id={note.author_id} person={note} />
+            <span className="feedback-author">{displayName(note)}</span>
+            <span className="feedback-time time-chip">{noteLabel(note)}</span>
           </span>
           <span className="feedback-summary">{note.deleted ? "삭제된 피드백" : note.body}</span>
           <span className="feedback-meta">
-            {note.resolved && <span className="status-label">해결됨</span>}
-            {note.replies.some(({ deleted }) => !deleted) && <span className="muted">답글 {note.replies.filter(({ deleted }) => !deleted).length}</span>}
+            {note.resolved && <span className="status-label status-resolved"><Icon name="check" size={12} />해결됨</span>}
+            {note.replies.some(({ deleted }) => !deleted) && <span className="muted meta-count"><Icon name="message" size={14} />답글 {note.replies.filter(({ deleted }) => !deleted).length}</span>}
           </span>
         </button>
         {selected?.id === note.id && thread}
@@ -268,7 +271,7 @@ function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, acco
       <strong className="feedback-time">{noteLabel(note)}</strong>
       <button type="button" onClick={() => feedback.select(undefined)}>대화 닫기</button>
     </div>
-    <p className="muted">{note.email}</p>
+    <Person id={note.author_id} person={note} />
     <p className="message-body">{note.deleted ? "삭제된 피드백" : note.body}</p>
     <div className="row wrap">
       <Link href={link}>피드백 링크</Link>
@@ -284,7 +287,7 @@ function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, acco
     {editor(note, target)}
     <ul className="clean-list replies">
       {note.replies.map((entry) => <li key={entry.id}>
-        <span className="muted">{entry.email}</span>
+        <Person id={entry.author_id} person={entry} />
         <p className="message-body">{entry.deleted ? "삭제된 답글" : entry.body}</p>
         {editor(entry, target + "/replies/" + entry.id)}
       </li>)}
@@ -321,13 +324,13 @@ function MessageEditor({ message, busy, change }: {
     </div>
   </form>;
 
-  return <details className="message-menu">
-    <summary>더 보기</summary>
-    <div className="row wrap">
-      <button onClick={() => setBody(message.body)}>수정</button>
-      <button disabled={busy} onClick={() => {
+  return <Menu className="message-menu" align="start" buttonLabel="더 보기" buttonClassName="icon-button" label={<Icon name="more" />}>
+    {(close) => <div className="menu-list">
+      <button className="menu-item" onClick={() => { close(); setBody(message.body); }}>수정</button>
+      <button className="menu-item danger" disabled={busy} onClick={() => {
+        close();
         if (window.confirm("이 내용을 삭제할까요?")) void change({ deleted: true });
       }}>삭제</button>
-    </div>
-  </details>;
+    </div>}
+  </Menu>;
 }

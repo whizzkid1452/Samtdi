@@ -195,6 +195,7 @@ type identity struct {
 	Issuer  string
 	Subject string
 	Email   string
+	Name    string
 }
 
 func (s *Server) verifyIdentity(ctx context.Context, code string, attempt loginAttempt) (identity, error) {
@@ -218,6 +219,7 @@ func (s *Server) verifyIdentity(ctx context.Context, code string, attempt loginA
 
 	var claims struct {
 		Email           string `json:"email"`
+		Name            string `json:"name"`
 		Verified        bool   `json:"email_verified"`
 		AuthorizedParty string `json:"azp"`
 	}
@@ -234,7 +236,12 @@ func (s *Server) verifyIdentity(ctx context.Context, code string, attempt loginA
 		return identity{}, err
 	}
 
-	return identity{Issuer: idToken.Issuer, Subject: idToken.Subject, Email: email}, nil
+	// The provider's name only seeds the display name; people can change it afterwards.
+	name, valid := displayName(claims.Name)
+	if !valid {
+		name = ""
+	}
+	return identity{Issuer: idToken.Issuer, Subject: idToken.Subject, Email: email, Name: name}, nil
 }
 
 func (s *Server) issueNativeCode(w http.ResponseWriter, r *http.Request, accountID string, attempt loginAttempt) {

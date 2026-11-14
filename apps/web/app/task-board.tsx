@@ -5,17 +5,24 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { api, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
+import { displayName } from "../lib/people";
 import { projectHref, taskHref, versionLink } from "../lib/routes";
-import { TaskEditor, statuses, statusLabel, type Status, type Task, type TaskChange, type TaskNote } from "./task-editor";
+import { todayInSeoul } from "../lib/tasks";
+import { TaskEditor, statuses, type Status, type Task, type TaskChange, type TaskNote } from "./task-editor";
 import { timecode } from "../lib/timecode";
+import { useProjectMembers } from "./members";
+import { DueChip, Icon, Menu, Person, StatusChip, Unassigned } from "./ui";
 import type { Member, Project } from "./workspace";
 
 type Counts = Record<Status, number>;
 type TaskSelection = { task?: Task; change?: TaskChange };
 const pageSize = 100;
 
-export function todayInSeoul() {
-  return new Intl.DateTimeFormat("sv-SE", { dateStyle: "short", timeZone: "Asia/Seoul" }).format(new Date());
+export { todayInSeoul };
+
+export function Assignee({ members, id }: { members: Member[]; id?: string }) {
+  const member = members.find(({ account_id }) => account_id === id);
+  return member ? <Person id={member.account_id} person={member} /> : <Unassigned />;
 }
 
 function taskFilters(query: URLSearchParams) {
@@ -34,20 +41,6 @@ function taskFilters(query: URLSearchParams) {
   return params;
 }
 
-function useMembers(base: string) {
-  const [members, setMembers] = useState<Member[]>([]);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    const request = new AbortController();
-
-    api<Member[]>(base + "/members", { signal: request.signal }).then((rows) => {
-      if (!request.signal.aborted) setMembers(rows);
-    }).catch((cause) => { if (!request.signal.aborted) setError(describeError(cause)); });
-    return () => request.abort();
-  }, [base]);
-  return { members, error };
-}
-
 export function TaskBoard({ project, initialNote }: { project: Project; initialNote?: string }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -61,7 +54,7 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
   const [counts, setCounts] = useState<Counts>();
   const [revision, setRevision] = useState(0);
   const base = "/v1/projects/" + project.id;
-  const { members, error: memberError } = useMembers(base);
+  const { members, error: memberError } = useProjectMembers(project.id);
   const canWrite = project.role !== "reviewer" && !project.archived_at;
   const detailQuery = filters.size ? "?" + filters : "";
   const apiFilters = new URLSearchParams(filters);
@@ -111,28 +104,24 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
 
   function taskCard(task: Task, previous?: Task) {
     const link = taskHref(project.id, task.id) + detailQuery;
-    const assignee = members.find(({ account_id }) => account_id === task.assignee_id);
-    const late = task.due_on && task.status !== "done" && task.due_on < todayInSeoul();
-
     return <article className={board ? "task-card" : "task-list-row"} draggable={board && canWrite && !task.archived}
       onDragStart={(event) => {
         event.dataTransfer.setData("text/plain", task.id);
         event.dataTransfer.effectAllowed = "move";
       }}>
       <Link href={link} className="resource-title">{task.title}</Link>
-      {!board && <span className="status-label">{statusLabel(task.status)}</span>}
-      <span className="muted">{assignee?.email ?? "미할당"}</span>
-      <span className={late ? "error" : "muted"}>{task.due_on || "마감 없음"}{late ? " · 지연" : ""}</span>
-      <span className="muted">피드백 {task.notes.length}</span>
-      {canWrite && <details className="task-menu">
-        <summary aria-label={task.title + " 관리"}>더 보기</summary>
-        <div className="row wrap">
-          {previous && <button type="button" onClick={() => setSelection({ task, change: { position: previous.position } })}>위로 이동</button>}
-          {statuses.filter(([value]) => value !== task.status).map(([value, label]) => <button type="button" key={value}
-            onClick={() => setSelection({ task, change: { status: value } })}>{label}으로 이동</button>)}
-          <button type="button" onClick={() => setSelection({ task, change: { archived: !task.archived } })}>{task.archived ? "복원" : "보관"}</button>
-        </div>
-      </details>}
+      {!board && <StatusChip status={task.status} />}
+      <Assignee members={members} id={task.assignee_id} />
+      <DueChip due={task.due_on} status={task.status} empty="마감 없음" />
+      <span className="muted meta-count" title="연결 피드백"><Icon name="message" size={14} />{task.notes.length}<span className="visually-hidden">개 피드백</span></span>
+      {canWrite && <Menu className="task-menu" buttonLabel={task.title + " 관리"} buttonClassName="icon-button" label={<Icon name="more" />}>
+        {(close) => <div className="menu-list">
+          {previous && <button type="button" className="menu-item" onClick={() => { close(); setSelection({ task, change: { position: previous.position } }); }}><Icon name="up" />위로 이동</button>}
+          {statuses.filter(([value]) => value !== task.status).map(([value, label]) => <button type="button" className="menu-item" key={value}
+            onClick={() => { close(); setSelection({ task, change: { status: value } }); }}><span className={"status-dot status-" + value} aria-hidden="true" />{label}으로 이동</button>)}
+          <button type="button" className="menu-item" onClick={() => { close(); setSelection({ task, change: { archived: !task.archived } }); }}>{task.archived ? "복원" : "보관"}</button>
+        </div>}
+      </Menu>}
     </article>;
   }
 
@@ -169,7 +158,7 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
       </select></label>
       <label>담당자 <select value={filters.get("assignee") ?? ""} onChange={(event) => router.push(href("assignee", event.target.value))}>
         <option value="">전체</option><option value="unassigned">미할당</option>
-        {members.map(({ account_id, email }) => <option key={account_id} value={account_id}>{email}</option>)}
+        {members.map((member) => <option key={member.account_id} value={member.account_id}>{displayName(member)}</option>)}
       </select></label>
       <label>마감 <select value={filters.get("due") ?? ""} onChange={(event) => router.push(href("due", event.target.value))}>
         <option value="">전체</option><option value="soon">7일 내</option><option value="late">지연</option><option value="none">마감 없음</option>
@@ -189,7 +178,7 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
             const id = event.dataTransfer.getData("text/plain");
             if (/^[0-9a-f-]{36}$/.test(id)) void drop(id, value);
           } : undefined}>
-          <h3>{label} {counts && <span className="muted">{counts[value]}</span>}</h3>
+          <h3 className="lane-title"><span className={"status-dot status-" + value} aria-hidden="true" />{label} {counts && <span className="lane-count">{counts[value]}</span>}</h3>
           <TaskRows key={lane.toString() + ":" + revision} path={base + "/tasks?" + lane} render={taskCard} />
         </section>;
       })}
@@ -254,7 +243,7 @@ function TaskRows({ path, render }: { path: string; render: (task: Task, previou
 
 export function TaskDetail({ project, taskId }: { project: Project; taskId: string }) {
   const base = "/v1/projects/" + project.id;
-  const { members, error: memberError } = useMembers(base);
+  const { members, error: memberError } = useProjectMembers(project.id);
   const params = taskFilters(new URLSearchParams(useSearchParams()));
   const [task, setTask] = useState<Task>();
   const [change, setChange] = useState<TaskChange | null>();
@@ -274,7 +263,6 @@ export function TaskDetail({ project, taskId }: { project: Project; taskId: stri
 
   const nextStatus = task ? ({ todo: "progress", progress: "review", review: "done", done: "todo" } as const)[task.status] : undefined;
   const nextLabel = nextStatus ? ({ progress: "진행 시작", review: "검토 요청", done: "완료", todo: "다시 열기" } as const)[nextStatus] : undefined;
-  const assignee = members.find(({ account_id }) => account_id === task?.assignee_id);
 
   return <section aria-label="작업 상세">
     <Link href={back}>작업 목록</Link>
@@ -287,9 +275,9 @@ export function TaskDetail({ project, taskId }: { project: Project; taskId: stri
         {canWrite && <div className="row wrap">
           {!task.archived && nextStatus && <button className="primary" onClick={() => setChange({ status: nextStatus })}>{nextLabel}</button>}
           {!task.archived && <button onClick={() => setChange(null)}>작업 편집</button>}
-          <details className="inbox"><summary>관리</summary><div className="inbox-body panel">
-            <button onClick={() => setChange({ archived: !task.archived })}>{task.archived ? "작업 복원" : "작업 보관"}</button>
-          </div></details>
+          <Menu buttonLabel="작업 관리" buttonClassName="icon-button" label={<Icon name="more" />}>{(close) => <div className="menu-list">
+            <button className="menu-item" onClick={() => { close(); setChange({ archived: !task.archived }); }}>{task.archived ? "작업 복원" : "작업 보관"}</button>
+          </div>}</Menu>
         </div>}
       </div>
       <div className="task-detail-grid">
@@ -300,7 +288,7 @@ export function TaskDetail({ project, taskId }: { project: Project; taskId: stri
           <ul className="resource-list">
             {task.notes.map((note) => <li key={note.id}>
               <Link href={versionLink(project.id, note.version_id, note.id, note.start_ms)}>{timecode(note.start_ms)} · {note.deleted ? "삭제된 피드백" : note.body}</Link>
-              {note.resolved && <span className="status-label">해결됨</span>}
+              {note.resolved && <span className="status-label status-resolved"><Icon name="check" size={12} />해결됨</span>}
             </li>)}
           </ul>
           {(task.result_version_id || task.review_text) && <section>
@@ -310,9 +298,9 @@ export function TaskDetail({ project, taskId }: { project: Project; taskId: stri
           </section>}
         </div>
         <dl className="task-metadata">
-          <dt>상태</dt><dd>{statusLabel(task.status)}{task.archived ? " · 보관됨" : ""}</dd>
-          <dt>담당자</dt><dd>{assignee?.email ?? "미할당"}</dd>
-          <dt>마감일</dt><dd>{task.due_on || "마감 없음"}</dd>
+          <dt>상태</dt><dd><StatusChip status={task.status} suffix={task.archived ? " · 보관됨" : ""} /></dd>
+          <dt>담당자</dt><dd><Assignee members={members} id={task.assignee_id} /></dd>
+          <dt>마감일</dt><dd><DueChip due={task.due_on} status={task.status} empty="마감 없음" /></dd>
         </dl>
       </div>
       {change !== undefined && canWrite && <TaskEditor base={base} members={members} task={task} change={change ?? undefined}

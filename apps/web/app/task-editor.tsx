@@ -4,8 +4,12 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { Dialog } from "./dialog";
+import { displayName } from "../lib/people";
+import { statusLabel, statuses } from "../lib/tasks";
 import { timecode } from "../lib/timecode";
 import { useWorkspace, type Member } from "./workspace";
+
+export { statusLabel, statuses };
 
 export type Task = components["schemas"]["Task"];
 export type TaskNote = components["schemas"]["TaskNote"];
@@ -13,14 +17,6 @@ export type Status = Task["status"];
 type Options = components["schemas"]["TaskOptions"];
 type VersionOption = components["schemas"]["TaskVersion"];
 export type TaskChange = { status?: Status; position?: number; archived?: boolean };
-
-export const statuses: [Status, string][] = [
-  ["todo", "할 일"], ["progress", "진행 중"], ["review", "검토 요청"], ["done", "완료"],
-];
-
-export function statusLabel(status: string) {
-  return statuses.find(([value]) => value === status)?.[1] ?? status;
-}
 
 type TaskDraft = {
   title: string; description: string; assignee: string; due: string; status: Status;
@@ -140,7 +136,7 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
         <div className="form-grid">
           <label>담당자<select aria-label="담당자" value={assignee} onChange={(event) => setAssignee(event.target.value)}>
             <option value="">미할당</option>
-            {members.filter(({ role }) => role !== "reviewer").map(({ account_id, email }) => <option key={account_id} value={account_id}>{email}</option>)}
+            {members.filter(({ role }) => role !== "reviewer").map((member) => <option key={member.account_id} value={member.account_id}>{displayName(member)}</option>)}
           </select></label>
           <label>마감일<input type="date" value={due} onChange={(event) => setDue(event.target.value)} /></label>
           {task && <label>상태<select value={status} onChange={(event) => { setConfirm(false); setStatus(event.target.value as Status); }}>

@@ -1,6 +1,6 @@
 # 사맛디 (Samtdi)
 
-비공개 음악 협업 플랫폼. [구현 계획](docs/web-implementation-plan.md)과 [PR 계획](docs/web-pr-plan.md), [UI 수정과 검증 기록](docs/web-ui-redesign-plan.md)을 참고하세요. 후속 [음원 리뷰 UX 개선과 검증 기록](docs/audio-review-ux-plan.md)도 참고하세요.
+비공개 음악 협업 플랫폼. [구현 계획](docs/web-implementation-plan.md)과 [PR 계획](docs/web-pr-plan.md), [UI 수정과 검증 기록](docs/web-ui-redesign-plan.md)을 참고하세요. 후속 [음원 리뷰 UX 개선과 검증 기록](docs/audio-review-ux-plan.md)도 참고하세요. 작업 보드·타임라인·대시보드 개편은 [협업 대시보드·타임라인 디자인 플랜](docs/collaboration-dashboard-design-plan.md)에서 관리합니다.
 
 Go 협업 서비스와 기존 데이터 마이그레이션의 이관 출처는 [Ayotbi 562f8d0](https://github.com/whizzkid1452/Ayotbi/tree/562f8d00221c003ca1224fa87edca2b061b8c586/services/collaboration)입니다. 모듈 import 경로와 검증 도구 입력 경로를 이 저장소에 맞췄습니다.
 

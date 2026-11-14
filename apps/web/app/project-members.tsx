@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, describeError } from "../lib/api";
 import { projectHref } from "../lib/routes";
 import { Dialog } from "./dialog";
+import { Person } from "./ui";
 import { useWorkspace, type Member, type Project } from "./workspace";
 
 const roles = { reviewer: "검토자", editor: "편집자", owner: "소유자" };
@@ -81,7 +82,7 @@ export function ProjectMembers({ project }: { project: Project }) {
     {!members && !error && <p role="status">팀원을 불러오는 중</p>}
     <ul className="clean-list member-list">
       {members?.map((member) => <li className="row spread wrap" key={member.account_id}>
-        <span>{member.email}</span>
+        <Person id={member.account_id} person={member} size="md" detail={member.name ? <span className="muted small">{member.email}</span> : undefined} />
         {canManage ? <div className="row wrap">
           <select aria-label={member.email + " 역할"} value={member.role} disabled={busy}
             onChange={(event) => void editMember(member, event.target.value as Project["role"])}>

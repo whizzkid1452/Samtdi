@@ -38,6 +38,7 @@ type project struct {
 type member struct {
 	AccountID string `json:"account_id"`
 	Email     string `json:"email"`
+	Name      string `json:"name"`
 	Role      Role   `json:"role"`
 }
 
@@ -123,7 +124,7 @@ func (s *Server) listMembers(w http.ResponseWriter, r *http.Request, session Ses
 		return
 	}
 
-	rows, err := s.pool.Query(r.Context(), `SELECT a.id::text AS account_id, a.email, m.role
+	rows, err := s.pool.Query(r.Context(), `SELECT a.id::text AS account_id, a.email, COALESCE(a.display_name, '') AS name, m.role
  FROM memberships m JOIN accounts a ON a.id = m.account_id WHERE m.project_id = $1
  AND EXISTS (SELECT 1 FROM memberships WHERE project_id = $1 AND account_id = $2) ORDER BY a.email`,
 		projectID, session.AccountID)

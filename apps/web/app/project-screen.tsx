@@ -6,14 +6,17 @@ import { useState, type FormEvent } from "react";
 import { api, describeError } from "../lib/api";
 import { projectHref, type ProjectTab } from "../lib/routes";
 import { MediaDetail, MediaLibrary } from "./media-library";
+import { useProjectMembers } from "./members";
 import { ProjectMembers } from "./project-members";
 import { TaskBoard, TaskDetail } from "./task-board";
+import { Icon, MemberStack, Menu, type IconName } from "./ui";
 import { ProjectActivity } from "./workspace-activity";
 import { useWorkspace, type Project } from "./workspace";
 
-const tabs = [
-  ["media", "음원"], ["tasks", "작업"], ["activity", "활동"], ["settings", "설정"],
-] as const;
+const tabs: [ProjectTab, string, IconName][] = [
+  ["media", "음원", "music"], ["tasks", "작업", "board"], ["activity", "활동", "clock"], ["settings", "설정", "users"],
+];
+const roles = { owner: "소유자", editor: "편집자", reviewer: "검토자" } as const;
 
 export function ProjectIndex() {
   const { projects, refreshProjects } = useWorkspace();
@@ -62,12 +65,13 @@ export function ProjectIndex() {
         <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} /> 보관된 프로젝트
       </label>}
     </div>}
-    <ul className="resource-list">
+    <ul className="resource-list project-list">
       {visible.map((project) => <li className="row spread wrap" key={project.id}>
-        <Link className="resource-title" href={projectHref(project.id)}>{project.title}</Link>
+        <span className="row"><span className="project-mark" aria-hidden="true"><Icon name="folder" /></span>
+          <Link className="resource-title" href={projectHref(project.id)}>{project.title}</Link></span>
         <div className="row wrap muted">
           {project.updated_at && <time dateTime={project.updated_at}>{new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeZone: "Asia/Seoul" }).format(new Date(project.updated_at))}</time>}
-          <span className="status-label">{{owner: "소유자", editor: "편집자", reviewer: "검토자"}[project.role]}{project.archived_at ? " · 보관됨" : ""}</span>
+          <span className="status-label">{roles[project.role]}{project.archived_at ? " · 보관됨" : ""}</span>
         </div>
       </li>)}
     </ul>
@@ -79,6 +83,7 @@ export function ProjectScreen({ projectId, tab, itemId, versionId, taskId }: { p
   const { projects, session } = useWorkspace();
   const query = useSearchParams();
   const project = projects.find(({ id }) => id === projectId);
+  const { members } = useProjectMembers(projectId);
   const at = query.get("at");
 
   if (!project) return <main className="main-content">
@@ -90,24 +95,26 @@ export function ProjectScreen({ projectId, tab, itemId, versionId, taskId }: { p
   return <>
     <div className="project-header">
       <div className="project-header-inner">
-        <div className="row wrap project-title">
-          <details className="inbox project-switcher">
-            <summary>프로젝트 전환</summary>
-            <ul className="inbox-body panel clean-list">
-              {projects.filter((entry) => !entry.archived_at || entry.id === project.id).map(({ id, title }) => <li key={id}>
-                <Link href={projectHref(id, tab)} aria-current={id === project.id ? "page" : undefined} onClick={(event) => {
-                  const menu = event.currentTarget.closest("details");
-                  if (menu) menu.open = false;
-                }}>{title}</Link>
-              </li>)}
-            </ul>
-          </details>
-          <h1>{project.title}</h1>
-          <span className="status-label">{project.archived_at ? "보관됨" : "비공개"}</span>
+        <div className="row wrap spread project-title">
+          <div className="row wrap">
+            <Link href="/projects" className="muted project-crumb">프로젝트</Link>
+            <span className="muted" aria-hidden="true">/</span>
+            <h1>{project.title}</h1>
+            <span className="status-label">{project.archived_at ? "보관됨" : "비공개"}</span>
+            <Menu className="project-switcher" align="start" buttonLabel="프로젝트 전환" buttonClassName="icon-button" label={<Icon name="swap" />}>
+              {(close) => <nav aria-label="프로젝트 전환" className="menu-list">
+                {projects.filter((entry) => !entry.archived_at || entry.id === project.id).map(({ id, title }) => <Link key={id}
+                  className="menu-item" href={projectHref(id, tab)} aria-current={id === project.id ? "page" : undefined} onClick={close}>
+                  {id === project.id ? <Icon name="check" /> : <span className="icon-space" />}{title}</Link>)}
+              </nav>}
+            </Menu>
+          </div>
+          {members.length > 0 && <Link className="row project-members-link" href={projectHref(projectId, "settings")}>
+            <MemberStack members={members} /><span className="muted small">{roles[project.role]}</span></Link>}
         </div>
         <nav className="project-tabs" aria-label="프로젝트 탭">
-          {tabs.map(([value, label]) => <Link key={value} href={projectHref(projectId, value)}
-            aria-current={tab === value ? "page" : undefined}>{label}</Link>)}
+          {tabs.map(([value, label, icon]) => <Link key={value} href={projectHref(projectId, value)}
+            aria-current={tab === value ? "page" : undefined}><Icon name={icon} />{label}</Link>)}
         </nav>
       </div>
     </div>

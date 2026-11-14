@@ -9,6 +9,7 @@ import { itemHref, projectHref, versionHref } from "../lib/routes";
 import { useUpload } from "./upload";
 import { VersionReview } from "./version-review";
 import type { Project } from "./workspace";
+import { Icon, Menu } from "./ui";
 
 type MediaItem = components["schemas"]["MediaItem"];
 export type MediaVersion = components["schemas"]["MediaVersion"];
@@ -228,13 +229,13 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
         <h2 className="section-title">{item.title}</h2>
         <div className="row wrap">
           {canEdit && !item.archived_at && <button onClick={() => openUpload({ projectId: project.id, itemId })}>수정본 업로드</button>}
-          {canEdit && <details className="inbox">
-            <summary aria-label="음원 관리">관리</summary>
-            <div className="inbox-body panel"><div className="row wrap">{version?.state === "ready" && <a className="button" href={base + "/versions/" + version.id + "/files/original"}>원본 다운로드</a>}<button disabled={busy} onClick={() => {
+          {canEdit && <Menu buttonLabel="음원 관리" buttonClassName="icon-button" label={<Icon name="more" />}>
+            {(close) => <div className="menu-list">{version?.state === "ready" && <a className="menu-item" href={base + "/versions/" + version.id + "/files/original"}>원본 다운로드</a>}<button className="menu-item" disabled={busy} onClick={() => {
+              close();
               if (!window.confirm(item.archived_at ? "음원을 복원할까요?" : "음원을 보관할까요?")) return;
               void change(() => api(itemPath, { method: "PATCH", body: JSON.stringify({ archived: !item.archived_at }) }));
-            }}>{item.archived_at ? "음원 복원" : "음원 보관"}</button></div></div>
-          </details>}
+            }}>{item.archived_at ? "음원 복원" : "음원 보관"}</button></div>}
+          </Menu>}
           {!canEdit && version?.state === "ready" && <a className="button" href={base + "/versions/" + version.id + "/files/original"}>원본 다운로드</a>}
         </div>
       </div>
