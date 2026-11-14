@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
+import { avatarTone, displayName, initials } from "../lib/people";
+import { statusLabel } from "../lib/tasks";
 import { timecode } from "../lib/timecode";
 import { noteLabel, type Note } from "./version-notes";
 
@@ -203,12 +205,20 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
               if (event.currentTarget.hasPointerCapture(event.pointerId)) moveRangeEdge(index, pointerPosition(event));
             }} />
         })}
+        {!range && duration > 0 && <div className="wave-ranges" aria-hidden="true">
+          {(notes ?? []).filter((note) => !note.deleted && note.end_ms != null).map((note) => <span key={note.id}
+            className={"wave-range tone-" + avatarTone(note.author_id) + (note.id === selected?.id ? " active" : "")}
+            style={{ left: note.start_ms / duration * 100 + "%", width: ((note.end_ms ?? note.start_ms) - note.start_ms) / duration * 100 + "%" }} />)}
+        </div>}
         {!range && markers.map((group) => {
           const first = group[0];
           const active = group.some(({ id }) => id === selected?.id);
-          return <button type="button" className="wave-marker" key={first.id}
+          const task = group.flatMap(({ tasks }) => tasks)[0];
+          const resolved = group.every((note) => note.resolved);
+          return <button type="button" className={"wave-marker tone-" + avatarTone(first.author_id) + (resolved ? " resolved" : "")} key={first.id}
             style={{ left: `clamp(22px, ${first.start_ms / duration * 100}%, calc(100% - 22px))` }}
-            aria-label={noteLabel(first) + " 피드백 " + group.length + "개"} aria-current={active || undefined}
+            aria-label={noteLabel(first) + " " + displayName(first) + " 피드백 " + group.length + "개" + (task ? ", 작업 " + statusLabel(task.status) : "") + (resolved ? ", 해결됨" : "")}
+            aria-current={active || undefined}
             aria-expanded={group.length > 1 ? openMarker === first.id : undefined} onClick={() => {
               if (group.length === 1) {
                 setOpenMarker(undefined);
@@ -216,7 +226,10 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
               } else {
                 setOpenMarker(openMarker === first.id ? undefined : first.id);
               }
-            }}>{group.length}</button>;
+            }}>{initials(first)}
+            {group.length > 1 && <span className="marker-count" aria-hidden="true">{group.length}</span>}
+            {task && <span className={"marker-task status-dot status-" + task.status} aria-hidden="true" />}
+          </button>;
         })}
       </div>
       <div className="row spread waveform-ticks" aria-hidden="true">
@@ -226,7 +239,7 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
         {markerGroup.map((note) => <button type="button" key={note.id} onClick={() => {
           setOpenMarker(undefined);
           openNote(note);
-        }}><strong className="feedback-time">{noteLabel(note)}</strong> {note.body}</button>)}
+        }}><strong className="feedback-time">{noteLabel(note)}</strong> <span className="feedback-author">{displayName(note)}</span> {note.body}</button>)}
       </div>}
   </>;
 }

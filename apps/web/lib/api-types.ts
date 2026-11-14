@@ -1171,6 +1171,13 @@ export interface paths {
                         start_ms: number;
                         end_ms?: number;
                         body: string;
+                        /** @description Also create a to-do task linked to this note (owners and editors) */
+                        task?: {
+                            title?: string;
+                            assignee_id?: string;
+                            /** Format: date */
+                            due_on?: string;
+                        };
                     };
                 };
             };
@@ -1181,7 +1188,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Created"];
+                        "application/json": components["schemas"]["CreatedNote"];
                     };
                 };
                 /** @description Request rejected */
@@ -2061,6 +2068,7 @@ export interface components {
             end_ms?: number;
             replies: components["schemas"]["Message"][];
             name: string;
+            tasks: components["schemas"]["NoteTask"][];
         };
         Created: {
             id: string;
@@ -2185,6 +2193,18 @@ export interface components {
             open: number;
             late: number;
             assignees: components["schemas"]["AssigneeLoad"][];
+        };
+        NoteTask: {
+            id: string;
+            title: string;
+            status: string;
+            assignee_id: string;
+            due_on: string;
+        };
+        CreatedNote: {
+            id: string;
+            /** @description Present when the note was created with a linked task */
+            task_id?: string;
         };
     };
     responses: never;

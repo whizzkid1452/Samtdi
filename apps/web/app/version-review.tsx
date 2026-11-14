@@ -8,6 +8,7 @@ import { ReviewWaveform } from "./review-waveform";
 import { FeedbackComposer } from "./feedback-composer";
 import { feedbackDraftKey, readFeedbackDraft, useFeedbackDraft, type FeedbackDraft } from "./feedback-drafts";
 import { VersionNotes, useVersionNotes } from "./version-notes";
+import { useProjectMembers } from "./members";
 import type { MediaVersion } from "./media-library";
 
 export function VersionReview({ base, version, initialAt, initialNote, projectId, accountId, canEdit, writable }: {
@@ -35,6 +36,8 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const feedback = useVersionNotes({ url: notesURL, linkedNote: initialNote });
+  const { members } = useProjectMembers(projectId);
+  const assignees = members.filter(({ role }) => role !== "reviewer");
   const validRange = range && range[1] > range[0];
   const linkedPosition = feedback.selected?.id === initialNote ? feedback.selected?.start_ms : undefined;
 
@@ -107,7 +110,7 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
     event.preventDefault();
     if (!draft?.body.trim()) return;
 
-    if (await feedback.create(draft.anchor, draft.body)) {
+    if (await feedback.create(draft.anchor, draft.body, draft.task)) {
       updateDraft(null);
       setRange(undefined);
       closeComposer();
@@ -216,7 +219,9 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
         {composerOpen && draft && <FeedbackComposer draft={draft} busy={feedback.busy} error={feedback.error}
           save={save} close={closeComposer} discard={() => { updateDraft(null); closeComposer(); }}
           changeBody={(body) => updateDraft({ ...draft, body })}
-          moveAnchor={() => updateDraft({ ...draft, anchor: { start_ms: currentPosition() } })} />}
+          moveAnchor={() => updateDraft({ ...draft, anchor: { start_ms: currentPosition() } })}
+          assignees={canEdit ? assignees : undefined}
+          changeTask={(task) => updateDraft(task ? { ...draft, task } : { anchor: draft.anchor, body: draft.body })} />}
       </div>} />
   </div>;
 }

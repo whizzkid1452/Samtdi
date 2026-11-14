@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { displayName } from "../lib/people";
+import { statusLabel } from "../lib/tasks";
 import { versionHref } from "../lib/routes";
 import { timecode } from "../lib/timecode";
 import { ReviewTaskLinks } from "./review-task-links";
@@ -152,8 +153,8 @@ export function useVersionNotes({ url, linkedNote }: { url: string; linkedNote?:
         pageRequest.current = null;
       }
     }),
-    create: (anchor: { start_ms: number; end_ms?: number }, body: string) => run(async () => {
-      const created = await api<{ id: string }>(url, { method: "POST", body: JSON.stringify({ ...anchor, body }) });
+    create: (anchor: { start_ms: number; end_ms?: number }, body: string, task?: { assignee_id: string; due_on: string }) => run(async () => {
+      const created = await api<{ id: string; task_id?: string }>(url, { method: "POST", body: JSON.stringify({ ...anchor, body, ...(task && { task }) }) });
       await refreshNote(created.id);
       setRefresh((value) => value + 1);
       select(created.id);
@@ -219,6 +220,8 @@ export function VersionNotes({ feedback, url, projectId, itemId, versionId, acco
             <span className="feedback-time time-chip">{noteLabel(note)}</span>
           </span>
           <span className="feedback-summary">{note.deleted ? "삭제된 피드백" : note.body}</span>
+          {note.tasks.length > 0 && <span className="note-tasks">{note.tasks.map((task) => <span key={task.id} className={"note-task status-chip status-" + task.status}>
+            <span className="status-dot" aria-hidden="true" /><span className="visually-hidden">작업 {statusLabel(task.status)}: </span>{task.title}</span>)}</span>}
           <span className="feedback-meta">
             {note.resolved && <span className="status-label status-resolved"><Icon name="check" size={12} />해결됨</span>}
             {note.replies.some(({ deleted }) => !deleted) && <span className="muted meta-count"><Icon name="message" size={14} />답글 {note.replies.filter(({ deleted }) => !deleted).length}</span>}

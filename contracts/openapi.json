@@ -1181,7 +1181,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Created"
+                  "$ref": "#/components/schemas/CreatedNote"
                 }
               }
             }
@@ -1236,6 +1236,23 @@
                   },
                   "body": {
                     "type": "string"
+                  },
+                  "task": {
+                    "type": "object",
+                    "description": "Also create a to-do task linked to this note (owners and editors)",
+                    "properties": {
+                      "title": {
+                        "type": "string",
+                        "maxLength": 160
+                      },
+                      "assignee_id": {
+                        "type": "string"
+                      },
+                      "due_on": {
+                        "type": "string",
+                        "format": "date"
+                      }
+                    }
                   }
                 }
               }
@@ -2586,7 +2603,8 @@
           "revision",
           "start_ms",
           "replies",
-          "name"
+          "name",
+          "tasks"
         ],
         "properties": {
           "id": {
@@ -2627,6 +2645,12 @@
           },
           "name": {
             "type": "string"
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NoteTask"
+            }
           }
         }
       },
@@ -3113,6 +3137,48 @@
             "items": {
               "$ref": "#/components/schemas/AssigneeLoad"
             }
+          }
+        }
+      },
+      "NoteTask": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "assignee_id",
+          "due_on"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "assignee_id": {
+            "type": "string"
+          },
+          "due_on": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatedNote": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string",
+            "description": "Present when the note was created with a linked task"
           }
         }
       }

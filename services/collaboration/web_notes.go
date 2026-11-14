@@ -19,18 +19,28 @@ type webReply struct {
 }
 
 type webNote struct {
-	ID        string     `json:"id"`
-	VersionID string     `json:"version_id"`
-	AuthorID  string     `json:"author_id"`
-	Email     string     `json:"email"`
-	Name      string     `json:"name"`
-	StartMS   int64      `json:"start_ms"`
-	EndMS     *int64     `json:"end_ms,omitempty"`
-	Body      string     `json:"body"`
-	Resolved  bool       `json:"resolved"`
-	Deleted   bool       `json:"deleted"`
-	Revision  int        `json:"revision"`
-	Replies   []webReply `json:"replies"`
+	ID        string        `json:"id"`
+	VersionID string        `json:"version_id"`
+	AuthorID  string        `json:"author_id"`
+	Email     string        `json:"email"`
+	Name      string        `json:"name"`
+	StartMS   int64         `json:"start_ms"`
+	EndMS     *int64        `json:"end_ms,omitempty"`
+	Body      string        `json:"body"`
+	Resolved  bool          `json:"resolved"`
+	Deleted   bool          `json:"deleted"`
+	Revision  int           `json:"revision"`
+	Replies   []webReply    `json:"replies"`
+	Tasks     []webNoteTask `json:"tasks"`
+}
+
+// webNoteTask summarizes an active task made from a note so the review can show its progress.
+type webNoteTask struct {
+	ID         string `json:"id"`
+	Title      string `json:"title"`
+	Status     string `json:"status"`
+	AssigneeID string `json:"assignee_id"`
+	DueOn      string `json:"due_on"`
 }
 
 const webNotesSelect = `SELECT n.id::text,n.version_id::text,n.author_id::text,a.email,COALESCE(a.display_name,''),n.start_ms,n.end_ms,
@@ -38,7 +48,10 @@ const webNotesSelect = `SELECT n.id::text,n.version_id::text,n.author_id::text,a
  COALESCE((SELECT jsonb_agg(jsonb_build_object('id', r.id, 'author_id',r.author_id,'email',ra.email,'name',COALESCE(ra.display_name,''),
  'body',CASE WHEN r.deleted THEN '' ELSE r.body END,'deleted',r.deleted,'revision',r.revision)
  ORDER BY r.created_at,r.id)
- FROM web_note_replies r JOIN accounts ra ON ra.id=r.author_id WHERE r.note_id=n.id),'[]'::jsonb)
+ FROM web_note_replies r JOIN accounts ra ON ra.id=r.author_id WHERE r.note_id=n.id),'[]'::jsonb),
+ COALESCE((SELECT jsonb_agg(jsonb_build_object('id',t.id,'title',t.title,'status',t.status,
+ 'assignee_id',COALESCE(t.assignee_id::text,''),'due_on',COALESCE(t.due_on::text,'')) ORDER BY t.created_at,t.id)
+ FROM web_task_notes l JOIN web_tasks t ON t.id=l.task_id WHERE l.note_id=n.id AND NOT t.archived),'[]'::jsonb)
  FROM web_notes n JOIN accounts a ON a.id=n.author_id`
 
 func (s *Server) webNoteRoutes() {
@@ -119,7 +132,7 @@ func (s *Server) getWebNote(w http.ResponseWriter, r *http.Request, session Sess
 	var value webNote
 	err := s.pool.QueryRow(r.Context(), webNotesSelect+" WHERE n.project_id=$1 AND n.version_id=$2 AND n.id=$3",
 		project, version, note).Scan(&value.ID, &value.VersionID, &value.AuthorID, &value.Email, &value.Name, &value.StartMS, &value.EndMS,
-		&value.Body, &value.Resolved, &value.Deleted, &value.Revision, &value.Replies)
+		&value.Body, &value.Resolved, &value.Deleted, &value.Revision, &value.Replies, &value.Tasks)
 	if err != nil {
 		writeWebError(w, "read_web_note", err)
 		return
@@ -127,21 +140,50 @@ func (s *Server) getWebNote(w http.ResponseWriter, r *http.Request, session Sess
 	writeJSON(w, 200, value)
 }
 
+// webNoteTaskInput asks to turn a new note into a to-do task in the same change.
+type webNoteTaskInput struct {
+	Title      string `json:"title"`
+	AssigneeID string `json:"assignee_id"`
+	DueOn      string `json:"due_on"`
+}
+
+// noteTaskTitle uses the note's first line, shortened to the task title limit.
+func noteTaskTitle(body string) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(body), "\n")
+	runes := []rune(strings.TrimSpace(line))
+	if len(runes) > 160 {
+		runes = append(runes[:159], '…')
+	}
+	return string(runes)
+}
+
 func (s *Server) createWebNote(w http.ResponseWriter, r *http.Request, session Session) {
 	var input struct {
-		StartMS *int64 `json:"start_ms"`
-		EndMS   *int64 `json:"end_ms"`
-		Body    string `json:"body"`
+		StartMS *int64            `json:"start_ms"`
+		EndMS   *int64            `json:"end_ms"`
+		Body    string            `json:"body"`
+		Task    *webNoteTaskInput `json:"task"`
 	}
 	if !readJSON(w, r, &input) {
 		return
 	}
 	project, version := r.PathValue("project"), r.PathValue("version")
-	if !uuidPattern.MatchString(version) || input.StartMS == nil || *input.StartMS < 0 || !webText(input.Body, 4000) {
+	var task webTaskInput
+	if input.Task != nil {
+		task = webTaskInput{Title: strings.TrimSpace(input.Task.Title), Status: "todo", AssigneeID: input.Task.AssigneeID, DueOn: input.Task.DueOn}
+		if task.Title == "" {
+			task.Title = noteTaskTitle(input.Body)
+		}
+	}
+	if !uuidPattern.MatchString(version) || input.StartMS == nil || *input.StartMS < 0 || !webText(input.Body, 4000) ||
+		(input.Task != nil && !task.valid()) {
 		problem(w, 400, "invalid_note")
 		return
 	}
-	s.webWrite(w, r, session, Reviewer, false, 201, func(ctx context.Context, tx pgx.Tx, _ Role) (any, error) {
+	s.webWrite(w, r, session, Reviewer, false, 201, func(ctx context.Context, tx pgx.Tx, role Role) (any, error) {
+		if input.Task != nil && !role.canWrite() {
+			return nil, webProblem{403, "insufficient_role"}
+		}
 		var duration int64
 		err := tx.QueryRow(ctx, `SELECT v.duration_ms FROM web_media_versions v JOIN web_media_items m ON m.id=v.item_id
  WHERE v.project_id=$1 AND v.id=$2 AND v.state='ready' AND m.archived_at IS NULL`, project, version).Scan(&duration)
@@ -157,8 +199,34 @@ func (s *Server) createWebNote(w http.ResponseWriter, r *http.Request, session S
 		if err != nil {
 			return nil, err
 		}
-		return map[string]string{"id": id}, appendWebActivity(ctx, tx, project, session.AccountID, "note.created", id, map[string]any{"version_id": version})
+		if err := appendWebActivity(ctx, tx, project, session.AccountID, "note.created", id, map[string]any{"version_id": version}); err != nil {
+			return nil, err
+		}
+		if input.Task == nil {
+			return map[string]string{"id": id}, nil
+		}
+		taskID, err := createWebTaskFromNote(ctx, tx, project, session.AccountID, id, task)
+		return map[string]string{"id": id, "task_id": taskID}, err
 	})
+}
+
+// createWebTaskFromNote adds a to-do task linked to a note at the end of the to-do column.
+func createWebTaskFromNote(ctx context.Context, tx pgx.Tx, project, actor, note string, input webTaskInput) (string, error) {
+	if err := validateWebTaskLinks(ctx, tx, project, input); err != nil {
+		return "", err
+	}
+	var task string
+	err := tx.QueryRow(ctx, `INSERT INTO web_tasks(project_id,title,status,assignee_id,due_on,position)
+ SELECT $1,$2,'todo',NULLIF($3,'')::uuid,NULLIF($4,'')::date,COALESCE(max(position)+1,0) FROM web_tasks WHERE project_id=$1 AND status='todo'
+ RETURNING id::text`, project, input.Title, input.AssigneeID, input.DueOn).Scan(&task)
+	if err != nil {
+		return "", err
+	}
+	if _, err := tx.Exec(ctx, "INSERT INTO web_task_notes(project_id,task_id,note_id) VALUES ($1,$2,$3)", project, task, note); err != nil {
+		return "", err
+	}
+	return task, appendWebActivity(ctx, tx, project, actor, "task.created", task, map[string]any{
+		"status": "todo", "assignee_id": input.AssigneeID, "previous_assignee_id": "", "archived": false, "note_id": note})
 }
 
 type webMessageUpdate struct {
