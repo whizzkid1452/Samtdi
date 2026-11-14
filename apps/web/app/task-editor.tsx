@@ -19,7 +19,7 @@ type VersionOption = components["schemas"]["TaskVersion"];
 export type TaskChange = { status?: Status; position?: number; archived?: boolean; assignee_id?: string };
 
 type TaskDraft = {
-  title: string; description: string; assignee: string; due: string; status: Status;
+  title: string; description: string; assignee: string; due: string; start?: string; status: Status;
   review: string; resultId: string; notes: TaskNote[]; revision: number;
 };
 
@@ -53,6 +53,7 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
   const [description, setDescription] = useState(restored?.description ?? task?.description ?? "");
   const [assignee, setAssignee] = useState(restored?.assignee ?? change?.assignee_id ?? task?.assignee_id ?? "");
   const [due, setDue] = useState(restored?.due ?? task?.due_on ?? "");
+  const [start, setStart] = useState(restored?.start ?? task?.start_on ?? "");
   const [status, setStatus] = useState<Status>(restored?.status ?? change?.status ?? task?.status ?? "todo");
   const [review, setReview] = useState(restored?.review ?? task?.review_text ?? "");
   const [resultId, setResultId] = useState(restored?.resultId ?? task?.result_version_id ?? "");
@@ -71,18 +72,22 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
   useEffect(() => {
     if (!dirty) return;
     const revision = hasConflict && !hasReadLatest ? (restored?.revision ?? task?.revision ?? 0) : (latest?.revision ?? 0);
-    storeTaskDraft(key, { title, description, assignee, due, status, review, resultId, notes, revision });
-  }, [assignee, description, dirty, due, hasConflict, hasReadLatest, key, latest, notes, restored, resultId, review, status, task, title]);
+    storeTaskDraft(key, { title, description, assignee, due, start, status, review, resultId, notes, revision });
+  }, [assignee, description, dirty, due, hasConflict, hasReadLatest, key, latest, notes, restored, resultId, review, start, status, task, title]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (start && due && start > due) {
+      setError("시작일은 마감일보다 늦을 수 없습니다.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
       const result = await api<{ id: string }>(base + "/tasks" + (task ? "/" + task.id : ""), {
         method: task ? "PUT" : "POST",
         body: JSON.stringify({
-          title, description, assignee_id: assignee, due_on: due, status, review_text: review, result_version_id: resultId,
+          title, description, assignee_id: assignee, due_on: due, start_on: start, status, review_text: review, result_version_id: resultId,
           position: change?.position, archived, revision: latest?.revision ?? 0, note_ids: notes.map(({ id }) => id),
           confirm_notes: status === "done" && confirm ? unresolved.map(({ id, revision }) => ({ id, revision })) : [],
         }),
@@ -138,7 +143,8 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
             <option value="">미할당</option>
             {members.filter(({ role }) => role !== "reviewer").map((member) => <option key={member.account_id} value={member.account_id}>{displayName(member)}</option>)}
           </select></label>
-          <label>마감일<input type="date" value={due} onChange={(event) => setDue(event.target.value)} /></label>
+          <label>시작일<input type="date" value={start} max={due || undefined} onChange={(event) => setStart(event.target.value)} /></label>
+          <label>마감일<input type="date" value={due} min={start || undefined} onChange={(event) => setDue(event.target.value)} /></label>
           {task && <label>상태<select value={status} onChange={(event) => { setConfirm(false); setStatus(event.target.value as Status); }}>
             {statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select></label>}

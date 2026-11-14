@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { api, describeError } from "../lib/api";
 import { projectHref, versionLink } from "../lib/routes";
+import { shortDate } from "../lib/tasks";
 import { timecode } from "../lib/timecode";
 import { useProjectMembers } from "./members";
 import { taskFilters } from "./task-board";
@@ -72,7 +73,8 @@ export function TaskDetail({ project, taskId, onChanged }: { project: Project; t
       </div>}
       <dl className="task-metadata">
         <div><dt>담당자</dt><dd><Assignee members={members} id={task.assignee_id} /></dd></div>
-        <div><dt>마감일</dt><dd><DueChip due={task.due_on} status={task.status} empty="마감 없음" /></dd></div>
+        <div><dt>일정</dt><dd className="row wrap schedule">{task.start_on && <span>{shortDate(task.start_on)} 시작</span>}
+          <DueChip due={task.due_on} status={task.status} empty={task.start_on ? "마감 없음" : "날짜 없음"} /></dd></div>
         <div><dt>만든 날</dt><dd>{createdAt.format(new Date(task.created_at))}</dd></div>
         {task.source && <div className="task-metadata-wide"><dt>원본 피드백</dt><dd><SourceChip projectId={project.id} source={task.source} filename /></dd></div>}
       </dl>

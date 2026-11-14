@@ -9,10 +9,11 @@ import { displayName } from "../lib/people";
 import { taskHref } from "../lib/routes";
 import { statuses, todayInSeoul } from "../lib/tasks";
 import { useProjectMembers } from "./members";
-import { createTask, moveTask } from "./task-actions";
+import { createTask, moveTask, type TaskUpdate } from "./task-actions";
 import { Assignee, FeedbackCount, SourceChip } from "./task-card";
 import { TaskEditor, type Status, type Task, type TaskChange, type TaskNote } from "./task-editor";
 import { Kanban, useLanes } from "./task-kanban";
+import { TaskTimeline, type Zoom } from "./task-timeline";
 import { Avatar, DueChip, Icon, Menu, StatusChip, type IconName } from "./ui";
 import type { Project } from "./workspace";
 
@@ -21,9 +22,9 @@ export { Assignee, todayInSeoul };
 type Counts = Record<Status, number>;
 type Summary = components["schemas"]["TaskSummary"];
 type TaskSelection = { task?: Task; change?: TaskChange };
-export type TaskView = "board" | "list";
+export type TaskView = "board" | "list" | "timeline";
 const pageSize = 100;
-const views: [TaskView, string, IconName][] = [["board", "보드", "board"], ["list", "목록", "list"]];
+const views: [TaskView, string, IconName][] = [["board", "보드", "board"], ["list", "목록", "list"], ["timeline", "타임라인", "timeline"]];
 
 /** Filters and view options that are safe to keep in the URL and pass between the board, list and detail. */
 export function taskFilters(query: URLSearchParams) {
@@ -39,7 +40,12 @@ export function taskFilters(query: URLSearchParams) {
   if (due && ["late", "soon", "none"].includes(due)) params.set("due", due);
   if (query.get("archived") === "true") params.set("archived", "true");
   if (view && views.some(([value]) => value === view)) params.set("view", view);
-  if (query.get("group") === "assignee" && view !== "list") params.set("group", "assignee");
+  const group = query.get("group");
+  if (group === "assignee" && view !== "list" && view !== "timeline") params.set("group", group);
+  if (group === "status" && view === "timeline") params.set("group", group);
+  if (view === "timeline" && query.get("zoom") === "month") params.set("zoom", "month");
+  const start = query.get("start");
+  if (view === "timeline" && start && /^\d{4}-\d{2}-\d{2}$/.test(start)) params.set("start", start);
   return params;
 }
 
@@ -48,7 +54,8 @@ export function TaskBoard({ project, initialNote, revision: external = 0 }: { pr
   const router = useRouter();
   const query = useSearchParams();
   const filters = taskFilters(new URLSearchParams(query));
-  const view: TaskView = filters.get("view") === "list" ? "list" : "board";
+  const requestedView = filters.get("view");
+  const view: TaskView = requestedView === "list" || requestedView === "timeline" ? requestedView : "board";
   const group = view === "board" && filters.get("group") === "assignee" ? "assignee" : "";
   const listPath = pathname.replace(/\/tasks\/[^/]+$/, "/tasks");
   const [input, setInput] = useState(filters.get("q") ?? "");
@@ -64,8 +71,7 @@ export function TaskBoard({ project, initialNote, revision: external = 0 }: { pr
   const canWrite = project.role !== "reviewer" && !project.archived_at;
   const detailQuery = filters.size ? "?" + filters : "";
   const apiFilters = new URLSearchParams(filters);
-  apiFilters.delete("view");
-  apiFilters.delete("group");
+  for (const name of ["view", "group", "zoom", "start"]) apiFilters.delete(name);
   if (!apiFilters.has("archived")) apiFilters.set("archived", "false");
   const queryString = apiFilters.toString();
   const refresh = revision + external;
@@ -114,7 +120,7 @@ export function TaskBoard({ project, initialNote, revision: external = 0 }: { pr
     if (initialNote) router.replace(listPath + detailQuery);
   }
 
-  async function move(task: Task, change: TaskChange) {
+  async function move(task: Task, change: TaskUpdate) {
     setBusy(task.id);
     setError("");
     try {
@@ -148,7 +154,7 @@ export function TaskBoard({ project, initialNote, revision: external = 0 }: { pr
       <div className="row wrap">
         <h2 className="section-title">작업</h2>
         <nav className="segmented view-switch" aria-label="작업 보기">
-          {views.map(([value, label, icon]) => <Link key={value} className="button" href={href({ view: value === "board" ? "" : value, group: value === "board" ? filters.get("group") ?? "" : "" })}
+          {views.map(([value, label, icon]) => <Link key={value} className="button" href={href({ view: value === "board" ? "" : value, group: "", zoom: "", start: "" })}
             aria-current={view === value ? "page" : undefined}><Icon name={icon} />{label}</Link>)}
         </nav>
       </div>
@@ -176,12 +182,18 @@ export function TaskBoard({ project, initialNote, revision: external = 0 }: { pr
       {view === "board" && <label>묶기 <select value={group} onChange={(event) => router.push(href({ group: event.target.value }))}>
         <option value="">없음</option><option value="assignee">담당자</option>
       </select></label>}
+      {view === "timeline" && <label>묶기 <select value={filters.get("group") === "status" ? "status" : ""} onChange={(event) => router.push(href({ group: event.target.value }))}>
+        <option value="">담당자</option><option value="status">상태</option>
+      </select></label>}
       <label className="row"><input type="checkbox" checked={filters.get("archived") === "true"}
         onChange={(event) => router.push(href({ archived: event.target.checked ? "true" : "" }))} />보관된 작업</label>
       {filtered && <Link href={href({ q: "", status: "", assignee: "", due: "", archived: "" })}>필터 초기화</Link>}
     </div>
     {(error || memberError) && <p role="alert" className="error">{error || memberError}</p>}
-    {view === "board" ? <Kanban projectId={project.id} lanes={lanes} counts={counts} visible={visible} members={members} canWrite={canWrite}
+    {view === "timeline" ? <TaskTimeline base={base} projectId={project.id} members={members} canWrite={canWrite} apiQuery={queryString}
+      detailQuery={detailQuery} group={filters.get("group") === "status" ? "status" : "assignee"} zoom={(filters.get("zoom") ?? "week") as Zoom}
+      start={filters.get("start") ?? undefined} refresh={refresh} onMove={(task, change) => move(task, change)} />
+    : view === "board" ? <Kanban projectId={project.id} lanes={lanes} counts={counts} visible={visible} members={members} canWrite={canWrite}
       group={group} detailQuery={detailQuery} busy={busy} onMove={(task, change) => void move(task, change)}
       onCreate={create} onArchive={(task) => void move(task, { archived: !task.archived })} loadMore={(status) => void loadMore(status)} />
       : <div className="task-list">

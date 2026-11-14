@@ -1646,6 +1646,36 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Tasks whose schedule ends on or after this date"
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Tasks whose schedule starts on or before this date"
+          },
+          {
+            "in": "query",
+            "name": "scheduled",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "description": "Only tasks with or without a start or due date"
           }
         ]
       },
@@ -1732,6 +1762,11 @@
                     "items": {
                       "$ref": "#/components/schemas/NoteConfirmation"
                     }
+                  },
+                  "start_on": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Optional start date; must not be after due_on"
                   }
                 }
               }
@@ -1810,6 +1845,64 @@
             }
           }
         ]
+      }
+    },
+    "/v1/projects/{project}/versions": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Playable versions uploaded in the date range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ScheduleVersion"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/projects/{project}/tasks/{task}": {
@@ -1909,6 +2002,11 @@
                     "items": {
                       "$ref": "#/components/schemas/NoteConfirmation"
                     }
+                  },
+                  "start_on": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Optional start date; must not be after due_on"
                   }
                 }
               }
@@ -2296,6 +2394,36 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Tasks whose schedule ends on or after this date"
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Tasks whose schedule starts on or before this date"
+          },
+          {
+            "in": "query",
+            "name": "scheduled",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "description": "Only tasks with or without a start or due date"
           }
         ]
       }
@@ -2393,6 +2521,36 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Tasks whose schedule ends on or after this date"
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Tasks whose schedule starts on or before this date"
+          },
+          {
+            "in": "query",
+            "name": "scheduled",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "description": "Only tasks with or without a start or due date"
           }
         ]
       }
@@ -2719,7 +2877,8 @@
           "revision",
           "notes",
           "created_at",
-          "source"
+          "source",
+          "start_on"
         ],
         "properties": {
           "id": {
@@ -2774,6 +2933,9 @@
                 "type": "null"
               }
             ]
+          },
+          "start_on": {
+            "type": "string"
           }
         }
       },
@@ -3179,6 +3341,34 @@
           "task_id": {
             "type": "string",
             "description": "Present when the note was created with a linked task"
+          }
+        }
+      },
+      "ScheduleVersion": {
+        "type": "object",
+        "required": [
+          "id",
+          "item_id",
+          "item_title",
+          "filename",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "item_title": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }

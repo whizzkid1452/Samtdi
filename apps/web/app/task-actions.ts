@@ -1,12 +1,12 @@
 import { api, ApiError } from "../lib/api";
 import type { Task, TaskChange } from "./task-editor";
 
-export type TaskUpdate = TaskChange & { due_on?: string };
+export type TaskUpdate = TaskChange & { start_on?: string; due_on?: string };
 
 export function taskPayload(task: Task, change: TaskUpdate = {}) {
   return {
     title: task.title, description: task.description, status: task.status, assignee_id: task.assignee_id,
-    due_on: task.due_on,
+    due_on: task.due_on, start_on: task.start_on,
     result_version_id: task.result_version_id, review_text: task.review_text, archived: task.archived,
     revision: task.revision, note_ids: task.notes.map(({ id }) => id), confirm_notes: [], ...change,
   };
@@ -32,11 +32,11 @@ export async function moveTask(base: string, id: string, change: TaskUpdate): Pr
   }
 }
 
-export async function createTask(base: string, task: { title: string; status: Task["status"]; assignee_id?: string; due_on?: string }) {
+export async function createTask(base: string, task: { title: string; status: Task["status"]; assignee_id?: string; due_on?: string; start_on?: string }) {
   return api<{ id: string }>(base + "/tasks", {
     method: "POST",
     body: JSON.stringify({
-      description: "", assignee_id: "", due_on: "", result_version_id: "", review_text: "",
+      description: "", assignee_id: "", due_on: "", start_on: "", result_version_id: "", review_text: "",
       archived: false, revision: 0, note_ids: [], confirm_notes: [], ...task,
     }),
   });

@@ -29,6 +29,7 @@ type webTask struct {
 	Status          string         `json:"status"`
 	AssigneeID      string         `json:"assignee_id"`
 	DueOn           string         `json:"due_on"`
+	StartOn         string         `json:"start_on"`
 	ResultVersionID string         `json:"result_version_id"`
 	ReviewText      string         `json:"review_text"`
 	Position        int64          `json:"position"`
@@ -57,7 +58,7 @@ const webTaskSourceJSON = `(SELECT jsonb_strip_nulls(jsonb_build_object('note_id
  FROM web_task_notes l JOIN web_notes n ON n.id=l.note_id JOIN web_media_versions v ON v.id=n.version_id
  JOIN web_media_items i ON i.id=v.item_id WHERE l.task_id=t.id AND NOT n.deleted ORDER BY n.created_at,n.id LIMIT 1)`
 const webTaskSelect = `SELECT t.id::text,t.title,t.description,t.status,COALESCE(t.assignee_id::text,''),
- COALESCE(t.due_on::text,''),COALESCE(t.result_version_id::text,''),t.review_text,t.position,t.archived,t.revision,t.created_at,
+ COALESCE(t.due_on::text,''),COALESCE(t.start_on::text,''),COALESCE(t.result_version_id::text,''),t.review_text,t.position,t.archived,t.revision,t.created_at,
  COALESCE((SELECT jsonb_agg(` + webTaskNoteJSON + ` ORDER BY n.created_at,n.id)
  FROM web_task_notes l JOIN web_notes n ON n.id=l.note_id WHERE l.task_id=t.id),'[]'::jsonb),
  ` + webTaskSourceJSON + `
@@ -74,6 +75,7 @@ type webTaskInput struct {
 	Status          string                `json:"status"`
 	AssigneeID      string                `json:"assignee_id"`
 	DueOn           string                `json:"due_on"`
+	StartOn         string                `json:"start_on"`
 	ResultVersionID string                `json:"result_version_id"`
 	ReviewText      string                `json:"review_text"`
 	Position        *int64                `json:"position"`
@@ -93,10 +95,22 @@ func (input webTaskInput) valid() bool {
 		input.Position != nil && (*input.Position < 0 || *input.Position > 1_000_000_000) {
 		return false
 	}
-	if input.DueOn != "" {
-		if _, err := time.Parse(time.DateOnly, input.DueOn); err != nil {
+	var start, due time.Time
+	for _, date := range []struct {
+		value  string
+		parsed *time.Time
+	}{{input.StartOn, &start}, {input.DueOn, &due}} {
+		if date.value == "" {
+			continue
+		}
+		parsed, err := time.Parse(time.DateOnly, date.value)
+		if err != nil {
 			return false
 		}
+		*date.parsed = parsed
+	}
+	if !start.IsZero() && !due.IsZero() && start.After(due) {
+		return false
 	}
 	for _, id := range input.NoteIDs {
 		if !uuidPattern.MatchString(id) {
@@ -120,6 +134,7 @@ func (s *Server) webTaskRoutes() {
 	s.mux.HandleFunc("GET "+base+"/task-summary", s.withSession(s.webTaskSummary))
 	s.mux.HandleFunc("PUT "+base+"/tasks/{task}", s.withSession(s.saveWebTask))
 	s.mux.HandleFunc("GET "+base+"/task-options", s.withSession(s.webTaskOptions))
+	s.mux.HandleFunc("GET "+base+"/versions", s.withSession(s.listWebScheduleVersions))
 }
 
 const webTaskFilter = ` WHERE t.project_id=$1
@@ -131,13 +146,18 @@ const webTaskFilter = ` WHERE t.project_id=$1
  OR ($6='late' AND t.status<>'done' AND t.due_on<(now() AT TIME ZONE 'Asia/Seoul')::date)
  OR ($6='soon' AND t.status<>'done' AND t.due_on BETWEEN (now() AT TIME ZONE 'Asia/Seoul')::date AND (now() AT TIME ZONE 'Asia/Seoul')::date+7))
  AND ($7='' OR EXISTS (SELECT 1 FROM web_task_notes l
- WHERE l.project_id=t.project_id AND l.task_id=t.id AND l.note_id=NULLIF($7,'')::uuid))`
+ WHERE l.project_id=t.project_id AND l.task_id=t.id AND l.note_id=NULLIF($7,'')::uuid))
+ AND ($8='' OR COALESCE(t.due_on,GREATEST(t.start_on,(now() AT TIME ZONE 'Asia/Seoul')::date))>=NULLIF($8,'')::date)
+ AND ($9='' OR COALESCE(t.start_on,t.due_on)<=NULLIF($9,'')::date)
+ AND ($10='' OR (t.start_on IS NULL AND t.due_on IS NULL)=($10='false'))`
 
 func webTaskFilterArgs(r *http.Request) ([]any, bool) {
 	query := r.URL.Query()
 	search, status := strings.TrimSpace(query.Get("q")), query.Get("status")
 	assignee, archived, due, note := query.Get("assignee"), query.Get("archived"), query.Get("due"), query.Get("note")
-	if (search != "" && !webText(search, 200)) ||
+	from, to, scheduled := query.Get("from"), query.Get("to"), query.Get("scheduled")
+	if !webDateRange(from, to) || (scheduled != "" && scheduled != "true" && scheduled != "false") ||
+		(search != "" && !webText(search, 200)) ||
 		(status != "" && status != "todo" && status != "progress" && status != "review" && status != "done") ||
 		(assignee != "" && assignee != "unassigned" && !uuidPattern.MatchString(assignee)) ||
 		(archived != "" && archived != "true" && archived != "false") ||
@@ -145,7 +165,58 @@ func webTaskFilterArgs(r *http.Request) ([]any, bool) {
 		(note != "" && !uuidPattern.MatchString(note)) {
 		return nil, false
 	}
-	return []any{r.PathValue("project"), search, status, assignee, archived, due, note}, true
+	return []any{r.PathValue("project"), search, status, assignee, archived, due, note, from, to, scheduled}, true
+}
+
+// webDateRange accepts optional calendar dates and, when both are set, at most about a year between them.
+func webDateRange(from, to string) bool {
+	var dates [2]time.Time
+	for index, value := range []string{from, to} {
+		if value == "" {
+			continue
+		}
+		parsed, err := time.Parse(time.DateOnly, value)
+		if err != nil {
+			return false
+		}
+		dates[index] = parsed
+	}
+	return dates[0].IsZero() || dates[1].IsZero() || (!dates[1].Before(dates[0]) && dates[1].Sub(dates[0]) <= 400*24*time.Hour)
+}
+
+type webScheduleVersion struct {
+	ID        string    `json:"id"`
+	ItemID    string    `json:"item_id"`
+	ItemTitle string    `json:"item_title"`
+	Filename  string    `json:"filename"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// listWebScheduleVersions lists playable versions uploaded in a date range, for marking them on the task timeline.
+func (s *Server) listWebScheduleVersions(w http.ResponseWriter, r *http.Request, session Session) {
+	if !s.webRead(w, r, session) {
+		return
+	}
+	from, to := r.URL.Query().Get("from"), r.URL.Query().Get("to")
+	if from == "" || to == "" || !webDateRange(from, to) {
+		problem(w, 400, "invalid_date_range")
+		return
+	}
+	rows, err := s.pool.Query(r.Context(), `SELECT v.id::text,i.id::text,i.title,v.filename,v.created_at
+ FROM web_media_versions v JOIN web_media_items i ON i.id=v.item_id
+ WHERE v.project_id=$1 AND v.state='ready' AND i.archived_at IS NULL
+ AND (v.created_at AT TIME ZONE 'Asia/Seoul')::date BETWEEN $2::date AND $3::date
+ ORDER BY v.created_at,v.id LIMIT 200`, r.PathValue("project"), from, to)
+	if err != nil {
+		internal(w, "list_schedule_versions", err)
+		return
+	}
+	versions, err := pgx.CollectRows(rows, pgx.RowToStructByPos[webScheduleVersion])
+	if err != nil {
+		internal(w, "read_schedule_versions", err)
+		return
+	}
+	writeJSON(w, 200, versions)
 }
 
 func (s *Server) listWebTasks(w http.ResponseWriter, r *http.Request, session Session) {
@@ -159,8 +230,8 @@ func (s *Server) listWebTasks(w http.ResponseWriter, r *http.Request, session Se
 		return
 	}
 
-	rows, err := s.pool.Query(r.Context(), webTaskSelect+webTaskFilter+` AND ($8='' OR
- (t.status,t.position,t.id)>(SELECT status,position,id FROM web_tasks WHERE project_id=$1 AND id=NULLIF($8,'')::uuid))
+	rows, err := s.pool.Query(r.Context(), webTaskSelect+webTaskFilter+` AND ($11='' OR
+ (t.status,t.position,t.id)>(SELECT status,position,id FROM web_tasks WHERE project_id=$1 AND id=NULLIF($11,'')::uuid))
  ORDER BY t.status,t.position,t.id LIMIT 100`, append(args, cursor)...)
 	if err != nil {
 		internal(w, "list_web_tasks", err)
@@ -388,18 +459,18 @@ func (s *Server) saveWebTask(w http.ResponseWriter, r *http.Request, session Ses
 		}
 		action := "task.updated"
 		args := []any{project, strings.TrimSpace(input.Title), input.Description, input.Status, input.AssigneeID, input.DueOn,
-			input.ResultVersionID, input.ReviewText, position, input.Archived}
+			input.ResultVersionID, input.ReviewText, position, input.Archived, input.StartOn}
 		if task == "" {
 			action = "task.created"
-			err := tx.QueryRow(ctx, `INSERT INTO web_tasks(project_id,title,description,status,assignee_id,due_on,result_version_id,review_text,position,archived)
- VALUES ($1,$2,$3,$4,NULLIF($5,'')::uuid,NULLIF($6,'')::date,NULLIF($7,'')::uuid,$8,$9,$10) RETURNING id::text`, args...).Scan(&task)
+			err := tx.QueryRow(ctx, `INSERT INTO web_tasks(project_id,title,description,status,assignee_id,due_on,result_version_id,review_text,position,archived,start_on)
+ VALUES ($1,$2,$3,$4,NULLIF($5,'')::uuid,NULLIF($6,'')::date,NULLIF($7,'')::uuid,$8,$9,$10,NULLIF($11,'')::date) RETURNING id::text`, args...).Scan(&task)
 			if err != nil {
 				return nil, err
 			}
 		} else {
 			if _, err := tx.Exec(ctx, `UPDATE web_tasks SET title=$2,description=$3,status=$4,assignee_id=NULLIF($5,'')::uuid,
- due_on=NULLIF($6,'')::date,result_version_id=NULLIF($7,'')::uuid,review_text=$8,position=$9,archived=$10,revision=revision+1
- WHERE project_id=$1 AND id=$11`, append(args, task)...); err != nil {
+ due_on=NULLIF($6,'')::date,result_version_id=NULLIF($7,'')::uuid,review_text=$8,position=$9,archived=$10,start_on=NULLIF($11,'')::date,revision=revision+1
+ WHERE project_id=$1 AND id=$12`, append(args, task)...); err != nil {
 				return nil, err
 			}
 		}
@@ -411,7 +482,8 @@ func (s *Server) saveWebTask(w http.ResponseWriter, r *http.Request, session Ses
 				return nil, err
 			}
 		}
-		if err := appendWebActivity(ctx, tx, project, session.AccountID, action, task, map[string]any{"status": input.Status, "assignee_id": input.AssigneeID, "previous_assignee_id": previousAssignee, "archived": input.Archived}); err != nil {
+		if err := appendWebActivity(ctx, tx, project, session.AccountID, action, task, map[string]any{"status": input.Status, "assignee_id": input.AssigneeID, "previous_assignee_id": previousAssignee, "archived": input.Archived,
+			"start_on": input.StartOn, "due_on": input.DueOn}); err != nil {
 			return nil, err
 		}
 		return map[string]string{"id": task}, nil

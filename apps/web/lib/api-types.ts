@@ -1422,6 +1422,12 @@ export interface paths {
                     due?: "late" | "soon" | "none";
                     q?: string;
                     assignee?: string;
+                    /** @description Tasks whose schedule ends on or after this date */
+                    from?: string;
+                    /** @description Tasks whose schedule starts on or before this date */
+                    to?: string;
+                    /** @description Only tasks with or without a start or due date */
+                    scheduled?: "true" | "false";
                 };
                 header?: never;
                 path: {
@@ -1475,6 +1481,11 @@ export interface paths {
                         archived?: boolean;
                         note_ids?: string[];
                         confirm_notes?: components["schemas"]["NoteConfirmation"][];
+                        /**
+                         * Format: date
+                         * @description Optional start date; must not be after due_on
+                         */
+                        start_on?: string;
                     };
                 };
             };
@@ -1535,6 +1546,55 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["TaskOptions"];
+                    };
+                };
+                /** @description Request rejected */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query: {
+                    from: string;
+                    to: string;
+                };
+                header?: never;
+                path: {
+                    project: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Playable versions uploaded in the date range */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ScheduleVersion"][];
                     };
                 };
                 /** @description Request rejected */
@@ -1620,6 +1680,11 @@ export interface paths {
                         archived?: boolean;
                         note_ids?: string[];
                         confirm_notes?: components["schemas"]["NoteConfirmation"][];
+                        /**
+                         * Format: date
+                         * @description Optional start date; must not be after due_on
+                         */
+                        start_on?: string;
                     };
                 };
             };
@@ -1902,6 +1967,12 @@ export interface paths {
                     due?: "late" | "soon" | "none";
                     q?: string;
                     assignee?: string;
+                    /** @description Tasks whose schedule ends on or after this date */
+                    from?: string;
+                    /** @description Tasks whose schedule starts on or before this date */
+                    to?: string;
+                    /** @description Only tasks with or without a start or due date */
+                    scheduled?: "true" | "false";
                 };
                 header?: never;
                 path: {
@@ -1961,6 +2032,12 @@ export interface paths {
                     due?: "late" | "soon" | "none";
                     q?: string;
                     assignee?: string;
+                    /** @description Tasks whose schedule ends on or after this date */
+                    from?: string;
+                    /** @description Tasks whose schedule starts on or before this date */
+                    to?: string;
+                    /** @description Only tasks with or without a start or due date */
+                    scheduled?: "true" | "false";
                 };
                 header?: never;
                 path: {
@@ -2099,6 +2176,7 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             source: components["schemas"]["TaskSource"] | null;
+            start_on: string;
         };
         TaskVersion: {
             id: string;
@@ -2205,6 +2283,14 @@ export interface components {
             id: string;
             /** @description Present when the note was created with a linked task */
             task_id?: string;
+        };
+        ScheduleVersion: {
+            id: string;
+            item_id: string;
+            item_title: string;
+            filename: string;
+            /** Format: date-time */
+            created_at: string;
         };
     };
     responses: never;
