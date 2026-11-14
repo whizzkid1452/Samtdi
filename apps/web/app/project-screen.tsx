@@ -8,7 +8,8 @@ import { projectHref, type ProjectTab } from "../lib/routes";
 import { MediaDetail, MediaLibrary } from "./media-library";
 import { useProjectMembers } from "./members";
 import { ProjectMembers } from "./project-members";
-import { TaskBoard, TaskDetail } from "./task-board";
+import { TaskBoard } from "./task-board";
+import { TaskDetail } from "./task-detail";
 import { Icon, MemberStack, Menu, type IconName } from "./ui";
 import { ProjectActivity } from "./workspace-activity";
 import { useWorkspace, type Project } from "./workspace";
@@ -84,6 +85,7 @@ export function ProjectScreen({ projectId, tab, itemId, versionId, taskId }: { p
   const query = useSearchParams();
   const project = projects.find(({ id }) => id === projectId);
   const { members } = useProjectMembers(projectId);
+  const [taskRevision, setTaskRevision] = useState(0);
   const at = query.get("at");
 
   if (!project) return <main className="main-content">
@@ -124,8 +126,10 @@ export function ProjectScreen({ projectId, tab, itemId, versionId, taskId }: { p
         <MediaDetail key={projectId + ":" + itemId + ":" + (versionId ?? "")} project={project} itemId={itemId} versionId={versionId}
           accountId={session.account_id} initialNote={query.get("note") ?? undefined} initialAt={at === null ? undefined : Number(at)} /> :
         <MediaLibrary key={projectId + ":" + query.toString()} project={project} />)}
-      {tab === "tasks" && (taskId ? <TaskDetail key={projectId + ":" + taskId} project={project} taskId={taskId} /> :
-        <TaskBoard key={projectId + ":" + query.toString()} project={project} initialNote={query.get("task_note") ?? undefined} />)}
+      {tab === "tasks" && <>
+        <TaskBoard key={projectId + ":" + query.toString()} project={project} initialNote={query.get("task_note") ?? undefined} revision={taskRevision} />
+        {taskId && <TaskDetail key={projectId + ":" + taskId} project={project} taskId={taskId} onChanged={() => setTaskRevision((value) => value + 1)} />}
+      </>}
       {tab === "activity" && <ProjectActivity key={projectId} projectId={projectId} />}
       {tab === "settings" && <ProjectSettings key={projectId} project={project} />}
     </main>

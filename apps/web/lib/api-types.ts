@@ -1937,6 +1937,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/{project}/task-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Return tasks linked to this feedback in the project. */
+                    note?: string;
+                    status?: "todo" | "progress" | "review" | "done";
+                    archived?: "true" | "false";
+                    due?: "late" | "soon" | "none";
+                    q?: string;
+                    assignee?: string;
+                };
+                header?: never;
+                path: {
+                    project: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Open work by assignee for the same filters as task counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaskSummary"];
+                    };
+                };
+                /** @description Request rejected */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2019,6 +2073,7 @@ export interface components {
             resolved: boolean;
             deleted: boolean;
             revision: number;
+            end_ms?: number;
         };
         Task: {
             id: string;
@@ -2033,6 +2088,9 @@ export interface components {
             archived: boolean;
             revision: number;
             notes: components["schemas"]["TaskNote"][];
+            /** Format: date-time */
+            created_at: string;
+            source: components["schemas"]["TaskSource"] | null;
         };
         TaskVersion: {
             id: string;
@@ -2108,6 +2166,25 @@ export interface components {
             accept_url: string;
             /** Format: date-time */
             expires_at: string;
+        };
+        TaskSource: {
+            note_id: string;
+            item_id: string;
+            item_title: string;
+            version_id: string;
+            filename: string;
+            start_ms: number;
+            end_ms?: number;
+        };
+        AssigneeLoad: {
+            assignee_id: string;
+            open: number;
+            late: number;
+        };
+        TaskSummary: {
+            open: number;
+            late: number;
+            assignees: components["schemas"]["AssigneeLoad"][];
         };
     };
     responses: never;
