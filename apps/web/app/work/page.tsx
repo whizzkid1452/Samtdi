@@ -1,4 +1,4 @@
-import { DashboardPanel } from "../workspace-activity";
+import { DashboardPanel } from "../dashboard";
 
 export default function Work() {
   return <DashboardPanel />;

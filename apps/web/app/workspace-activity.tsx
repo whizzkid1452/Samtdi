@@ -7,15 +7,10 @@ import { api, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { itemHref, projectHref, taskHref, versionLink } from "../lib/routes";
 import { displayName } from "../lib/people";
-import { Avatar, DueChip, StatusChip } from "./ui";
+import { Avatar, StatusChip } from "./ui";
 
-type Dashboard = components["schemas"]["Dashboard"];
 type Activity = components["schemas"]["Activity"];
 
-const filters = [
-  ["assigned", "내 담당", "assigned_count"], ["review", "팀 검토 대기", "review_count"],
-  ["due", "7일 내 마감", "due_soon_count"], ["late", "지연", "late_count"],
-] as const;
 const actions: Record<string, string> = {
   "project.created": "프로젝트 생성", "project.archived": "프로젝트 보관", "project.restored": "프로젝트 복원",
   "invitation.created": "팀원 초대", "invitation.accepted": "초대 수락", "membership.changed": "팀원 권한 변경",
@@ -26,74 +21,6 @@ const actions: Record<string, string> = {
 };
 const localDate = new Intl.DateTimeFormat("ko-KR", { dateStyle: "full", timeZone: "Asia/Seoul" });
 const localTime = new Intl.DateTimeFormat("ko-KR", { timeStyle: "short", timeZone: "Asia/Seoul" });
-
-export function DashboardPanel() {
-  const requested = useSearchParams().get("filter");
-  const filter = filters.find(([key]) => key === requested)?.[0] ?? "assigned";
-
-  return <main className="main-content">
-    <h1 className="section-header">내 작업</h1>
-    <DashboardTasks key={filter} filter={filter} />
-  </main>;
-}
-
-function DashboardTasks({ filter }: { filter: typeof filters[number][0] }) {
-  const [dashboard, setDashboard] = useState<Dashboard>();
-  const [error, setError] = useState("");
-  const [attempt, setAttempt] = useState(0);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const path = "/v1/dashboard?filter=" + filter;
-
-  useEffect(() => {
-    const request = new AbortController();
-    function refresh() {
-      api<Dashboard>(path, { signal: request.signal }).then((result) => {
-        if (request.signal.aborted) return;
-        setDashboard(result);
-        setError("");
-      }).catch((cause) => { if (!request.signal.aborted) setError(describeError(cause)); });
-    }
-
-    refresh();
-    window.addEventListener("focus", refresh);
-    return () => { window.removeEventListener("focus", refresh); request.abort(); };
-  }, [attempt, path]);
-
-  async function loadMore() {
-    if (!dashboard?.next_cursor || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const page = await api<Dashboard>(path + "&after=" + dashboard.next_cursor);
-      setDashboard((previous) => previous ? {
-        ...page, tasks: [...previous.tasks, ...page.tasks.filter((task) => !previous.tasks.some(({ id }) => id === task.id))],
-      } : page);
-    } catch (cause) {
-      setError(describeError(cause));
-    } finally {
-      setLoadingMore(false);
-    }
-  }
-
-  return <section aria-label="내 작업 목록">
-    <nav aria-label="내 작업 필터" className="row wrap work-filters">
-      {filters.map(([key, label, count]) => <Link className="button" key={key} aria-current={filter === key ? "page" : undefined}
-        href={"/work?filter=" + key}>{label}{dashboard && <strong> {dashboard[count]}</strong>}</Link>)}
-    </nav>
-    {filter === "review" && <p className="muted">참여 중인 프로젝트에서 검토를 기다리는 작업입니다.</p>}
-    {error && <div className="row wrap" role="alert"><span className="error">{error}</span>
-      <button onClick={() => setAttempt((value) => value + 1)}>다시 시도</button></div>}
-    {!dashboard && !error && <p role="status">작업을 불러오는 중</p>}
-    {dashboard?.tasks.length === 0 && <p className="empty muted">이 조건에 해당하는 작업이 없습니다.</p>}
-    <ul className="resource-list">
-      {dashboard?.tasks.map((task) => <li className="row spread wrap" key={task.id}>
-        <div><Link className="resource-title" href={taskHref(task.project_id, task.id)}>{task.title}</Link>
-          <div className="muted">{task.project_title}</div></div>
-        <div className="row wrap"><StatusChip status={task.status} /><DueChip due={task.due_on} status={task.status} /></div>
-      </li>)}
-    </ul>
-    {dashboard?.next_cursor && <button disabled={loadingMore} onClick={() => void loadMore()}>작업 더 보기</button>}
-  </section>;
-}
 
 function activityHref(projectId: string, entry: Activity) {
   const family = entry.action.split(".")[0];

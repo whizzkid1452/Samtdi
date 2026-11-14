@@ -1763,6 +1763,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/dashboard/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Open feedback on the viewer's uploads in the last 14 days and recent playable versions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DashboardOverview"];
+                    };
+                };
+                /** @description Login required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Request rejected */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{project}/activity": {
         parameters: {
             query?: never;
@@ -2207,6 +2258,11 @@ export interface components {
             title: string;
             status: string;
             due_on: string;
+            start_on: string;
+            assignee_id: string;
+            note_count: number;
+            source: components["schemas"]["TaskSource"] | null;
+            assignee: components["schemas"]["PersonName"] | null;
         };
         Dashboard: {
             tasks: components["schemas"]["DashboardTask"][];
@@ -2291,6 +2347,45 @@ export interface components {
             filename: string;
             /** Format: date-time */
             created_at: string;
+        };
+        DashboardFeedback: {
+            id: string;
+            project_id: string;
+            project_title: string;
+            item_id: string;
+            item_title: string;
+            version_id: string;
+            filename: string;
+            start_ms: number;
+            end_ms?: number;
+            body: string;
+            author_id: string;
+            author_name: string;
+            author_email: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        DashboardVersion: {
+            id: string;
+            project_id: string;
+            project_title: string;
+            item_id: string;
+            item_title: string;
+            filename: string;
+            /** Format: date-time */
+            created_at: string;
+            uploader_id: string;
+            uploader_name: string;
+            uploader_email: string;
+            open_notes: number;
+        };
+        DashboardOverview: {
+            feedback: components["schemas"]["DashboardFeedback"][];
+            versions: components["schemas"]["DashboardVersion"][];
+        };
+        PersonName: {
+            name: string;
+            email: string;
         };
     };
     responses: never;
