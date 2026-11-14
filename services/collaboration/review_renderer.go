@@ -197,9 +197,10 @@ func (s *Server) renderReviewMedia(ctx context.Context, projectID string, media 
 		return fail("render_media_unavailable")
 	}
 
-	hash := sha256.Sum256(document)
+	documentDigest := sha256.Sum256(document)
+	documentHash := hex.EncodeToString(documentDigest[:])
 	input, err := json.Marshal(map[string]any{
-		"version": 1, "projectFolder": projectFolder, "documentHash": hex.EncodeToString(hash[:]),
+		"version": 1, "projectFolder": projectFolder, "documentHash": documentHash,
 		"sourceHash": manifest.SourceHash, "settings": media.Settings, "plugins": available,
 	})
 	if err != nil || os.WriteFile(filepath.Join(folder, "job.json"), input, 0600) != nil {
@@ -221,7 +222,7 @@ func (s *Server) renderReviewMedia(ctx context.Context, projectID string, media 
 		return fail("render_worker_failed")
 	}
 
-	result, metadata, err := verifiedReviewWAV(folder, manifest.SourceHash, media.Settings)
+	result, metadata, err := verifiedReviewWAV(folder, manifest.SourceHash, documentHash, media.Settings)
 	if err != nil {
 		return fail("render_output_invalid")
 	}
@@ -348,28 +349,32 @@ func readSmallFile(path string, limit int64) ([]byte, error) {
 	return data, nil
 }
 
-func verifiedReviewWAV(folder, sourceHash string, settings reviewRenderSettings) (json.RawMessage, BlobMetadata, error) {
+func verifiedReviewWAV(folder, sourceHash, documentHash string, settings reviewRenderSettings) (json.RawMessage, BlobMetadata, error) {
 	raw, err := readSmallFile(filepath.Join(folder, "render.json"), 4<<20)
 	if err != nil {
 		return nil, BlobMetadata{}, err
 	}
 	var report struct {
-		Version     int                  `json:"version"`
-		Complete    bool                 `json:"complete"`
-		SourceHash  string               `json:"sourceHash"`
-		Settings    reviewRenderSettings `json:"settings"`
-		Environment json.RawMessage      `json:"environment"`
-		Outputs     []struct {
+		Version            int                  `json:"version"`
+		Complete           bool                 `json:"complete"`
+		SourceHash         string               `json:"sourceHash"`
+		SourceDocumentHash string               `json:"sourceDocumentHash"`
+		Settings           reviewRenderSettings `json:"settings"`
+		Environment        json.RawMessage      `json:"environment"`
+		Outputs            []struct {
 			File   string `json:"file"`
 			SHA256 string `json:"sha256"`
 			Bytes  int64  `json:"bytes"`
 			Frames int64  `json:"frames"`
 		} `json:"outputs"`
 	}
-	if err := json.Unmarshal(raw, &report); err != nil || report.Version != 1 || !report.Complete ||
+	if err := json.Unmarshal(raw, &report); err != nil || (report.Version != 1 && report.Version != 2) || !report.Complete ||
 		report.SourceHash != sourceHash || !reflect.DeepEqual(report.Settings, settings) || len(report.Environment) == 0 ||
 		len(report.Outputs) != 1 || report.Outputs[0].File != "mix.wav" || report.Outputs[0].Frames <= 0 {
 		return nil, BlobMetadata{}, errors.New("invalid review render manifest")
+	}
+	if report.Version == 2 && report.SourceDocumentHash != documentHash {
+		return nil, BlobMetadata{}, errors.New("review render source document checksum mismatch")
 	}
 
 	output := report.Outputs[0]
