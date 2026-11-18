@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
+import { createPlaybackClock } from "../lib/playback-clock";
 import { timecode } from "../lib/timecode";
 import { noteLabel, type Note } from "./version-notes";
 
@@ -30,6 +31,8 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
   openNote: (note: Note) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const playedWaveform = useRef<HTMLCanvasElement>(null);
+  const playhead = useRef<HTMLSpanElement>(null);
   const waveformGesture = useRef<WaveformGesture | null>(null);
   const [openMarker, setOpenMarker] = useState<string>();
   const selectedStart = selected?.start_ms;
@@ -38,9 +41,9 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
 
   useEffect(() => {
     const target = canvas.current;
-    const player = audio.current;
     const context = target?.getContext("2d");
-    if (!target || !player || !context || !duration) return;
+    const playedContext = playedWaveform.current?.getContext("2d");
+    if (!target || !context || !playedContext) return;
 
     const { width, height } = target;
     const waveform = new Path2D();
@@ -50,58 +53,84 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
       waveform.rect(index * barWidth, (height - barHeight) / 2, Math.max(1, barWidth - 1), barHeight);
     }
 
+    context.clearRect(0, 0, width, height);
+    playedContext.clearRect(0, 0, width, height);
+    if (selectedStart !== undefined && duration) {
+      context.fillStyle = "#bddde9";
+      const x = Math.min(width - 2, selectedStart / duration * width);
+      context.fillRect(x, 0, Math.max(2, ((selectedEnd ?? selectedStart) - selectedStart) / duration * width), height);
+    }
+    if (range && range[1] > range[0] && duration) {
+      context.fillStyle = "#d7ecdc";
+      context.fillRect(range[0] / duration * width, 0, (range[1] - range[0]) / duration * width, height);
+    }
+
+    context.fillStyle = "#8b99a6";
+    context.fill(waveform);
+    playedContext.fillStyle = "#1a7138";
+    playedContext.fill(waveform);
+  }, [duration, peaks, range, selectedStart, selectedEnd]);
+
+  useEffect(() => {
+    const target = canvas.current;
+    const played = playedWaveform.current;
+    const head = playhead.current;
+    const player = audio.current;
+    if (!target || !played || !head || !player || !duration) return;
+
+    const clock = createPlaybackClock();
     let frame = 0;
-    const draw = () => {
+    let width = target.clientWidth;
+
+    const paint = (seconds: number) => {
+      const progress = Math.min(1, Math.max(0, seconds * 1000 / duration));
+      played.style.clipPath = `inset(0 ${(1 - progress) * 100}% 0 0)`;
+      head.style.transform = `translate3d(${Math.min(progress * width, Math.max(0, width - 2))}px, 0, 0)`;
+    };
+
+    const draw = (timestamp: number) => {
       if (previewEnd.current !== null && player.currentTime * 1000 >= previewEnd.current) {
         const end = previewEnd.current;
         previewEnd.current = null;
         player.pause();
         player.currentTime = end / 1000;
+        paint(end / 1000);
+        return;
       }
 
-      const progress = Math.min(1, player.currentTime * 1000 / duration);
-      const playheadX = progress * width;
-      context.clearRect(0, 0, width, height);
-      if (selectedStart !== undefined) {
-        context.fillStyle = "#bddde9";
-        const x = Math.min(width - 2, selectedStart / duration * width);
-        context.fillRect(x, 0, Math.max(2, ((selectedEnd ?? selectedStart) - selectedStart) / duration * width), height);
-      }
-      if (range && range[1] > range[0]) {
-        context.fillStyle = "#d7ecdc";
-        context.fillRect(range[0] / duration * width, 0, (range[1] - range[0]) / duration * width, height);
-      }
-
-      context.fillStyle = "#8b99a6";
-      context.fill(waveform);
-      if (playheadX > 0) {
-        context.save();
-        context.beginPath();
-        context.rect(0, 0, playheadX, height);
-        context.clip();
-        context.fillStyle = "#1a7138";
-        context.fill(waveform);
-        context.restore();
-      }
-
-      context.fillStyle = "#1f2328";
-      context.fillRect(Math.min(playheadX, width - 2), 0, 2, height);
-      if (!player.paused && !player.ended) frame = requestAnimationFrame(draw);
+      paint(clock.read({ seconds: player.currentTime, timestamp, playbackRate: player.playbackRate }));
+      frame = requestAnimationFrame(draw);
     };
 
-    const refresh = () => {
+    const stop = () => {
       cancelAnimationFrame(frame);
-      draw();
+      paint(clock.reset({ seconds: player.currentTime, timestamp: performance.now() }));
     };
-    const events = ["loadedmetadata", "play", "pause", "ended", "seeking", "seeked"];
-    for (const event of events) player.addEventListener(event, refresh);
-    refresh();
+    const synchronize = () => {
+      stop();
+      if (!player.paused && !player.ended && !player.seeking && player.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+        frame = requestAnimationFrame(draw);
+      }
+    };
+    const stops = ["pause", "ended", "waiting", "emptied", "seeking"];
+    const starts = ["loadedmetadata", "playing", "seeked", "ratechange"];
+    for (const event of stops) player.addEventListener(event, stop);
+    for (const event of starts) player.addEventListener(event, synchronize);
+
+    const resize = new ResizeObserver(() => {
+      width = target.clientWidth;
+      if (player.paused) paint(player.currentTime);
+    });
+    resize.observe(target);
+    synchronize();
 
     return () => {
       cancelAnimationFrame(frame);
-      for (const event of events) player.removeEventListener(event, refresh);
+      resize.disconnect();
+      for (const event of stops) player.removeEventListener(event, stop);
+      for (const event of starts) player.removeEventListener(event, synchronize);
     };
-  }, [audio, duration, peaks, previewEnd, range, selectedStart, selectedEnd]);
+  }, [audio, duration, previewEnd]);
 
   function clamp(ms: number) {
     return Math.round(Math.min(duration, Math.max(0, ms)));
@@ -178,6 +207,8 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
           }}
           onPointerCancel={endWaveformGesture}
           onLostPointerCapture={endWaveformGesture} />
+        <canvas ref={playedWaveform} width={1024} height={180} className="waveform waveform-played" aria-hidden="true" />
+        <span ref={playhead} className="waveform-playhead" aria-hidden="true" />
         {range && ([0, 1] as const).map((index) => {
           const label = index === 0 ? "구간 시작" : "구간 끝";
           return <button key={index} type="button" className="range-handle" role="slider"
