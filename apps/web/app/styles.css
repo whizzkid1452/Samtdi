@@ -149,6 +149,8 @@ label { font-size: .9rem; color: var(--muted); }
 .waveform-frame { position: relative; }
 .waveform { height: clamp(9rem, 18vw, 13rem); background: var(--surface); cursor: ew-resize; touch-action: pan-y; }
 .waveform.selecting { cursor: crosshair; touch-action: none; }
+.waveform-played { position: absolute; inset: 0; background: transparent; border-color: transparent; pointer-events: none; clip-path: inset(0 100% 0 0); }
+.waveform-playhead { position: absolute; inset: 1px auto 1px 1px; width: 2px; background: var(--text); pointer-events: none; will-change: transform; }
 .wave-marker { position: absolute; bottom: .25rem; transform: translateX(-50%); padding: 0 .3rem; min-width: 2rem; min-height: 2rem; background: var(--bg); border-color: var(--accent); color: var(--accent); border-radius: 999px; font-size: .75rem; font-weight: 700; }
 .wave-marker[aria-current] { background: var(--accent); color: #fff; }
 .range-handle { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 24px; height: 44px; padding: 0; background: #fff; border: 2px solid var(--accent); touch-action: none; cursor: ew-resize; }
