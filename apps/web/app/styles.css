@@ -237,3 +237,10 @@ label { font-size: .9rem; color: var(--muted); }
 .project-switcher .inbox-body a { display: block; overflow-wrap: anywhere; }
 .project-switcher .inbox-body [aria-current] { font-weight: 700; color: var(--accent); }
 .member-list li > span { overflow-wrap: anywhere; }
+.task-card { position: relative; }
+.task-card[draggable="true"] { cursor: grab; }
+.task-dragging { opacity: .45; }
+.lane-drop-active { outline: 2px solid var(--accent, #166534); outline-offset: -2px; }
+.task-card[data-drop-edge]::after { content: ""; position: absolute; left: 0; right: 0; height: 3px; background: var(--accent, #166534); border-radius: 2px; pointer-events: none; }
+.task-card[data-drop-edge="top"]::after { top: -5px; }
+.task-card[data-drop-edge="bottom"]::after { bottom: -5px; }

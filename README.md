@@ -30,3 +30,9 @@ aws --endpoint-url "$AYOTBI_S3_ENDPOINT" s3 mb "s3://$AYOTBI_S3_BUCKET"
 미디어 처리에는 FFmpeg·FFprobe가 필요합니다. API와 같은 환경을 별도 터미널에 적용하고 `services/collaboration`에서 `go run ./cmd/ayotbi-collaboration media-worker`를 실행합니다. 처리 작업은 최대 8분, 임대는 10분입니다. 전송이나 저장 오류는 최대 세 번 시도하며, 형식 오류는 새 업로드가 필요합니다. 로컬 설정은 파일당 500 MB, 30분, 모노·스테레오를 허용합니다.
 
 [운영과 복원](docs/web-operations.md) · [MVP 검증 결과와 재현](docs/web-pilot-verification.md)
+
+## 작업 보드
+
+보드에서 카드를 끌어 컬럼 사이로 이동하거나 카드 위·아래에 놓아 순서를 저장합니다. 더 보기 메뉴의 이동 버튼으로도 같은 작업을 수행할 수 있습니다. 검토 요청·완료로 전환할 때는 결과와 미해결 피드백을 확인합니다. 다른 사용자가 먼저 수정한 카드는 덮어쓰지 않고 최신 상태를 다시 불러옵니다.
+
+보드 조작에는 Apache-2.0의 Pragmatic drag and drop을 사용합니다. [외부 라이선스 고지](THIRD_PARTY_NOTICES.md)를 참고하세요.
