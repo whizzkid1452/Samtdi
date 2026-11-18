@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { projectHref, taskHref, versionLink } from "../lib/routes";
 import { TaskEditor, statuses, statusLabel, type Status, type Task, type TaskChange, type TaskNote } from "./task-editor";
 import { timecode } from "../lib/timecode";
 import type { Member, Project } from "./workspace";
+import { DraggableTask, TaskLane, type TaskMove } from "./task-drag";
 
 type Counts = Record<Status, number>;
 type TaskSelection = { task?: Task; change?: TaskChange };
@@ -60,6 +61,9 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
   const [error, setError] = useState("");
   const [counts, setCounts] = useState<Counts>();
   const [revision, setRevision] = useState(0);
+  const moveLockRef = useRef(false);
+  const [moving, setMoving] = useState(false);
+  const [moveNotice, setMoveNotice] = useState("");
   const base = "/v1/projects/" + project.id;
   const { members, error: memberError } = useMembers(base);
   const canWrite = project.role !== "reviewer" && !project.archived_at;
@@ -68,6 +72,37 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
   apiFilters.delete("view");
   if (!apiFilters.has("archived")) apiFilters.set("archived", "false");
   const queryString = apiFilters.toString();
+
+  const moveTask = useCallback(({ task, status, position }: TaskMove) => {
+    if (!canWrite || task.archived || moveLockRef.current) return;
+    if (task.status !== status && (status === "review" || status === "done")) {
+      setSelection({ task, change: { status, position } });
+      return;
+    }
+
+    moveLockRef.current = true;
+    setMoving(true);
+    setError("");
+    setMoveNotice("");
+    void api(base + "/tasks/" + task.id, {
+      method: "PUT",
+      body: JSON.stringify({
+        title: task.title, description: task.description, status, position,
+        assignee_id: task.assignee_id, due_on: task.due_on, result_version_id: task.result_version_id,
+        review_text: task.review_text, archived: task.archived, revision: task.revision,
+        note_ids: task.notes.map(({ id }) => id), confirm_notes: [],
+      }),
+    }).then(() => {
+      setMoveNotice(task.title + " · " + statusLabel(status) + "으로 이동했습니다.");
+      setRevision((value) => value + 1);
+    }).catch((cause) => {
+      setError(describeError(cause));
+      setRevision((value) => value + 1);
+    }).finally(() => {
+      moveLockRef.current = false;
+      setMoving(false);
+    });
+  }, [base, canWrite, setRevision]);
 
   useEffect(() => {
     if (!initialNote || !canWrite) return;
@@ -114,11 +149,7 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
     const assignee = members.find(({ account_id }) => account_id === task.assignee_id);
     const late = task.due_on && task.status !== "done" && task.due_on < todayInSeoul();
 
-    return <article className={board ? "task-card" : "task-list-row"} draggable={board && canWrite && !task.archived}
-      onDragStart={(event) => {
-        event.dataTransfer.setData("text/plain", task.id);
-        event.dataTransfer.effectAllowed = "move";
-      }}>
+    const content = <>
       <Link href={link} className="resource-title">{task.title}</Link>
       {!board && <span className="status-label">{statusLabel(task.status)}</span>}
       <span className="muted">{assignee?.email ?? "미할당"}</span>
@@ -127,22 +158,16 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
       {canWrite && <details className="task-menu">
         <summary aria-label={task.title + " 관리"}>더 보기</summary>
         <div className="row wrap">
-          {previous && <button type="button" onClick={() => setSelection({ task, change: { position: previous.position } })}>위로 이동</button>}
+          {previous && <button type="button" disabled={moving} onClick={() => moveTask({ task, status: task.status, position: previous.position })}>위로 이동</button>}
           {statuses.filter(([value]) => value !== task.status).map(([value, label]) => <button type="button" key={value}
-            onClick={() => setSelection({ task, change: { status: value } })}>{label}으로 이동</button>)}
+            disabled={moving} onClick={() => moveTask({ task, status: value })}>{label}으로 이동</button>)}
           <button type="button" onClick={() => setSelection({ task, change: { archived: !task.archived } })}>{task.archived ? "복원" : "보관"}</button>
         </div>
       </details>}
-    </article>;
-  }
+    </>;
 
-  async function drop(id: string, status: Status) {
-    try {
-      const task = await api<Task>(base + "/tasks/" + encodeURIComponent(id));
-      if (task.status !== status && !task.archived) setSelection({ task, change: { status } });
-    } catch (cause) {
-      setError(describeError(cause));
-    }
+    return board ? <DraggableTask projectId={project.id} task={task} enabled={canWrite && !moving && !task.archived} onMove={moveTask}>{content}</DraggableTask>
+      : <article className="task-list-row">{content}</article>;
   }
 
   return <section id="task-board" aria-label="작업">
@@ -179,19 +204,15 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
       {filters.size > (board ? 1 : 0) && <Link href={pathname + (board ? "?view=board" : "")}>필터 초기화</Link>}
     </div>
     {(error || memberError) && <p role="alert" className="error">{error || memberError}</p>}
-    {board ? <div className="board">
+    <p role="status" className="muted">{moving ? "작업을 이동하는 중" : moveNotice || (board && canWrite ? "카드를 끌어 순서를 바꾸거나 다른 상태로 옮기세요. 더 보기 메뉴로도 이동할 수 있습니다." : "")}</p>
+    {board ? <div className="board" aria-busy={moving}>
       {statuses.filter(([value]) => !filters.get("status") || filters.get("status") === value).map(([value, label]) => {
         const lane = new URLSearchParams(queryString);
         lane.set("status", value);
-        return <section className="lane" key={value} aria-label={label} onDragOver={canWrite ? (event) => event.preventDefault() : undefined}
-          onDrop={canWrite ? (event) => {
-            event.preventDefault();
-            const id = event.dataTransfer.getData("text/plain");
-            if (/^[0-9a-f-]{36}$/.test(id)) void drop(id, value);
-          } : undefined}>
+        return <TaskLane key={value} projectId={project.id} status={value} label={label} enabled={canWrite && !moving} onMove={moveTask}>
           <h3>{label} {counts && <span className="muted">{counts[value]}</span>}</h3>
           <TaskRows key={lane.toString() + ":" + revision} path={base + "/tasks?" + lane} render={taskCard} />
-        </section>;
+        </TaskLane>;
       })}
     </div> : <div className="task-list">
       <TaskRows key={queryString + ":" + revision} path={base + "/tasks?" + queryString} render={taskCard} />

@@ -12,6 +12,8 @@
     "verify:pilot": "node scripts/verify-pilot.mjs"
   },
   "dependencies": {
+    "@atlaskit/pragmatic-drag-and-drop": "4.0.0",
+    "@atlaskit/pragmatic-drag-and-drop-hitbox": "3.0.0",
     "next": "16.4.6",
     "react": "19.3.1",
     "react-dom": "19.3.1"
