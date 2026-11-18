@@ -147,10 +147,6 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
   return <div className="review-grid">
     <section className="player-panel" aria-label="음원 플레이어" onKeyDown={(event) => {
       if (event.key === "Escape" && range) clearRange();
-      if (event.key === " " && event.target instanceof HTMLCanvasElement && metadataReady) {
-        event.preventDefault();
-        void togglePlayback();
-      }
     }}>
       <audio ref={audio} aria-label="버전 재생" preload="metadata" src={path + "/files/playback"}
         onLoadedMetadata={() => {
@@ -164,6 +160,7 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
         <button onClick={() => { setError(""); setAttempt((value) => value + 1); audio.current?.load(); }}>다시 시도</button></div>}
       <ReviewWaveform audio={audio} duration={duration} peaks={peaks} position={position} range={range}
         setRange={setRange} seek={seek} notes={feedback.notes} selected={feedback.selected} previewEnd={previewEnd}
+        onError={setError} togglePlayback={() => { if (metadataReady) void togglePlayback(); }}
         openNote={(note) => { feedback.select(note.id); seek(note.start_ms); }} />
       <div className="row spread wrap player-controls">
         <div className="row wrap">

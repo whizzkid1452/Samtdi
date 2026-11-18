@@ -127,24 +127,39 @@ async function verifyWaveformSeeking(page, durationMs) {
   await waveform.press("Home");
 }
 
+async function verifyRangeSelection(page, durationMs) {
+  const waveform = page.getByRole("slider", { name: "재생 위치", exact: true });
+  const bounds = await waveform.boundingBox();
+  assert.ok(bounds);
+
+  const y = bounds.y + bounds.height / 3;
+  const start = bounds.x + bounds.width * .2;
+  const end = bounds.x + bounds.width * .6;
+  await page.mouse.move(end, y);
+  await page.mouse.down();
+  await page.mouse.move(start, y, { steps: 8 });
+  await page.mouse.up();
+
+  const tolerance = durationMs / bounds.width + 1;
+  for (const [label, fraction] of [["시작", .2], ["끝", .6]]) {
+    const milliseconds = Number(await page.getByLabel(label + " (초)").inputValue()) * 1000;
+    assert.ok(Math.abs(milliseconds - fraction * durationMs) <= tolerance, `Unexpected range ${label} ${milliseconds}ms`);
+  }
+}
+
 async function verifyMovingPlayhead(page) {
-  const canvas = page.getByRole("slider", { name: "재생 위치", exact: true });
-  const sample = await canvas.evaluate(async (element) => {
-    const context = element.getContext("2d");
+  const playhead = page.locator(".waveform-playhead");
+  const sample = await playhead.evaluate(async (element) => {
     const audio = element.closest("section").querySelector("audio");
     const start = audio.currentTime;
-    const pixels = new Set();
+    const positions = new Set();
     const deadline = performance.now() + 2000;
     while (audio.currentTime < start + .5 && performance.now() < deadline) {
       await new Promise(requestAnimationFrame);
-      const row = context.getImageData(0, 0, element.width, 1).data;
-      for (let index = 3; index < row.length; index += 4) {
-        if (row[index] === 0) continue;
-        pixels.add((index - 3) / 4);
-        break;
-      }
+      const position = new DOMMatrixReadOnly(getComputedStyle(element).transform).m41;
+      positions.add(position);
     }
-    return pixels.size;
+    return positions.size;
   });
   assert.ok(sample >= 5, `Expected smooth playhead movement, observed ${sample} positions`);
 }
@@ -223,7 +238,7 @@ try {
 
   const first = await upload(owner, { file: wav, action: "음원 업로드", expected: "ready" });
   await ensureFits(owner);
-  const waveform = await owner.locator("canvas.waveform").boundingBox();
+  const waveform = await owner.getByRole("slider", { name: "재생 위치", exact: true }).boundingBox();
   assert.ok(waveform && waveform.y + waveform.height <= 900);
 
   await tab(owner, "설정").click();
@@ -239,6 +254,7 @@ try {
   await editor.waitForURL(first.url);
   await verifyWaveformSeeking(editor, first.duration_ms);
   await button(editor, "구간 지정").click();
+  await verifyRangeSelection(editor, first.duration_ms);
   await editor.getByLabel("시작 (초)").fill("0.2");
   await editor.getByLabel("끝 (초)").fill("0.6");
   await editor.getByRole("slider", { name: "구간 끝" }).press("ArrowRight");
