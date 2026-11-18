@@ -28,7 +28,7 @@ aws --endpoint-url "$AYOTBI_S3_ENDPOINT" s3 mb "s3://$AYOTBI_S3_BUCKET"
 
 `ops/verify-web.sh`는 격리 PostgreSQL로 실행합니다. API 형식은 `contracts/openapi.json`을 수정하고 `apps/web`에서 `pnpm generate:api`를 실행해 갱신합니다.
 
-웹 재생 위치 보간 검사는 `cd apps/web && pnpm test`로 실행합니다(Node.js 22.6 이상). 파형은 데이터·선택 구간이 바뀔 때 그리며 플레이헤드는 별도 레이어에서 애니메이션합니다. 보간은 표시 위치에만 적용하고 탐색·정지·버퍼링 시 실제 오디오 위치로 다시 맞춥니다.
+웹 재생 위치 보간 검사는 `cd apps/web && pnpm test`로 실행합니다(Node.js 22.6 이상). wavesurfer.js는 서버에서 생성한 파형 데이터를 그리고 Regions로 선택 구간을 표시·조절합니다. 기존 HTML 오디오의 재생 시간을 기준으로 플레이헤드를 보간하며 탐색·정지·버퍼링 시 실제 위치로 다시 맞춥니다. 댓글과 구간 입력의 시간은 밀리초 단위입니다. [외부 라이선스 고지](THIRD_PARTY_NOTICES.md)
 
 미디어 처리에는 FFmpeg·FFprobe가 필요합니다. API와 같은 환경을 별도 터미널에 적용하고 `services/collaboration`에서 `go run ./cmd/ayotbi-collaboration media-worker`를 실행합니다. 처리 작업은 최대 8분, 임대는 10분입니다. 전송이나 저장 오류는 최대 세 번 시도하며, 형식 오류는 새 업로드가 필요합니다. 로컬 설정은 파일당 500 MB, 30분, 모노·스테레오를 허용합니다.
 
