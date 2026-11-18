@@ -30,6 +30,7 @@ type Config struct {
 	Git                   GitConfig
 	S3                    S3Config
 	Renderer              RendererConfig
+	Logto                 LogtoConfig
 }
 
 type Server struct {
@@ -48,6 +49,7 @@ type Server struct {
 	blobs          BlobStore
 	lfsSlots       chan struct{}
 	receive        *receiveGate
+	logto          *logtoClient
 }
 
 func NewServer(ctx context.Context, pool *pgxpool.Pool, config Config) (*Server, error) {
@@ -99,6 +101,10 @@ func NewServer(ctx context.Context, pool *pgxpool.Pool, config Config) (*Server,
 			RedirectURL: origin.String() + "/v1/auth/callback", Scopes: []string{oidc.ScopeOpenID, "email"},
 		},
 		mux: http.NewServeMux(),
+	}
+	server.logto, err = newLogtoClient(config, client)
+	if err != nil {
+		return nil, err
 	}
 	if config.ProjectToolPath != "" {
 		server.projectTool, err = NewProjectTool(config.ProjectToolPath)
@@ -167,6 +173,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) routes() {
+	s.workspaceRoutes()
 	s.webUploadRoutes()
 	s.webMediaDeliveryRoutes()
 	s.webNoteRoutes()

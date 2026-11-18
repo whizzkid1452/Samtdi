@@ -44,16 +44,16 @@ func (s *Server) listWebNotifications(w http.ResponseWriter, r *http.Request, se
 	defer tx.Rollback(ctx)
 	const visible = ` FROM web_notifications n JOIN web_activity e ON e.id=n.activity_id
  JOIN projects p ON p.id=e.project_id JOIN memberships m ON m.project_id=p.id AND m.account_id=n.recipient_id
- WHERE n.recipient_id=$1`
+ WHERE n.recipient_id=$1 AND (p.workspace_id IS NULL OR EXISTS(SELECT 1 FROM workspaces w WHERE w.id=p.workspace_id AND w.active AND w.organization_id=ANY($2::text[])))`
 	var unread int
-	err = tx.QueryRow(ctx, "SELECT count(*)"+visible+" AND n.read_at IS NULL", session.AccountID).Scan(&unread)
+	err = tx.QueryRow(ctx, "SELECT count(*)"+visible+" AND n.read_at IS NULL", session.AccountID, session.organizationIDs()).Scan(&unread)
 	if err != nil {
 		internal(w, "count_notifications", err)
 		return
 	}
 	rows, err := tx.Query(ctx, `SELECT e.id::text,p.id::text,p.title,e.action,e.subject_id::text,
  COALESCE(e.detail->>'version_id',''),COALESCE(e.detail->>'note_id',''),e.created_at,n.read_at`+visible+
-		" AND ($2::bigint=0 OR e.id<$2) ORDER BY e.id DESC LIMIT 50", session.AccountID, cursor)
+		" AND ($3::bigint=0 OR e.id<$3) ORDER BY e.id DESC LIMIT 50", session.AccountID, session.organizationIDs(), cursor)
 	if err != nil {
 		internal(w, "list_notifications", err)
 		return
@@ -73,8 +73,9 @@ func (s *Server) readWebNotification(w http.ResponseWriter, r *http.Request, ses
 		return
 	}
 	result, err := s.pool.Exec(r.Context(), `UPDATE web_notifications n SET read_at=COALESCE(n.read_at,now())
- FROM web_activity e JOIN memberships m ON m.project_id=e.project_id
- WHERE n.activity_id=e.id AND n.activity_id=$1 AND n.recipient_id=$2 AND m.account_id=$2`, id, session.AccountID)
+ FROM web_activity e JOIN memberships m ON m.project_id=e.project_id JOIN projects p ON p.id=e.project_id
+ WHERE n.activity_id=e.id AND n.activity_id=$1 AND n.recipient_id=$2 AND m.account_id=$2
+ AND (p.workspace_id IS NULL OR EXISTS(SELECT 1 FROM workspaces w WHERE w.id=p.workspace_id AND w.active AND w.organization_id=ANY($3::text[])))`, id, session.AccountID, session.organizationIDs())
 	if err != nil {
 		internal(w, "mark_notification_read", err)
 		return

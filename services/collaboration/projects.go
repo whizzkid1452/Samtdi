@@ -28,11 +28,12 @@ func (role Role) canWrite() bool {
 }
 
 type project struct {
-	ID         string     `json:"id"`
-	Title      string     `json:"title"`
-	Role       Role       `json:"role"`
-	ArchivedAt *time.Time `json:"archived_at,omitempty"`
-	UpdatedAt  *time.Time `json:"updated_at,omitempty"`
+	ID          string     `json:"id"`
+	Title       string     `json:"title"`
+	Role        Role       `json:"role"`
+	ArchivedAt  *time.Time `json:"archived_at,omitempty"`
+	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
+	WorkspaceID string     `json:"workspace_id,omitempty"`
 }
 
 type member struct {
@@ -71,10 +72,11 @@ func requireRole(w http.ResponseWriter, role Role, err error, allowed bool) bool
 }
 
 func (s *Server) listProjects(w http.ResponseWriter, r *http.Request, session Session) {
-	rows, err := s.pool.Query(r.Context(), `SELECT p.id::text AS id, p.title, m.role, p.archived_at, COALESCE(recent.created_at,p.created_at) AS updated_at FROM projects p
+	rows, err := s.pool.Query(r.Context(), `SELECT p.id::text AS id, p.title, m.role, p.archived_at, COALESCE(recent.created_at,p.created_at) AS updated_at,COALESCE(p.workspace_id::text,'') AS workspace_id FROM projects p
  JOIN memberships m ON m.project_id=p.id
  LEFT JOIN LATERAL (SELECT created_at FROM web_activity WHERE project_id=p.id ORDER BY id DESC LIMIT 1) recent ON true
- WHERE m.account_id=$1 ORDER BY p.created_at,p.id`, session.AccountID)
+ WHERE m.account_id=$1 AND (p.workspace_id IS NULL OR EXISTS(SELECT 1 FROM workspaces w WHERE w.id=p.workspace_id AND w.active AND w.organization_id=ANY($2::text[])))
+ ORDER BY p.created_at,p.id`, session.AccountID, session.organizationIDs())
 	if err != nil {
 		internal(w, "list_projects", err)
 		return
@@ -91,7 +93,8 @@ func (s *Server) listProjects(w http.ResponseWriter, r *http.Request, session Se
 
 func (s *Server) createProject(w http.ResponseWriter, r *http.Request, session Session) {
 	var input struct {
-		Title string `json:"title"`
+		Title       string `json:"title"`
+		WorkspaceID string `json:"workspace_id"`
 	}
 	if !readJSON(w, r, &input) {
 		return
@@ -103,11 +106,26 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request, session S
 		return
 	}
 
-	created := project{Title: title, Role: Owner}
-	err := s.pool.QueryRow(r.Context(), `WITH created AS (INSERT INTO projects (title) VALUES ($1) RETURNING id),
+	if input.WorkspaceID != "" {
+		entry, err := s.readWorkspace(r.Context(), input.WorkspaceID, session, false)
+		if err != nil {
+			writeWebError(w, "read_project_workspace", err)
+			return
+		}
+		organization := session.organizations[entry.OrganizationID]
+		if !organization.canCreateProject() {
+			problem(w, 403, "workspace_member_required")
+			return
+		}
+	} else if s.logto != nil && session.Kind != "native" {
+		problem(w, 400, "workspace_required")
+		return
+	}
+	created := project{Title: title, Role: Owner, WorkspaceID: input.WorkspaceID}
+	err := s.pool.QueryRow(r.Context(), `WITH created AS (INSERT INTO projects (title,workspace_id) VALUES ($1,NULLIF($3,'')::uuid) RETURNING id),
  member AS (INSERT INTO memberships (project_id, account_id, role) SELECT id, $2, 'owner' FROM created RETURNING project_id)
  INSERT INTO web_activity(project_id, actor_id, action, subject_id) SELECT project_id, $2, 'project.created', project_id FROM member
- RETURNING project_id::text`, title, session.AccountID).Scan(&created.ID)
+ RETURNING project_id::text`, title, session.AccountID, input.WorkspaceID).Scan(&created.ID)
 	if err != nil {
 		internal(w, "create_project", err)
 		return

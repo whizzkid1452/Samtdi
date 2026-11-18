@@ -1,0 +1,12 @@
+Samtdi third-party notices
+
+@atlaskit/pragmatic-drag-and-drop 4.0.0
+@atlaskit/pragmatic-drag-and-drop-hitbox 3.0.0
+Copyright 2024 Atlassian Pty Ltd
+Apache License, Version 2.0
+License text: /licenses/Apache-2.0.txt
+Upstream: https://github.com/atlassian/pragmatic-drag-and-drop
+
+Logto OSS 1.46.0 runs as a separate identity service.
+Mozilla Public License, Version 2.0
+Upstream source and license: https://github.com/logto-io/logto/tree/v1.46.0

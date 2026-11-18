@@ -10,30 +10,35 @@ import { ProjectMembers } from "./project-members";
 import { TaskBoard, TaskDetail } from "./task-board";
 import { ProjectActivity } from "./workspace-activity";
 import { useWorkspace, type Project } from "./workspace";
+import { ProjectWorkspaceLink, WorkspacePicker } from "./workspace-manager";
 
 const tabs = [
   ["media", "음원"], ["tasks", "작업"], ["activity", "활동"], ["settings", "설정"],
 ] as const;
 
 export function ProjectIndex() {
-  const { projects, refreshProjects } = useWorkspace();
+  const { projects, refreshProjects, teams, teamsEnabled } = useWorkspace();
   const router = useRouter();
+  const query = useSearchParams();
+  const selectedWorkspace = query.get("workspace") ?? "";
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const visible = projects.filter((project) => Boolean(project.archived_at) === showArchived && project.title.toLowerCase().includes(search.trim().toLowerCase()))
+  const visible = projects.filter((project) => (!selectedWorkspace || (selectedWorkspace === "shared" ? !project.workspace_id : project.workspace_id === selectedWorkspace)) && Boolean(project.archived_at) === showArchived && project.title.toLowerCase().includes(search.trim().toLowerCase()))
     .sort((left, right) => (right.updated_at ?? "").localeCompare(left.updated_at ?? ""));
 
   async function createProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const title = new FormData(event.currentTarget).get("title");
+    const form = new FormData(event.currentTarget);
+    const title = form.get("title");
+    const workspace_id = form.get("workspace_id") ?? undefined;
 
     setSaving(true);
     setError("");
     try {
-      const created = await api<Project>("/v1/projects", { method: "POST", body: JSON.stringify({ title }) });
+      const created = await api<Project>("/v1/projects", { method: "POST", body: JSON.stringify({ title, workspace_id }) });
       await refreshProjects();
       router.push(projectHref(created.id));
     } catch (cause) {
@@ -46,11 +51,15 @@ export function ProjectIndex() {
   return <main className="main-content">
     <div className="row spread wrap section-header">
       <h1>프로젝트</h1>
-      {!creating && <button className="primary" onClick={() => setCreating(true)}>새 프로젝트</button>}
+      {!creating && <button className="primary" disabled={teamsEnabled && !teams.some(({ active, can_create }) => active && can_create)} onClick={() => setCreating(true)}>새 프로젝트</button>}
     </div>
+    <WorkspacePicker selected={selectedWorkspace} onSelect={(id) => router.replace("/projects" + (id ? "?" + new URLSearchParams({ workspace: id }) : ""))} />
     {creating && <form className="panel row wrap" onSubmit={createProject}>
       <label htmlFor="project-title">프로젝트 이름</label>
       <input id="project-title" name="title" maxLength={160} required />
+      {teamsEnabled && <label>작업공간<select name="workspace_id" required defaultValue={teams.some(({ id }) => id === selectedWorkspace) ? selectedWorkspace : undefined}>
+        {teams.filter(({ active, can_create }) => active && can_create).map(({ id, name }) => <option key={id} value={id}>{name}</option>)}
+      </select></label>}
       <button className="primary" disabled={saving}>프로젝트 만들기</button>
       <button type="button" disabled={saving} onClick={() => setCreating(false)}>취소</button>
     </form>}
@@ -151,6 +160,7 @@ function ProjectSettings({ project }: { project: Project }) {
 
   return <>
     <ProjectMembers project={project} />
+    <ProjectWorkspaceLink key={project.id + ":" + project.workspace_id} project={project} />
     <section className="panel" aria-label="다운로드">
       <h2>다운로드</h2>
       <div className="row wrap">

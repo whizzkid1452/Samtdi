@@ -21,13 +21,18 @@ import (
 var legacySnapshotTables = []string{"accounts", "projects", "memberships", "invitations", "lfs_objects",
 	"reviews", "review_comments", "review_media_versions"}
 
-var snapshotTables = append(append([]string(nil), legacySnapshotTables...),
+var version2SnapshotTables = append(append([]string(nil), legacySnapshotTables...),
 	"web_activity", "web_media_items", "web_uploads", "web_media_versions", "web_media_jobs", "web_media_garbage",
 	"web_notes", "web_note_replies", "web_note_edits", "web_tasks", "web_task_notes", "web_notifications")
+
+var snapshotTables = append([]string{"accounts", "account_identities", "workspaces"}, version2SnapshotTables[1:]...)
 
 func tablesForSnapshot(version int) []string {
 	if version == 1 {
 		return legacySnapshotTables
+	}
+	if version == 2 {
+		return version2SnapshotTables
 	}
 	return snapshotTables
 }
@@ -117,7 +122,7 @@ func (state snapshotState) snapshot(ctx context.Context, folder string) error {
 			_ = os.RemoveAll(root)
 		}
 	}()
-	manifest := snapshotManifest{Version: 2, CreatedAt: time.Now().UTC()}
+	manifest := snapshotManifest{Version: 3, CreatedAt: time.Now().UTC()}
 
 	tx, err := state.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
@@ -282,6 +287,9 @@ func (state snapshotState) restore(ctx context.Context, folder string) error {
 		}
 		expected = schema[:6]
 	}
+	if manifest.Version == 2 {
+		expected = schema[:14]
+	}
 	if !reflect.DeepEqual(expected, manifest.Schema) {
 		return errors.New("snapshot schema does not match")
 	}
@@ -307,7 +315,10 @@ func (state snapshotState) restore(ctx context.Context, folder string) error {
 		}
 		destination := table
 		if manifest.Version == 1 && table == "projects" {
-			destination += " (id,title,created_at)"
+			destination += " (id,title,created_at,song_id)"
+		}
+		if manifest.Version == 2 && table == "projects" {
+			destination += " (id,title,created_at,song_id,archived_at)"
 		}
 		_, err = tx.Conn().PgConn().CopyFrom(ctx, file, "COPY "+destination+" FROM STDIN (FORMAT binary)")
 		if err := errors.Join(err, file.Close()); err != nil {

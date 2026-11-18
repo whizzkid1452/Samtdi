@@ -18,6 +18,14 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 4 && os.Args[1] == "link-logto-identity" {
+		if err := linkLogtoIdentity(os.Args[2], os.Args[3]); err != nil {
+			slog.Error("identity link failed", "reason", err.Error())
+			os.Exit(1)
+		}
+		fmt.Println("Logto identity linked; existing account ID preserved")
+		return
+	}
 	if filepath.Base(os.Args[0]) == "pre-receive" {
 		if err := collaboration.RunReceiveHook(context.Background(), os.Stdin, os.Stderr); err != nil {
 			fmt.Fprintln(os.Stderr, err.Error())
@@ -41,7 +49,7 @@ func main() {
 		return
 	}
 	if len(os.Args) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: ayotbi-collaboration [media-worker|snapshot <folder>|restore <folder>]")
+		fmt.Fprintln(os.Stderr, "usage: ayotbi-collaboration [media-worker|snapshot <folder>|restore <folder>|link-logto-identity <account-id> <subject>]")
 		os.Exit(2)
 	}
 
@@ -51,12 +59,35 @@ func main() {
 	}
 }
 
+func linkLogtoIdentity(accountID, subject string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	pool, err := openDatabase(ctx)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	if err := collaboration.Migrate(ctx, pool); err != nil {
+		return err
+	}
+	config := collaboration.Config{
+		Issuer: os.Getenv("AYOTBI_OIDC_ISSUER"), Logto: logtoSettings(),
+		AllowLoopbackHTTP: os.Getenv("AYOTBI_ALLOW_LOOPBACK_HTTP") == "1",
+	}
+	return collaboration.LinkLogtoIdentity(ctx, pool, config, accountID, subject)
+}
+
 func storageSettings() collaboration.MaintenanceConfig {
 	return collaboration.MaintenanceConfig{
 		Git:               collaboration.GitConfig{Root: os.Getenv("AYOTBI_GIT_ROOT"), Executable: os.Getenv("AYOTBI_GIT_EXECUTABLE")},
 		S3:                collaboration.S3Config{Bucket: os.Getenv("AYOTBI_S3_BUCKET"), Region: os.Getenv("AYOTBI_S3_REGION"), Endpoint: os.Getenv("AYOTBI_S3_ENDPOINT")},
 		AllowLoopbackHTTP: os.Getenv("AYOTBI_ALLOW_LOOPBACK_HTTP") == "1",
 	}
+}
+
+func logtoSettings() collaboration.LogtoConfig {
+	return collaboration.LogtoConfig{Endpoint: os.Getenv("SAMTDI_LOGTO_ENDPOINT"), ClientID: os.Getenv("SAMTDI_LOGTO_M2M_CLIENT_ID"), ClientSecret: os.Getenv("SAMTDI_LOGTO_M2M_CLIENT_SECRET"), Resource: os.Getenv("SAMTDI_LOGTO_RESOURCE")}
 }
 
 func maintenance(action, folder string) error {
@@ -134,6 +165,7 @@ func run() error {
 		Renderer:              collaboration.RendererConfig{Executable: os.Getenv("AYOTBI_RENDER_WORKER"), PluginRegistry: os.Getenv("AYOTBI_RENDER_PLUGIN_REGISTRY")},
 		Git:                   storage.Git,
 		S3:                    storage.S3,
+		Logto:                 logtoSettings(),
 	})
 	if err != nil {
 		return err

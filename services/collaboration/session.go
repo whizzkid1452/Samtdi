@@ -13,10 +13,12 @@ import (
 const webSessionCookie = "ayotbi_session"
 
 type Session struct {
-	AccountID string `json:"account_id"`
-	Email     string `json:"email"`
-	Kind      string `json:"kind"`
-	tokenHash []byte
+	AccountID     string `json:"account_id"`
+	Email         string `json:"email"`
+	Kind          string `json:"kind"`
+	tokenHash     []byte
+	subject       string
+	organizations map[string]logtoOrganization
 }
 
 type sessionWriter interface {
@@ -76,6 +78,16 @@ func (s *Server) withSession(handler sessionHandler) http.HandlerFunc {
 			r.Header.Get("Origin") != s.origin {
 			problem(w, http.StatusForbidden, "invalid_origin")
 			return
+		}
+		if r.URL.Path != "/v1/auth/logout" {
+			if err := s.loadOrganizations(r.Context(), &session); err != nil {
+				writeWebError(w, "load_organizations", err)
+				return
+			}
+			if err := s.authorizeWorkspaceProject(r.Context(), r.PathValue("project"), session); err != nil {
+				writeWebError(w, "authorize_workspace", err)
+				return
+			}
 		}
 
 		handler(w, r, session)

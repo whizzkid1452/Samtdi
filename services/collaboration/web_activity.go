@@ -48,6 +48,7 @@ func (s *Server) webDashboard(w http.ResponseWriter, r *http.Request, session Se
  FROM web_tasks t JOIN projects p ON p.id=t.project_id
  JOIN memberships m ON m.project_id=p.id AND m.account_id=$1
  WHERE NOT t.archived AND p.archived_at IS NULL AND t.status<>'done'
+ AND (p.workspace_id IS NULL OR EXISTS(SELECT 1 FROM workspaces w WHERE w.id=p.workspace_id AND w.active AND w.organization_id=ANY($4::text[])))
  ), filtered AS (
  SELECT * FROM visible WHERE CASE $2 WHEN 'review' THEN review WHEN 'due' THEN due WHEN 'late' THEN late ELSE assigned END
  ), candidates AS (
@@ -59,7 +60,7 @@ func (s *Server) webDashboard(w http.ResponseWriter, r *http.Request, session Se
  'title',title,'status',status,'due_on',COALESCE(due_on::text,'')) ORDER BY sort_date,id) FROM page),'[]'),
  count(*) FILTER(WHERE assigned),count(*) FILTER(WHERE review),count(*) FILTER(WHERE due),count(*) FILTER(WHERE late),
  CASE WHEN (SELECT count(*) FROM candidates)>50 THEN (SELECT id::text FROM page ORDER BY sort_date DESC,id DESC LIMIT 1) ELSE '' END
- FROM visible`, session.AccountID, filter, after).Scan(&tasks, &assigned, &review, &due, &late, &next)
+ FROM visible`, session.AccountID, filter, after, session.organizationIDs()).Scan(&tasks, &assigned, &review, &due, &late, &next)
 	if err != nil {
 		internal(w, "read_dashboard", err)
 		return
