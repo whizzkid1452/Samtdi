@@ -31,6 +31,15 @@ func (s *Server) withGitSession(handler sessionHandler) http.HandlerFunc {
 			internal(w, "authenticate_git", err)
 			return
 		}
+		if err := s.loadOrganizations(r.Context(), &session); err != nil {
+			writeWebError(w, "load_git_organizations", err)
+			return
+		}
+		projectID := strings.TrimSuffix(r.PathValue("repository"), ".git")
+		if err := s.authorizeWorkspaceProject(r.Context(), projectID, session); err != nil {
+			writeWebError(w, "authorize_git_workspace", err)
+			return
+		}
 
 		handler(w, r, session)
 	}

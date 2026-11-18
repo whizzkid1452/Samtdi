@@ -54,6 +54,8 @@ func safeWebReturn(raw string) bool {
 
 func safeWebReturnValue(key, value string) bool {
 	switch key {
+	case "workspace":
+		return value == "shared" || uuidPattern.MatchString(value)
 	case "project", "version", "note", "task_note":
 		return uuidPattern.MatchString(value)
 	case "assignee":

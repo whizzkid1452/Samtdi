@@ -11,11 +11,17 @@ import { UploadProvider } from "./upload";
 type Session = components["schemas"]["Session"];
 export type Project = components["schemas"]["Project"] & { archived_at?: string };
 export type Member = { account_id: string; email: string; role: Project["role"] };
+export type TeamWorkspace = components["schemas"]["TeamWorkspace"];
+
+type WorkspacesResponse = components["schemas"]["WorkspacesResponse"];
 
 const WorkspaceContext = createContext<{
   session: Session;
   projects: Project[];
   refreshProjects: () => Promise<void>;
+  teams: TeamWorkspace[];
+  teamsEnabled: boolean;
+  refreshTeams: () => Promise<void>;
 } | null>(null);
 
 export function useWorkspace() {
@@ -30,6 +36,8 @@ export function Workspace({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [teams, setTeams] = useState<TeamWorkspace[]>([]);
+  const [teamsEnabled, setTeamsEnabled] = useState(false);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -40,9 +48,12 @@ export function Workspace({ children }: { children: ReactNode }) {
       try {
         const account = await api<Session>("/v1/me", { signal: request.signal });
         const visible = await api<Project[]>("/v1/projects", { signal: request.signal });
+        const spaces = await api<WorkspacesResponse>("/v1/workspaces", { signal: request.signal });
         if (request.signal.aborted) return;
 
         setProjects(visible);
+        setTeams(spaces.workspaces);
+        setTeamsEnabled(spaces.enabled);
         setSession(account);
       } catch (cause) {
         if (request.signal.aborted) return;
@@ -57,6 +68,13 @@ export function Workspace({ children }: { children: ReactNode }) {
 
   async function refreshProjects() {
     setProjects(await api<Project[]>("/v1/projects"));
+  }
+
+  async function refreshTeams() {
+    const spaces = await api<WorkspacesResponse>("/v1/workspaces");
+    setTeams(spaces.workspaces);
+    setTeamsEnabled(spaces.enabled);
+    await refreshProjects();
   }
 
   async function logout() {
@@ -93,7 +111,7 @@ export function Workspace({ children }: { children: ReactNode }) {
     </main>;
   }
 
-  return <WorkspaceContext.Provider value={{ session, projects, refreshProjects }}>
+  return <WorkspaceContext.Provider value={{ session, projects, refreshProjects, teams, teamsEnabled, refreshTeams }}>
     <UploadProvider key={session.account_id} accountId={session.account_id}>
     <header className="topbar">
       <div className="row">
@@ -109,6 +127,7 @@ export function Workspace({ children }: { children: ReactNode }) {
           <summary className="account-label">계정</summary>
           <div className="inbox-body panel">
             <p className="muted">{session.email}</p>
+            <p><a href="/third-party-notices.txt">오픈소스 고지</a></p>
             <button disabled={loggingOut} onClick={() => void logout()}>로그아웃</button>
           </div>
         </details>

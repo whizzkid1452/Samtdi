@@ -161,7 +161,7 @@ func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		internal(w, "admit_account", err)
+		writeWebError(w, "admit_account", err)
 		return
 	}
 

@@ -52,7 +52,8 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 	}
 
 	var accountID string
-	err = tx.QueryRow(ctx, `SELECT id::text FROM accounts WHERE issuer = $1 AND subject = $2`,
+	err = tx.QueryRow(ctx, `SELECT id::text FROM accounts a WHERE (issuer = $1 AND subject = $2)
+ OR EXISTS(SELECT 1 FROM account_identities i WHERE i.account_id=a.id AND i.issuer=$1 AND i.subject=$2)`,
 		who.Issuer, who.Subject).Scan(&accountID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		var bootstrap bool
@@ -62,7 +63,21 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 				return "", err
 			}
 		}
-		if !bootstrap && projectID == "" {
+		organizationMember := false
+		if s.logto != nil && projectID == "" {
+			organizations, err := s.logto.organizations(ctx, who.Subject)
+			if err != nil {
+				return "", err
+			}
+			ids := make([]string, 0, len(organizations))
+			for _, organization := range organizations {
+				ids = append(ids, organization.ID)
+			}
+			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM workspaces WHERE active AND organization_id=ANY($1::text[]))", ids).Scan(&organizationMember); err != nil {
+				return "", err
+			}
+		}
+		if !bootstrap && projectID == "" && !organizationMember {
 			return "", errInvitationRequired
 		}
 
@@ -79,8 +94,24 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 	if err != nil {
 		return "", err
 	}
+	if _, err := tx.Exec(ctx, `INSERT INTO account_identities(issuer,subject,account_id) VALUES($1,$2,$3)
+ ON CONFLICT(issuer,subject) DO NOTHING`, who.Issuer, who.Subject, accountID); err != nil {
+		return "", err
+	}
 
 	if projectID != "" {
+		if s.logto != nil {
+			var organization string
+			if err := tx.QueryRow(ctx, `SELECT COALESCE(w.organization_id,'') FROM projects p
+ LEFT JOIN workspaces w ON w.id=p.workspace_id WHERE p.id=$1`, projectID).Scan(&organization); err != nil {
+				return "", err
+			}
+			if organization != "" {
+				if err := s.logto.ensureMember(ctx, organization, who.Subject, "samtdi-guest"); err != nil {
+					return "", err
+				}
+			}
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO memberships (project_id, account_id, role) VALUES ($1, $2, $3)
   ON CONFLICT (project_id, account_id) DO NOTHING`, projectID, accountID, role); err != nil {
 			return "", err
