@@ -1,5 +1,6 @@
 "use client";
 
+import { Button, Popover } from "@mantine/core";
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
 import WaveSurfer from "wavesurfer.js";
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.esm.js";
@@ -180,7 +181,6 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
     seek(target);
   }
 
-  const markerGroup = !range ? markers.find((group) => group[0].id === openMarker) : undefined;
 
   return <>
       <div className="waveform-frame">
@@ -206,10 +206,10 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
         {!range && markers.map((group) => {
           const first = group[0];
           const active = group.some(({ id }) => id === selected?.id);
-          return <button type="button" className="wave-marker" key={first.id}
+          const marker = <button type="button" className="wave-marker" key={first.id}
             style={{ left: `clamp(22px, ${first.start_ms / duration * 100}%, calc(100% - 22px))` }}
             aria-label={noteLabel(first) + " 피드백 " + group.length + "개"} aria-current={active || undefined}
-            aria-expanded={group.length > 1 ? openMarker === first.id : undefined} onClick={() => {
+            onClick={() => {
               if (group.length === 1) {
                 setOpenMarker(undefined);
                 openNote(first);
@@ -217,16 +217,31 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
                 setOpenMarker(openMarker === first.id ? undefined : first.id);
               }
             }}>{group.length}</button>;
+          if (group.length === 1) return marker;
+
+          return (
+            <Popover key={first.id} opened={openMarker === first.id} onDismiss={() => setOpenMarker(undefined)}
+              trapFocus returnFocus position="bottom-start" width="min(22rem, calc(100vw - 2rem))" shadow="sm">
+              <Popover.Target>{marker}</Popover.Target>
+              <Popover.Dropdown className="marker-choices" onKeyDown={(event) => {
+                if (event.key === "Escape") event.stopPropagation();
+              }}>
+                {group.map((note) => (
+                  <Button type="button" variant="subtle" justify="start" key={note.id} className="marker-choice"
+                    classNames={{ label: "marker-choice-label" }} onClick={() => {
+                      setOpenMarker(undefined);
+                      openNote(note);
+                    }}>
+                    <strong className="feedback-time">{noteLabel(note)}</strong> {note.body}
+                  </Button>
+                ))}
+              </Popover.Dropdown>
+            </Popover>
+          );
         })}
       </div>
       <div className="row spread waveform-ticks" aria-hidden="true">
         {[0, .25, .5, .75, 1].map((part) => <span key={part}>{duration < 4000 ? (duration * part / 1000).toFixed(1) + "초" : timecode(duration * part).split(".")[0]}</span>)}
       </div>
-      {markerGroup && <div className="marker-choices" aria-label="겹친 피드백">
-        {markerGroup.map((note) => <button type="button" key={note.id} onClick={() => {
-          setOpenMarker(undefined);
-          openNote(note);
-        }}><strong className="feedback-time">{noteLabel(note)}</strong> {note.body}</button>)}
-      </div>}
   </>;
 }

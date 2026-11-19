@@ -1,5 +1,6 @@
 "use client";
 
+import { Button, Slider } from "@mantine/core";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, describeError } from "../lib/api";
 import { timecode } from "../lib/timecode";
@@ -146,7 +147,7 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
 
   return <div className="review-grid">
     <section className="player-panel" aria-label="음원 플레이어" onKeyDown={(event) => {
-      if (event.key === "Escape" && range) clearRange();
+      if (event.key === "Escape" && !event.defaultPrevented && range) clearRange();
     }}>
       <audio ref={audio} aria-label="버전 재생" preload="metadata" src={path + "/files/playback"}
         onLoadedMetadata={() => {
@@ -157,24 +158,28 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
         onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => { previewEnd.current = null; setPlaying(false); }}
         onError={() => setError("재생 파일에 접근하지 못했습니다.")} />
       {error && <div className="row wrap" role="alert"><span className="error">{error}</span>
-        <button onClick={() => { setError(""); setAttempt((value) => value + 1); audio.current?.load(); }}>다시 시도</button></div>}
+        <Button variant="default" onClick={() => { setError(""); setAttempt((value) => value + 1); audio.current?.load(); }}>다시 시도</Button></div>}
       <ReviewWaveform audio={audio} duration={duration} peaks={peaks} position={position} range={range}
         setRange={setRange} seek={seek} notes={feedback.notes} selected={feedback.selected} previewEnd={previewEnd}
         onError={setError} togglePlayback={() => { if (metadataReady) void togglePlayback(); }}
         openNote={(note) => { feedback.select(note.id); seek(note.start_ms); }} />
       <div className="row spread wrap player-controls">
         <div className="row wrap">
-          <button type="button" className="primary review-play" disabled={!metadataReady} onClick={() => void togglePlayback()}>{playing ? "일시정지" : "재생"}</button>
+          <Button type="button" className="review-play" disabled={!metadataReady} onClick={() => void togglePlayback()}>{playing ? "일시정지" : "재생"}</Button>
           <span className="feedback-time">{timecode(position)} / {timecode(duration)}</span>
         </div>
-        <label className="row">음량<input type="range" min={0} max={1} step={.05} value={volume} onChange={(event) => {
-          const value = Number(event.target.value);
-          setVolume(value);
-          if (audio.current) audio.current.volume = value;
-        }} /></label>
+        <div className="row volume-control">
+          <span aria-hidden="true">음량</span>
+          <Slider className="volume-slider" thumbLabel="음량" min={0} max={100} step={5}
+            value={Math.round(volume * 100)} label={(value) => value + "%"} onChange={(percent) => {
+              const value = percent / 100;
+              setVolume(value);
+              if (audio.current) audio.current.volume = value;
+            }} />
+        </div>
       </div>
       <div className="row wrap player-actions">
-        <button type="button" aria-pressed={!!range} disabled={!metadataReady || !duration}
+        <Button variant="default" type="button" aria-pressed={!!range} disabled={!metadataReady || !duration}
           onClick={() => {
             if (range) clearRange();
             else {
@@ -183,7 +188,7 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
             }
           }}>
           {range ? "구간 해제" : "구간 지정"}
-        </button>
+        </Button>
       </div>
       {range && <div className="row wrap range-fields">
         <p className="muted">파형에서 구간을 드래그하거나 시작·끝 시간을 입력하세요.</p>
@@ -192,10 +197,10 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
             const value = clamp(milliseconds);
             setRange(index === 0 ? [value, range[1]] : [range[0], value]);
           }} />)}
-        <button type="button" disabled={!validRange || !metadataReady}
-          onClick={() => void playRange({ start_ms: range[0], end_ms: range[1] })}>구간 듣기</button>
-        {writable && <button type="button" disabled={!validRange || feedback.busy || !metadataReady}
-          onClick={() => compose(true)}>구간에 피드백</button>}
+        <Button variant="default" type="button" disabled={!validRange || !metadataReady}
+          onClick={() => void playRange({ start_ms: range[0], end_ms: range[1] })}>구간 듣기</Button>
+        {writable && <Button variant="default" type="button" disabled={!validRange || feedback.busy || !metadataReady}
+          onClick={() => compose(true)}>구간에 피드백</Button>}
       </div>}
     </section>
     <VersionNotes feedback={feedback} url={notesURL} projectId={projectId} itemId={version.item_id}
@@ -206,9 +211,9 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
         pausePlayback();
       }}
       composer={writable && <div className="feedback-composer">
-        <button ref={composerTrigger} aria-expanded={composerOpen} disabled={!metadataReady || feedback.busy} onClick={() => composerOpen ? closeComposer() : compose(false)}>
+        <Button variant="default" ref={composerTrigger} aria-expanded={composerOpen} disabled={!metadataReady || feedback.busy} onClick={() => composerOpen ? closeComposer() : compose(false)}>
           {composerOpen ? "새 피드백" : draft?.body.trim() ? "피드백 계속 작성" : "이 위치에 피드백 남기기"}
-        </button>
+        </Button>
         {storageError && <p className="error" role="alert">{storageError}</p>}
         {composerOpen && draft && <FeedbackComposer draft={draft} busy={feedback.busy} error={feedback.error}
           save={save} close={closeComposer} discard={() => { updateDraft(null); closeComposer(); }}
