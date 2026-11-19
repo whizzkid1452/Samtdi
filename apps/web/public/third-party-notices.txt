@@ -10,3 +10,9 @@ Upstream: https://github.com/atlassian/pragmatic-drag-and-drop
 Logto OSS 1.46.0 runs as a separate identity service.
 Mozilla Public License, Version 2.0
 Upstream source and license: https://github.com/logto-io/logto/tree/v1.46.0
+
+@mantine/core 9.8.1 and @mantine/hooks 9.8.1
+Copyright (c) 2021 Vitaly Rtishchev
+MIT License
+License text: /licenses/Mantine-MIT.txt
+Upstream: https://github.com/mantinedev/mantine
