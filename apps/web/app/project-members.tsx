@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, describeError } from "../lib/api";
 import { projectHref } from "../lib/routes";
 import { Dialog } from "./dialog";
+import { ConfirmAction, type Confirmation } from "./confirm-action";
 import { useWorkspace, type Member, type Project } from "./workspace";
 
 const roles = { reviewer: "검토자", editor: "편집자", owner: "소유자" };
@@ -14,6 +15,8 @@ export function ProjectMembers({ project }: { project: Project }) {
   const [members, setMembers] = useState<Member[]>();
   const [invite, setInvite] = useState<{ id: string; accept_url: string; expires_at: string }>();
   const [inviting, setInviting] = useState(false);
+  const [confirmation, setConfirmation] = useState<Confirmation>();
+  const heading = useRef<HTMLHeadingElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -36,8 +39,10 @@ export function ProjectMembers({ project }: { project: Project }) {
     setNotice("");
     try {
       await action();
+      return true;
     } catch (cause) {
       setError(describeError(cause));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -60,8 +65,7 @@ export function ProjectMembers({ project }: { project: Project }) {
   }
 
   async function editMember(member: Member, role?: Project["role"]) {
-    if (!role && !window.confirm(member.email + "의 프로젝트 접근 권한을 제거할까요?")) return;
-    await change(async () => {
+    return change(async () => {
       await api(base + "/members/" + member.account_id, role
         ? { method: "PATCH", body: JSON.stringify({ role }) }
         : { method: "DELETE" });
@@ -73,7 +77,7 @@ export function ProjectMembers({ project }: { project: Project }) {
 
   return <section className="panel" aria-label="팀원">
     <div className="row spread wrap">
-      <h2>팀원</h2>
+      <h2 ref={heading} tabIndex={-1}>팀원</h2>
       {canManage && <button className="primary" onClick={() => { setError(""); setInviting(true); }}>팀원 초대</button>}
     </div>
     {error && !inviting && <div className="row wrap" role="alert"><span className="error">{error}</span>
@@ -87,7 +91,14 @@ export function ProjectMembers({ project }: { project: Project }) {
             onChange={(event) => void editMember(member, event.target.value as Project["role"])}>
             {Object.entries(roles).map(([role, label]) => <option key={role} value={role}>{label}</option>)}
           </select>
-          <button disabled={busy} aria-label={member.email + " 제거"} onClick={() => void editMember(member)}>제거</button>
+          <button disabled={busy} aria-label={member.email + " 제거"} onClick={(event) => setConfirmation({
+            title: "팀원 제거",
+            description: member.email + "의 프로젝트 접근 권한을 제거할까요?",
+            label: "제거",
+            trigger: event.currentTarget,
+            focusAfterSuccess: heading.current,
+            run: () => editMember(member),
+          })}>제거</button>
         </div> : <span className="status-label">{roles[member.role]}</span>}
       </li>)}
     </ul>
@@ -98,17 +109,22 @@ export function ProjectMembers({ project }: { project: Project }) {
           await navigator.clipboard.writeText(invite.accept_url);
           setNotice("초대 링크를 복사했습니다.");
         })}>복사</button>
-        <button disabled={busy} onClick={() => {
-          if (!window.confirm("이 초대를 취소할까요?")) return;
-          void change(async () => {
+        <button disabled={busy} onClick={(event) => setConfirmation({
+          title: "초대 취소",
+          description: "발급한 초대 링크를 사용할 수 없게 할까요?",
+          label: "초대 취소",
+          trigger: event.currentTarget,
+          focusAfterSuccess: heading.current,
+          run: () => change(async () => {
             await api(base + "/invitations/" + invite.id, { method: "DELETE" });
             setInvite(undefined);
             setNotice("초대를 취소했습니다.");
-          });
-        }}>초대 취소</button>
+          }),
+        })}>초대 취소</button>
       </div>
       <p className="muted">{formatExpiry.format(new Date(invite.expires_at))}까지 사용할 수 있습니다.</p>
     </div>}
+    {confirmation && <ConfirmAction confirmation={confirmation} actionError={error} close={() => setConfirmation(undefined)} />}
     {notice && <p role="status">{notice}</p>}
     {inviting && canManage && <Dialog title="팀원 초대" close={() => { if (!busy) setInviting(false); }}>
       <form className="task-editor" onSubmit={inviteMember}>

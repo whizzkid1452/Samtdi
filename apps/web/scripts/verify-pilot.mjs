@@ -5,7 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium, firefox, webkit, devices } from "playwright";
 
-const origin = "http://127.0.0.1:3100";
+const verifyURL = new URL(process.env.SAMTDI_VERIFY_ORIGIN ?? "http://127.0.0.1:3100");
+assert.equal(verifyURL.protocol, "http:");
+assert.equal(verifyURL.hostname, "127.0.0.1");
+const origin = verifyURL.origin;
 const headers = { Origin: origin };
 const ownerEmail = "owner@example.test";
 const reviewerEmail = "reviewer@example.test";
@@ -367,8 +370,8 @@ try {
   await owner.waitForURL(taskURL);
   await button(owner, "작업 편집").click();
   assert.equal(await owner.getByLabel("작업 설명").inputValue(), "작성 중인 변경");
-  owner.once("dialog", (dialog) => dialog.accept());
   await owner.keyboard.press("Escape");
+  await button(owner.getByRole("dialog", { name: "미저장 변경 버리기" }), "버리기").click();
   await owner.getByRole("dialog").waitFor({ state: "hidden" });
   console.log("Assignment notification, MP3 revision, review, completion and board navigation passed");
 
@@ -425,8 +428,8 @@ try {
   }
 
   await owner.goto(projectURL + "/settings");
-  owner.once("dialog", (dialog) => dialog.accept());
   await button(owner, reviewerEmail + " 제거").click();
+  await button(owner.getByRole("dialog", { name: "팀원 제거" }), "제거").click();
   await owner.getByText("팀원을 제거했습니다.", { exact: true }).waitFor();
   assert.equal((await editor.request.get(first.path + "/files/playback", { headers: { Range: "bytes=0-31" } })).status(), 404);
   assert.equal((await editor.request.get(base + "/export/json")).status(), 404);

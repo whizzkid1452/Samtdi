@@ -6,7 +6,8 @@ import { createContext, useContext, useEffect, useRef, useState, type FormEvent,
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { itemHref, projectHref, versionHref } from "../lib/routes";
-import { Dialog } from "./dialog";
+import { AppModal } from "./app-modal";
+import { ConfirmAction, type Confirmation } from "./confirm-action";
 
 type MediaVersion = components["schemas"]["MediaVersion"];
 type UploadSession = components["schemas"]["UploadSession"];
@@ -74,6 +75,7 @@ export function UploadProvider({ accountId, children }: { accountId: string; chi
   const [error, setError] = useState("");
   const [visible, setVisible] = useState(false);
   const [completed, setCompleted] = useState("");
+  const [confirmation, setConfirmation] = useState<Confirmation>();
   const [uploadRevision, setUploadRevision] = useState(0);
 
   useEffect(() => { currentPath.current = pathname; }, [pathname]);
@@ -176,6 +178,12 @@ export function UploadProvider({ accountId, children }: { accountId: string; chi
     setVisible(true);
   }
 
+  function discardUpload() {
+    setDraft(null);
+    rememberCompletion(null);
+    setVisible(false);
+  }
+
   const stageLabel = stage === "prepare" ? "업로드 준비 중" : stage === "transfer" ? "전송 중" : "버전 등록 중";
 
   return <UploadContext.Provider value={{ openUpload, uploadRevision }}>
@@ -185,10 +193,10 @@ export function UploadProvider({ accountId, children }: { accountId: string; chi
         <><button onClick={() => setVisible(true)}>{stage ? stageLabel : completion ? "버전 등록 이어가기" : "업로드 열기"}</button>
           {stage === "transfer" && <progress aria-label="업로드 진행률" value={progress} max={100} />}</>}
     </div>}
-    {visible && (draft || completion) && <Dialog title={completion ? "버전 등록" : draft?.isNew ? "음원 업로드" : "수정본 업로드"} close={() => setVisible(false)}>
+    {visible && (draft || completion) && <AppModal title={completion ? "버전 등록" : draft?.isNew ? "음원 업로드" : "수정본 업로드"} close={() => setVisible(false)} suspended={!!confirmation}>
       <form className="upload-form" onSubmit={submit}>
         {draft && !completion && <>
-          <label>WAV 또는 MP3<input name="file" type="file" accept=".wav,.mp3" disabled={!!stage}
+          <label>WAV 또는 MP3<input data-autofocus name="file" type="file" accept=".wav,.mp3" disabled={!!stage}
             onChange={(event) => {
               const file = event.currentTarget.files?.[0];
               setDraft({ ...draft, file, title: draft.title || (file ? suggestedTitle(file) : "") });
@@ -205,14 +213,23 @@ export function UploadProvider({ accountId, children }: { accountId: string; chi
         <div className="row wrap">
           <button className="primary" disabled={!!stage || (!completion && !draft?.file)}>{completion ? "등록 계속하기" : "파일 업로드"}</button>
           {stage === "transfer" && <button type="button" onClick={() => request.current?.abort()}>전송 취소</button>}
-          {!stage && <button type="button" onClick={() => {
-            if ((draft?.file || completion) && !window.confirm("이 업로드를 그만둘까요?")) return;
-            setDraft(null);
-            rememberCompletion(null);
-            setVisible(false);
+          {!stage && <button type="button" onClick={(event) => {
+            if (!draft?.file && !completion) {
+              discardUpload();
+              return;
+            }
+
+            setConfirmation({
+              title: "업로드 그만두기",
+              description: "선택한 파일과 등록 정보를 지울까요?",
+              label: "그만두기",
+              trigger: event.currentTarget,
+              run: discardUpload,
+            });
           }}>그만두기</button>}
         </div>
       </form>
-    </Dialog>}
+    </AppModal>}
+    {confirmation && <ConfirmAction confirmation={confirmation} close={() => setConfirmation(undefined)} />}
   </UploadContext.Provider>;
 }

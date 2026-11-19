@@ -241,6 +241,7 @@ label { font-size: .9rem; color: var(--muted); }
 .task-metadata { margin: 0; padding: .8rem 1rem; border: 1px solid var(--border); border-radius: 8px; align-self: start; }
 .task-metadata dt { color: var(--muted); margin-top: .45rem; }
 .task-metadata dd { margin: 0; font-weight: 600; }
+.confirm-actions { justify-content: flex-end; margin-top: 1rem; }
 .task-editor { display: grid; gap: .85rem; margin-top: .85rem; }
 .task-editor label:not(.row) { display: grid; gap: .35rem; }
 .task-editor ul { margin: 0; padding-inline-start: 1rem; }

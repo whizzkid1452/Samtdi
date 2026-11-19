@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { Dialog } from "./dialog";
+import { AppModal } from "./app-modal";
+import { ConfirmAction, type Confirmation } from "./confirm-action";
 import { useWorkspace, type Project, type TeamWorkspace } from "./workspace";
 
 type TeamMember = components["schemas"]["WorkspaceMember"];
@@ -82,6 +84,8 @@ function WorkspaceMembers({ team, close }: { team: TeamWorkspace; close: () => v
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [confirmation, setConfirmation] = useState<Confirmation>();
+  const emailInput = useRef<HTMLInputElement>(null);
   const base = "/v1/workspaces/" + team.id + "/members";
 
   useEffect(() => {
@@ -106,31 +110,41 @@ function WorkspaceMembers({ team, close }: { team: TeamWorkspace; close: () => v
       setEmail("");
       setPage(1);
       setRevision((value) => value + 1);
+      return true;
     } catch (cause) {
       setError(describeError(cause));
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
-  return <Dialog title={team.name + " 멤버 관리"} close={() => { if (!busy) close(); }}>
-    <p className="muted">가입한 계정을 팀에 추가합니다. 프로젝트 참여는 프로젝트 설정에서 따로 초대하세요.</p>
-    <form className="row wrap" onSubmit={(event) => { event.preventDefault(); void changeMember(); }}>
-      <label>계정 이메일<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-      <button disabled={busy}>팀원 추가</button>
-    </form>
-    {error && <p role="alert" className="error">{error}</p>}
-    <ul className="clean-list member-list">{members.map((member) => {
-      const owner = member.organizationRoles.some(({ name }) => name === "samtdi-owner");
-      return <li key={member.id} className="row spread wrap">
-        <span>{member.name || member.primaryEmail} {owner && "· 소유자"}</span>
-        {!owner && <button disabled={busy} onClick={() => {
-          if (window.confirm("이 팀원의 작업공간 접근을 해제할까요?")) void changeMember({ subject: member.id });
-        }}>팀에서 제거</button>}
-      </li>;
-    })}</ul>
-    {more && <button disabled={busy || loadedPage !== page} onClick={() => setPage((value) => value + 1)}>멤버 더 보기</button>}
-  </Dialog>;
+  return <>
+    <AppModal title={team.name + " 멤버 관리"} close={close} busy={busy} suspended={!!confirmation}>
+      <p className="muted">가입한 계정을 팀에 추가합니다. 프로젝트 참여는 프로젝트 설정에서 따로 초대하세요.</p>
+      <form className="row wrap" onSubmit={(event) => { event.preventDefault(); void changeMember(); }}>
+        <label>계정 이메일<input ref={emailInput} data-autofocus type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+        <button disabled={busy}>팀원 추가</button>
+      </form>
+      {error && <p role="alert" className="error">{error}</p>}
+      <ul className="clean-list member-list">{members.map((member) => {
+        const owner = member.organizationRoles.some(({ name }) => name === "samtdi-owner");
+        return <li key={member.id} className="row spread wrap">
+          <span>{member.name || member.primaryEmail} {owner && "· 소유자"}</span>
+          {!owner && <button disabled={busy} onClick={(event) => setConfirmation({
+            title: "작업공간 접근 해제",
+            description: (member.name || member.primaryEmail) + "의 작업공간 접근을 해제할까요?",
+            label: "제거",
+            trigger: event.currentTarget,
+            focusAfterSuccess: emailInput.current,
+            run: () => changeMember({ subject: member.id }),
+          })}>팀에서 제거</button>}
+        </li>;
+      })}</ul>
+      {more && <button disabled={busy || loadedPage !== page} onClick={() => setPage((value) => value + 1)}>멤버 더 보기</button>}
+    </AppModal>
+    {confirmation && <ConfirmAction confirmation={confirmation} actionError={error} close={() => setConfirmation(undefined)} />}
+  </>;
 }
 
 export function ProjectWorkspaceLink({ project }: { project: Project }) {
