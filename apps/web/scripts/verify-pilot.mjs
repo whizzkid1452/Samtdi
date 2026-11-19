@@ -45,6 +45,17 @@ function tab(page, name) {
   return page.getByRole("navigation", { name: "프로젝트 탭" }).getByRole("link", { name, exact: true });
 }
 
+async function createInvitation(page, { email, role }) {
+  await button(page, "팀원 초대").click();
+  const dialog = page.getByRole("dialog", { name: "팀원 초대", exact: true });
+  await dialog.getByRole("textbox", { name: "초대할 이메일" }).fill(email);
+  await dialog.getByLabel("초대 역할").selectOption(role);
+
+  await button(dialog, "초대 링크 만들기").click();
+  await dialog.waitFor({ state: "hidden" });
+  return page.getByLabel("초대 링크", { exact: true }).inputValue();
+}
+
 async function upload(page, { file, action, expected }) {
   await button(page, action).click();
   await page.getByLabel("오디오 파일 입력").setInputFiles(file);
@@ -248,11 +259,7 @@ try {
   assert.ok(waveform && waveform.y + waveform.height <= 900);
 
   await tab(owner, "설정").click();
-  await button(owner, "팀원 초대").click();
-  await owner.getByLabel("초대할 이메일").fill(reviewerEmail);
-  await owner.getByLabel("초대 역할").selectOption("editor");
-  await button(owner, "초대 링크 만들기").click();
-  const invite = await owner.getByLabel("초대 링크", { exact: true }).inputValue();
+  const invite = await createInvitation(owner, { email: reviewerEmail, role: "editor" });
   await login(editor, { email: reviewerEmail, url: invite, target: media });
 
   await link(editor, "mix-v1").click();
@@ -438,6 +445,20 @@ try {
   assert.equal((await editor.request.get(base + "/export/json")).status(), 404);
   await editor.goto(taskURL);
   await editor.getByRole("heading", { name: "프로젝트를 열 수 없습니다" }).waitFor();
+
+  const reviewerInvite = await createInvitation(owner, { email: reviewerEmail, role: "reviewer" });
+  const reviewer = await other.newPage();
+  await login(reviewer, { email: reviewerEmail, url: reviewerInvite, target: media });
+  await link(reviewer, "mix-v1").waitFor();
+  assert.equal(await button(reviewer, "음원 업로드").count(), 0);
+  await reviewer.goto(tasks);
+  await link(reviewer, taskTitle).waitFor();
+  assert.equal(await button(reviewer, "새 작업").count(), 0);
+  await reviewer.goto(feedbackURL);
+  await reviewer.getByRole("region", { name: "선택한 피드백" }).waitFor();
+  await button(reviewer, "이 위치에 피드백 남기기").waitFor();
+  console.log("Reviewer: direct links and feedback are available, upload and task creation are restricted");
+
   assert.equal((await owner.request.patch(base + "/archive", { headers, data: { archived: true } })).status(), 204);
   await owner.reload();
   await owner.goto(origin + "/projects");
