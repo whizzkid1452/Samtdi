@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 import { api, describeError } from "../lib/api";
 import { projectHref, type ProjectTab } from "../lib/routes";
 import { MediaDetail, MediaLibrary } from "./media-library";
+import { ConfirmAction, type Confirmation } from "./confirm-action";
 import { ProjectMembers } from "./project-members";
 import { TaskBoard, TaskDetail } from "./task-board";
 import { ProjectActivity } from "./workspace-activity";
@@ -139,11 +140,9 @@ function ProjectSettings({ project }: { project: Project }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [confirmation, setConfirmation] = useState<Confirmation>();
 
-  async function changeArchive() {
-    const archived = !project.archived_at;
-    if (!window.confirm(project.title + (archived ? " 프로젝트를 보관할까요?" : " 프로젝트를 복원할까요?"))) return;
-
+  async function changeArchive(archived: boolean) {
     setBusy(true);
     setError("");
     setMessage("");
@@ -151,8 +150,10 @@ function ProjectSettings({ project }: { project: Project }) {
       await api("/v1/projects/" + project.id + "/archive", { method: "PATCH", body: JSON.stringify({ archived }) });
       await refreshProjects();
       setMessage(archived ? "프로젝트를 보관했습니다." : "프로젝트를 복원했습니다.");
+      return true;
     } catch (cause) {
       setError(describeError(cause));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -172,7 +173,18 @@ function ProjectSettings({ project }: { project: Project }) {
       <h2>프로젝트 보관</h2>
       {error && <p role="alert" className="error">{error}</p>}
       {message && <p role="status">{message}</p>}
-      <button disabled={busy} onClick={() => void changeArchive()}>{project.archived_at ? "프로젝트 복원" : "프로젝트 보관"}</button>
+      <button disabled={busy} onClick={(event) => {
+        const archived = !project.archived_at;
+        const label = archived ? "보관" : "복원";
+        setConfirmation({
+          title: "프로젝트 " + label,
+          description: project.title + " 프로젝트를 " + label + "할까요?",
+          label,
+          trigger: event.currentTarget,
+          run: () => changeArchive(archived),
+        });
+      }}>{project.archived_at ? "프로젝트 복원" : "프로젝트 보관"}</button>
+      {confirmation && <ConfirmAction confirmation={confirmation} actionError={error} close={() => setConfirmation(undefined)} />}
     </section>}
   </>;
 }

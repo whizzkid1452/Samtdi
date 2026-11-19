@@ -1,5 +1,6 @@
 "use client";
 
+import { Menu } from "@mantine/core";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
@@ -7,6 +8,8 @@ import { api, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { itemHref, projectHref, versionHref } from "../lib/routes";
 import { useUpload } from "./upload";
+import { ActionMenu } from "./action-menu";
+import { ConfirmAction, type Confirmation } from "./confirm-action";
 import { VersionReview } from "./version-review";
 import type { Project } from "./workspace";
 
@@ -138,6 +141,7 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
 }) {
   const { openUpload, uploadRevision } = useUpload();
   const router = useRouter();
+  const [confirmation, setConfirmation] = useState<Confirmation>();
   const base = "/v1/projects/" + project.id;
   const itemPath = base + "/media/" + encodeURIComponent(itemId);
   const [item, setItem] = useState<MediaItem>();
@@ -195,8 +199,10 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
     try {
       await action();
       setRefresh((value) => value + 1);
+      return true;
     } catch (cause) {
       setError(describeError(cause));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -228,16 +234,26 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
         <h2 className="section-title">{item.title}</h2>
         <div className="row wrap">
           {canEdit && !item.archived_at && <button onClick={() => openUpload({ projectId: project.id, itemId })}>수정본 업로드</button>}
-          {canEdit && <details className="inbox">
-            <summary aria-label="음원 관리">관리</summary>
-            <div className="inbox-body panel"><div className="row wrap">{version?.state === "ready" && <a className="button" href={base + "/versions/" + version.id + "/files/original"}>원본 다운로드</a>}<button disabled={busy} onClick={() => {
-              if (!window.confirm(item.archived_at ? "음원을 복원할까요?" : "음원을 보관할까요?")) return;
-              void change(() => api(itemPath, { method: "PATCH", body: JSON.stringify({ archived: !item.archived_at }) }));
-            }}>{item.archived_at ? "음원 복원" : "음원 보관"}</button></div></div>
-          </details>}
+          {canEdit && <ActionMenu label="관리" accessibleName="음원 관리">{(trigger) => <>
+            {version?.state === "ready" && (
+              <Menu.Item component="a" href={base + "/versions/" + version.id + "/files/original"}>원본 다운로드</Menu.Item>
+            )}
+            <Menu.Item disabled={busy} onClick={() => {
+              const archived = !item.archived_at;
+              const label = archived ? "보관" : "복원";
+              setConfirmation({
+                title: "음원 " + label,
+                description: item.title + " 음원을 " + label + "할까요?",
+                label,
+                trigger: trigger.current,
+                run: () => change(() => api(itemPath, { method: "PATCH", body: JSON.stringify({ archived }) })),
+              });
+            }}>{item.archived_at ? "음원 복원" : "음원 보관"}</Menu.Item>
+          </>}</ActionMenu>}
           {!canEdit && version?.state === "ready" && <a className="button" href={base + "/versions/" + version.id + "/files/original"}>원본 다운로드</a>}
         </div>
       </div>
+      {confirmation && <ConfirmAction confirmation={confirmation} actionError={error} close={() => setConfirmation(undefined)} />}
       {item.archived_at && <p className="notice">보관된 음원입니다.</p>}
       {version && <div className="version-overview">
         <div className="row wrap">

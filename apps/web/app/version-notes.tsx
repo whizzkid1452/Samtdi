@@ -1,5 +1,6 @@
 "use client";
 
+import { Menu } from "@mantine/core";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -7,6 +8,8 @@ import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { versionHref } from "../lib/routes";
 import { timecode } from "../lib/timecode";
+import { ActionMenu } from "./action-menu";
+import { ConfirmAction, type Confirmation } from "./confirm-action";
 import { ReviewTaskLinks } from "./review-task-links";
 import { readReplyDraft, useFeedbackDraft } from "./feedback-drafts";
 import { submitFeedbackShortcut } from "./feedback-shortcut";
@@ -263,7 +266,7 @@ function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, acco
     if (reply?.trim() && await feedback.reply(note, reply)) updateDraft(null);
   }
 
-  return <section className="feedback-thread" id={"note-" + note.id} aria-label="선택한 피드백">
+  return <section className="feedback-thread" id={"note-" + note.id} aria-label="선택한 피드백" tabIndex={-1}>
     <div className="row spread wrap">
       <strong className="feedback-time">{noteLabel(note)}</strong>
       <button type="button" onClick={() => feedback.select(undefined)}>대화 닫기</button>
@@ -307,6 +310,7 @@ function MessageEditor({ message, busy, change }: {
   message: Message; busy: boolean; change: (payload: object) => Promise<boolean | undefined>;
 }) {
   const [body, setBody] = useState<string>();
+  const [confirmation, setConfirmation] = useState<Confirmation>();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -321,13 +325,18 @@ function MessageEditor({ message, busy, change }: {
     </div>
   </form>;
 
-  return <details className="message-menu">
-    <summary>더 보기</summary>
-    <div className="row wrap">
-      <button onClick={() => setBody(message.body)}>수정</button>
-      <button disabled={busy} onClick={() => {
-        if (window.confirm("이 내용을 삭제할까요?")) void change({ deleted: true });
-      }}>삭제</button>
-    </div>
-  </details>;
+  return <div className="message-menu">
+    <ActionMenu label="더 보기">{(trigger) => <>
+      <Menu.Item onClick={() => setBody(message.body)}>수정</Menu.Item>
+      <Menu.Item color="red.8" disabled={busy} onClick={() => setConfirmation({
+        title: "피드백 삭제",
+        description: "이 내용을 삭제할까요?",
+        label: "삭제",
+        trigger: trigger.current,
+        focusAfterSuccess: trigger.current?.closest<HTMLElement>(".feedback-thread"),
+        run: async () => (await change({ deleted: true })) === true,
+      })}>삭제</Menu.Item>
+    </>}</ActionMenu>
+    {confirmation && <ConfirmAction confirmation={confirmation} close={() => setConfirmation(undefined)} />}
+  </div>;
 }

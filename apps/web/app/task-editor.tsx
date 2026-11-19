@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { AppModal } from "./app-modal";
+import { ConfirmAction, type Confirmation } from "./confirm-action";
 import { timecode } from "../lib/timecode";
 import { useWorkspace, type Member } from "./workspace";
 
@@ -65,6 +66,7 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(!!restored);
+  const [discarding, setDiscarding] = useState<Confirmation>();
   const [error, setError] = useState("");
   const [hasConflict, setHasConflict] = useState(!!restored && !!task && restored.revision !== task.revision);
   const [hasReadLatest, setHasReadLatest] = useState(false);
@@ -128,62 +130,83 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
     }
   }
 
-  return <AppModal title={heading} busy={busy} returnFocusTo={returnFocusTo} close={() => {
-    if (busy || (dirty && !window.confirm("저장하지 않은 변경을 버릴까요?"))) return;
+  function discard() {
     storeTaskDraft(key);
     close();
-  }}>
-    <form className="task-editor" onSubmit={submit} onChange={() => setDirty(true)}>
-      {restored && <p className="muted" role="status">이전에 작성하던 내용을 불러왔습니다.</p>}
-      {!change && <>
-        <label>작업 제목<input data-autofocus autoComplete="off" value={title} required maxLength={160} onChange={(event) => setTitle(event.target.value)} /></label>
-        <label>작업 설명<textarea value={description} maxLength={4000} onChange={(event) => setDescription(event.target.value)} /></label>
-        <div className="form-grid">
-          <label>담당자<select aria-label="담당자" value={assignee} onChange={(event) => setAssignee(event.target.value)}>
-            <option value="">미할당</option>
-            {members.filter(({ role }) => role !== "reviewer").map(({ account_id, email }) => <option key={account_id} value={account_id}>{email}</option>)}
-          </select></label>
-          <label>마감일<input type="date" value={due} onChange={(event) => setDue(event.target.value)} /></label>
-          {task && <label>상태<select value={status} onChange={(event) => { setConfirm(false); setStatus(event.target.value as Status); }}>
-            {statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select></label>}
-        </div>
-      </>}
-      {change && <p>{task?.title}</p>}
-      {status === "review" && <>
-        <label>검토 설명<textarea data-autofocus={!!change || undefined} value={review} maxLength={2000} onChange={(event) => setReview(event.target.value)} /></label>
-        <ResultPicker base={base} resultId={resultId} select={(id) => { setDirty(true); setResultId(id); }} />
-        <p className="muted">결과 버전 또는 검토 설명을 입력해 주세요.</p>
-      </>}
-      {notes.length > 0 && <ul className="clean-list">
-        {notes.map((note) => <li className="row spread wrap" key={note.id}>
-          <span className="message-body">{timecode(note.start_ms)} · {note.deleted ? "삭제된 피드백" : note.body}</span>
-          {!change && <button type="button" onClick={() => {
-            setNotes(notes.filter(({ id }) => id !== note.id)); setConfirm(false); setDirty(true);
-          }}>연결 해제</button>}
-        </li>)}
-      </ul>}
-      {!change && <OptionPicker base={base} kind="note" onNote={(note) => {
-        if (notes.some(({ id }) => id === note.id) || notes.length >= 50) return;
-        setNotes([...notes, note]); setConfirm(false); setDirty(true);
-      }} />}
-      {status === "done" && unresolved.length > 0 && <div className="notice">
-        <p>미해결 피드백 {unresolved.length}개</p>
-        <ul>{unresolved.map((note) => <li key={note.id}>{timecode(note.start_ms)} · {note.body}</li>)}</ul>
-        <label className="row"><input type="checkbox" checked={confirm} onChange={(event) => setConfirm(event.target.checked)} required />
-          미해결 피드백을 확인하고 완료합니다</label>
-      </div>}
-      {error && <p className="error" role="alert">{error}</p>}
-      {hasConflict && (hasReadLatest && latest ? <div className="notice" role="status">
-        <p>최신 작업 {latest.title} · {statusLabel(latest.status)}</p>
-        <p className="message-body">{latest.description}</p>
-        <p>작성 중인 내용으로 반영하려면 다시 저장하세요.</p>
-      </div> : <button type="button" disabled={busy} onClick={() => void loadLatest()}>최신 상태 확인</button>)}
-      <button className="primary" disabled={busy || !title.trim() || (hasConflict && !hasReadLatest)}>
-        {task ? "저장" : "작업 만들기"}
-      </button>
-    </form>
-  </AppModal>;
+  }
+
+  function requestClose() {
+    if (busy) return;
+    if (!dirty) {
+      discard();
+      return;
+    }
+
+    setDiscarding({
+      title: "미저장 변경 버리기",
+      description: "저장하지 않은 작업 변경을 버릴까요?",
+      label: "버리기",
+      run: discard,
+      trigger: document.activeElement instanceof HTMLElement ? document.activeElement : undefined,
+      focusAfterSuccess: returnFocusTo,
+    });
+  }
+
+  return <>
+    <AppModal title={heading} busy={busy} suspended={!!discarding} returnFocusTo={returnFocusTo} close={requestClose}>
+      <form className="task-editor" onSubmit={submit} onChange={() => setDirty(true)}>
+        {restored && <p className="muted" role="status">이전에 작성하던 내용을 불러왔습니다.</p>}
+        {!change && <>
+          <label>작업 제목<input data-autofocus autoComplete="off" value={title} required maxLength={160} onChange={(event) => setTitle(event.target.value)} /></label>
+          <label>작업 설명<textarea value={description} maxLength={4000} onChange={(event) => setDescription(event.target.value)} /></label>
+          <div className="form-grid">
+            <label>담당자<select aria-label="담당자" value={assignee} onChange={(event) => setAssignee(event.target.value)}>
+              <option value="">미할당</option>
+              {members.filter(({ role }) => role !== "reviewer").map(({ account_id, email }) => <option key={account_id} value={account_id}>{email}</option>)}
+            </select></label>
+            <label>마감일<input type="date" value={due} onChange={(event) => setDue(event.target.value)} /></label>
+            {task && <label>상태<select value={status} onChange={(event) => { setConfirm(false); setStatus(event.target.value as Status); }}>
+              {statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select></label>}
+          </div>
+        </>}
+        {change && <p>{task?.title}</p>}
+        {status === "review" && <>
+          <label>검토 설명<textarea data-autofocus={!!change || undefined} value={review} maxLength={2000} onChange={(event) => setReview(event.target.value)} /></label>
+          <ResultPicker base={base} resultId={resultId} select={(id) => { setDirty(true); setResultId(id); }} />
+          <p className="muted">결과 버전 또는 검토 설명을 입력해 주세요.</p>
+        </>}
+        {notes.length > 0 && <ul className="clean-list">
+          {notes.map((note) => <li className="row spread wrap" key={note.id}>
+            <span className="message-body">{timecode(note.start_ms)} · {note.deleted ? "삭제된 피드백" : note.body}</span>
+            {!change && <button type="button" onClick={() => {
+              setNotes(notes.filter(({ id }) => id !== note.id)); setConfirm(false); setDirty(true);
+            }}>연결 해제</button>}
+          </li>)}
+        </ul>}
+        {!change && <OptionPicker base={base} kind="note" onNote={(note) => {
+          if (notes.some(({ id }) => id === note.id) || notes.length >= 50) return;
+          setNotes([...notes, note]); setConfirm(false); setDirty(true);
+        }} />}
+        {status === "done" && unresolved.length > 0 && <div className="notice">
+          <p>미해결 피드백 {unresolved.length}개</p>
+          <ul>{unresolved.map((note) => <li key={note.id}>{timecode(note.start_ms)} · {note.body}</li>)}</ul>
+          <label className="row"><input type="checkbox" checked={confirm} onChange={(event) => setConfirm(event.target.checked)} required />
+            미해결 피드백을 확인하고 완료합니다</label>
+        </div>}
+        {error && <p className="error" role="alert">{error}</p>}
+        {hasConflict && (hasReadLatest && latest ? <div className="notice" role="status">
+          <p>최신 작업 {latest.title} · {statusLabel(latest.status)}</p>
+          <p className="message-body">{latest.description}</p>
+          <p>작성 중인 내용으로 반영하려면 다시 저장하세요.</p>
+        </div> : <button type="button" disabled={busy} onClick={() => void loadLatest()}>최신 상태 확인</button>)}
+        <button className="primary" disabled={busy || !title.trim() || (hasConflict && !hasReadLatest)}>
+          {task ? "저장" : "작업 만들기"}
+        </button>
+      </form>
+    </AppModal>
+    {discarding && <ConfirmAction confirmation={discarding} close={() => setDiscarding(undefined)} />}
+  </>;
 }
 
 function ResultPicker({ base, resultId, select }: { base: string; resultId: string; select: (id: string) => void }) {
