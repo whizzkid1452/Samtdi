@@ -9,6 +9,7 @@ import type { components } from "../lib/api-types";
 import { itemHref, projectHref, versionHref } from "../lib/routes";
 import { AppModal } from "./app-modal";
 import { ConfirmAction, type Confirmation } from "./confirm-action";
+import { InlineError } from "./request-states";
 
 type MediaVersion = components["schemas"]["MediaVersion"];
 type UploadSession = components["schemas"]["UploadSession"];
@@ -215,7 +216,7 @@ export function UploadProvider({ accountId, children }: { accountId: string; chi
           <Textarea label="수정 설명 (선택)" name="description" maxLength={2000} disabled={!!stage}
             value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.currentTarget.value })} />
         </>}
-        {error && <p role="alert" className="error">{error}</p>}
+        {error && <InlineError message={error} />}
         {stage && <p role="status">{stageLabel}</p>}
         {transferProgress}
         <div className="row wrap">

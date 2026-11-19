@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Checkbox, Popover, Select, TextInput } from "@mantine/core";
+import { Alert, Badge, Button, Checkbox, Popover, Select, TextInput } from "@mantine/core";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -8,11 +8,12 @@ import { api, describeError } from "../lib/api";
 import { projectHref, type ProjectTab } from "../lib/routes";
 import { MediaDetail, MediaLibrary } from "./media-library";
 import { ConfirmAction, type Confirmation } from "./confirm-action";
-import { ProjectMembers } from "./project-members";
+import { ProjectMembers, ProjectRoleBadge } from "./project-members";
 import { TaskBoard, TaskDetail } from "./task-board";
 import { ProjectActivity } from "./workspace-activity";
 import { useWorkspace, type Project } from "./workspace";
 import { ProjectWorkspaceLink, WorkspacePicker } from "./workspace-manager";
+import { EmptyState, InlineError } from "./request-states";
 
 const tabs = [
   ["media", "음원"], ["tasks", "작업"], ["activity", "활동"], ["settings", "설정"],
@@ -65,7 +66,7 @@ export function ProjectIndex() {
       <Button type="submit" loading={saving}>프로젝트 만들기</Button>
       <Button type="button" variant="default" disabled={saving} onClick={() => setCreating(false)}>취소</Button>
     </form>}
-    {error && <p role="alert" className="error">{error}</p>}
+    {error && <InlineError message={error} />}
     {projects.length > 0 && <div className="row wrap filter-bar">
       <TextInput type="search" aria-label="프로젝트 검색" placeholder="프로젝트 검색" value={search}
         onChange={(event) => setSearch(event.target.value)} />
@@ -78,11 +79,14 @@ export function ProjectIndex() {
         <Link className="resource-title" href={projectHref(project.id)}>{project.title}</Link>
         <div className="row wrap muted">
           {project.updated_at && <time dateTime={project.updated_at}>{new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeZone: "Asia/Seoul" }).format(new Date(project.updated_at))}</time>}
-          <span className="status-label">{{owner: "소유자", editor: "편집자", reviewer: "검토자"}[project.role]}{project.archived_at ? " · 보관됨" : ""}</span>
+          <ProjectRoleBadge role={project.role} />
+          {project.archived_at && <Badge variant="light" color="gray" tt="none">보관됨</Badge>}
         </div>
       </li>)}
     </ul>
-    {visible.length === 0 && <p className="muted">{search || showArchived ? "조건에 맞는 프로젝트가 없습니다." : "새 프로젝트를 만들어 음원을 공유하세요."}</p>}
+    {visible.length === 0 && (
+      <EmptyState message={search || showArchived ? "조건에 맞는 프로젝트가 없습니다." : "새 프로젝트를 만들어 음원을 공유하세요."} />
+    )}
   </main>;
 }
 
@@ -137,7 +141,7 @@ export function ProjectScreen({ projectId, tab, itemId, versionId, taskId }: { p
         <div className="row wrap project-title">
           <ProjectSwitcher projects={projects} projectId={projectId} tab={tab} />
           <h1>{project.title}</h1>
-          <span className="status-label">{project.archived_at ? "보관됨" : "비공개"}</span>
+          <Badge variant="light" color="gray" tt="none">{project.archived_at ? "보관됨" : "비공개"}</Badge>
         </div>
         <nav className="project-tabs" aria-label="프로젝트 탭">
           {tabs.map(([value, label]) => (
@@ -148,7 +152,7 @@ export function ProjectScreen({ projectId, tab, itemId, versionId, taskId }: { p
       </div>
     </div>
     <main className="main-content">
-      {project.archived_at && <p className="notice" role="status">보관된 프로젝트입니다. 기존 내용을 열 수 있습니다.</p>}
+      {project.archived_at && <Alert color="gray" role="status">보관된 프로젝트입니다. 기존 내용을 열 수 있습니다.</Alert>}
       {tab === "media" && (itemId ?
         <MediaDetail key={projectId + ":" + itemId + ":" + (versionId ?? "")} project={project} itemId={itemId} versionId={versionId}
           accountId={session.account_id} initialNote={query.get("note") ?? undefined} initialAt={at === null ? undefined : Number(at)} /> :
@@ -197,7 +201,7 @@ function ProjectSettings({ project }: { project: Project }) {
     </section>
     {project.role === "owner" && <section className="panel">
       <h2>프로젝트 보관</h2>
-      {error && <p role="alert" className="error">{error}</p>}
+      {error && <InlineError message={error} />}
       {message && <p role="status">{message}</p>}
       <button disabled={busy} onClick={(event) => {
         const archived = !project.archived_at;

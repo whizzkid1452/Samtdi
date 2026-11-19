@@ -10,6 +10,7 @@ import { FeedbackComposer } from "./feedback-composer";
 import { feedbackDraftKey, readFeedbackDraft, useFeedbackDraft, type FeedbackDraft } from "./feedback-drafts";
 import { VersionNotes, useVersionNotes } from "./version-notes";
 import type { MediaVersion } from "./media-library";
+import { InlineError } from "./request-states";
 
 export function VersionReview({ base, version, initialAt, initialNote, projectId, accountId, canEdit, writable }: {
   base: string; version: MediaVersion; initialAt?: number; initialNote?: string;
@@ -157,8 +158,11 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
         onTimeUpdate={(event) => setPosition(clamp(event.currentTarget.currentTime * 1000))}
         onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => { previewEnd.current = null; setPlaying(false); }}
         onError={() => setError("재생 파일에 접근하지 못했습니다.")} />
-      {error && <div className="row wrap" role="alert"><span className="error">{error}</span>
-        <Button variant="default" onClick={() => { setError(""); setAttempt((value) => value + 1); audio.current?.load(); }}>다시 시도</Button></div>}
+      {error && <InlineError message={error} retry={() => {
+        setError("");
+        setAttempt((value) => value + 1);
+        audio.current?.load();
+      }} />}
       <ReviewWaveform audio={audio} duration={duration} peaks={peaks} position={position} range={range}
         setRange={setRange} seek={seek} notes={feedback.notes} selected={feedback.selected} previewEnd={previewEnd}
         onError={setError} togglePlayback={() => { if (metadataReady) void togglePlayback(); }}
@@ -214,7 +218,7 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
         <Button variant="default" ref={composerTrigger} aria-expanded={composerOpen} disabled={!metadataReady || feedback.busy} onClick={() => composerOpen ? closeComposer() : compose(false)}>
           {composerOpen ? "새 피드백" : draft?.body.trim() ? "피드백 계속 작성" : "이 위치에 피드백 남기기"}
         </Button>
-        {storageError && <p className="error" role="alert">{storageError}</p>}
+        {storageError && <InlineError message={storageError} />}
         {composerOpen && draft && <FeedbackComposer draft={draft} busy={feedback.busy} error={feedback.error}
           save={save} close={closeComposer} discard={() => { updateDraft(null); closeComposer(); }}
           changeBody={(body) => updateDraft({ ...draft, body })}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, describeError } from "../lib/api";
 import { taskHref, versionLink } from "../lib/routes";
+import { EmptyState, InlineError } from "./request-states";
 
 type Notification = {
   id: string;
@@ -96,8 +97,8 @@ export function Notifications() {
       </Popover.Target>
       <Popover.Dropdown className="notification-popover">
         <section aria-label="알림 목록">
-          {error && <p role="alert" className="error">{error}</p>}
-          {inbox.items.length === 0 && <p className="muted">받은 알림이 없습니다.</p>}
+          {error && <InlineError message={error} retry={() => void refresh()} />}
+          {!error && inbox.items.length === 0 && <EmptyState message="받은 알림이 없습니다." />}
           <ul className="clean-list">
             {inbox.items.map((notice) => {
               const href = notice.version_id ? versionLink(notice.project_id, notice.version_id, notice.note_id)

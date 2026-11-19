@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Menu, NativeSelect, SegmentedControl, Textarea } from "@mantine/core";
+import { Badge, Button, Menu, NativeSelect, SegmentedControl, Textarea } from "@mantine/core";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -13,6 +13,7 @@ import { ConfirmAction, type Confirmation } from "./confirm-action";
 import { ReviewTaskLinks } from "./review-task-links";
 import { readReplyDraft, useFeedbackDraft } from "./feedback-drafts";
 import { submitFeedbackShortcut } from "./feedback-shortcut";
+import { EmptyState, InlineError, LoadingRows } from "./request-states";
 
 type Message = components["schemas"]["Message"];
 export type Note = components["schemas"]["Note"];
@@ -203,9 +204,10 @@ export function VersionNotes({ feedback, url, projectId, itemId, versionId, acco
         data={[{ value: "time", label: "시간순" }, { value: "recent", label: "최신순" }]} />
     </div>
     {composer}
-    {error && <div role="alert"><p className="error">{error}</p><button onClick={feedback.retry}>다시 시도</button></div>}
-    {!notes && !error && <p role="status">피드백을 불러오는 중</p>}
-    {notes?.length === 0 && <p className="muted">{filter === "resolved" ? "해결된 피드백이 없습니다." : filter === "open" ? "미해결 피드백이 없습니다." : "이 버전에 남긴 피드백이 없습니다."}</p>}
+    {error && <InlineError message={error} retry={feedback.retry} />}
+    {!notes && !error && <LoadingRows label="피드백을 불러오는 중" />}
+    {notes?.length === 0 && <EmptyState message={filter === "resolved" ? "해결된 피드백이 없습니다."
+      : filter === "open" ? "미해결 피드백이 없습니다." : "이 버전에 남긴 피드백이 없습니다."} />}
     <ul className="feedback-list">
       {notes?.map((note) => <li key={note.id}>
         <button type="button" aria-expanded={selected?.id === note.id} onClick={() => selected?.id === note.id ? feedback.select(undefined) : open(note)}>
@@ -215,7 +217,7 @@ export function VersionNotes({ feedback, url, projectId, itemId, versionId, acco
           </span>
           <span className="feedback-summary">{note.deleted ? "삭제된 피드백" : note.body}</span>
           <span className="feedback-meta">
-            {note.resolved && <span className="status-label">해결됨</span>}
+            {note.resolved && <Badge color="teal" variant="light" tt="none">해결됨</Badge>}
             {note.replies.some(({ deleted }) => !deleted) && <span className="muted">답글 {note.replies.filter(({ deleted }) => !deleted).length}</span>}
           </span>
         </button>
@@ -287,7 +289,7 @@ function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, acco
         {editor(entry, target + "/replies/" + entry.id)}
       </li>)}
     </ul>
-    {storageError && <p className="error" role="alert">{storageError}</p>}
+    {storageError && <InlineError message={storageError} />}
     {writable && !note.deleted && (replyActive
       ? <form className="notes-form" onSubmit={submit}>
         <Textarea ref={replyInput} w="100%" aria-label="답글" placeholder="답글 쓰기" maxLength={4000} required

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { timecode } from "../lib/timecode";
+import { InlineError } from "./request-states";
 
 type Options = components["schemas"]["TaskOptions"];
 type Note = components["schemas"]["TaskNote"];
@@ -120,7 +121,7 @@ export function TaskOptionPicker(props: PickerProps) {
             }} />
           <Button type="button" variant="default" size="compact-sm" onClick={search}>검색</Button>
         </div>
-        {error && <p role="alert" className="error">{error}</p>}
+        {error && <InlineError message={error} />}
         {!rows && !error && <p role="status">불러오는 중</p>}
         <Combobox.Options className="task-option-list">
           {rows?.length === 0 && <Combobox.Empty>일치하는 항목이 없습니다.</Combobox.Empty>}

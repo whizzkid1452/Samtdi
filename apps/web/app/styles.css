@@ -80,6 +80,9 @@ h1, h2, h3 { word-break: keep-all; }
 label { font-size: .9rem; color: var(--muted); }
 .error { color: #a40e26; }
 .empty { padding: 2rem 0; }
+.empty-state, .loading-rows { margin-block: .75rem; }
+.empty-state > a { display: inline-block; margin-top: .45rem; }
+.loading-rows { padding: .65rem 0; }
 @media (max-width: 700px) {
   .topbar { flex-wrap: wrap; }
   .topbar .row { gap: .25rem; }

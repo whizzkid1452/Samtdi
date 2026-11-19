@@ -9,6 +9,7 @@ import { ConfirmAction, type Confirmation } from "./confirm-action";
 import { TaskOptionPicker } from "./task-option-picker";
 import { timecode } from "../lib/timecode";
 import { useWorkspace, type Member } from "./workspace";
+import { InlineError } from "./request-states";
 
 export type Task = components["schemas"]["Task"];
 export type TaskNote = components["schemas"]["TaskNote"];
@@ -199,7 +200,7 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
           <Checkbox label="미해결 피드백을 확인하고 완료합니다" checked={confirm} required
             onChange={(event) => setConfirm(event.currentTarget.checked)} />
         </div>}
-        {error && <p className="error" role="alert">{error}</p>}
+        {error && <InlineError message={error} />}
         {hasConflict && (hasReadLatest && latest ? <div className="notice" role="status">
           <p>최신 작업 {latest.title} · {statusLabel(latest.status)}</p>
           <p className="message-body">{latest.description}</p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Checkbox, Menu, NativeSelect, Select, TextInput } from "@mantine/core";
+import { Badge, Button, Checkbox, Menu, NativeSelect, Select, TextInput } from "@mantine/core";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -13,6 +13,7 @@ import type { Member, Project } from "./workspace";
 import { ActionMenu } from "./action-menu";
 import { TaskStatusBadge } from "./task-status-badge";
 import { DraggableTask, TaskLane, type TaskMove } from "./task-drag";
+import { EmptyState, InlineError, LoadingRows } from "./request-states";
 
 type Counts = Record<Status, number>;
 type TaskSelection = { task?: Task; change?: TaskChange; returnFocusTo?: HTMLButtonElement | null };
@@ -211,7 +212,7 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
         onChange={(event) => router.push(href("archived", event.currentTarget.checked ? "true" : ""))} />
       {filters.size > (board ? 1 : 0) && <Link href={pathname + (board ? "?view=board" : "")}>필터 초기화</Link>}
     </div>
-    {(error || memberError) && <p role="alert" className="error">{error || memberError}</p>}
+    {(error || memberError) && <InlineError message={error || memberError} />}
     <p role="status" className="muted">{moving ? "작업을 이동하는 중" : moveNotice || (board && canWrite ? "카드를 끌어 순서를 바꾸거나 다른 상태로 옮기세요. 더 보기 메뉴로도 이동할 수 있습니다." : "")}</p>
     {board ? <div className="board" aria-busy={moving}>
       {statuses.filter(([value]) => !filters.get("status") || filters.get("status") === value).map(([value, label]) => {
@@ -267,10 +268,9 @@ function TaskRows({ path, render }: { path: string; render: (task: Task, previou
   }
 
   return <>
-    {error && <div className="row wrap" role="alert"><span className="error">{error}</span>
-      <button onClick={() => { setError(""); setAttempt((value) => value + 1); }}>다시 시도</button></div>}
-    {!rows && !error && <p role="status">작업을 불러오는 중</p>}
-    {rows?.length === 0 && <p className="empty muted">표시할 작업이 없습니다.</p>}
+    {error && <InlineError message={error} retry={() => { setError(""); setAttempt((value) => value + 1); }} />}
+    {!rows && !error && <LoadingRows label="작업을 불러오는 중" />}
+    {rows?.length === 0 && <EmptyState message="표시할 작업이 없습니다." />}
     {rows && rows.length > 0 && <ul className="task-rows">
       {rows.map((task, index) => {
         const previous = rows[index - 1];
@@ -307,9 +307,9 @@ export function TaskDetail({ project, taskId }: { project: Project; taskId: stri
 
   return <section aria-label="작업 상세">
     <Link href={back}>작업 목록</Link>
-    {(error || memberError) && <div role="alert"><p className="error">{error || memberError}</p>
-      <button onClick={() => { setError(""); setRevision((value) => value + 1); }}>다시 시도</button></div>}
-    {!task && !error && <p role="status">작업을 불러오는 중</p>}
+    {(error || memberError) && <InlineError message={error || memberError}
+      retry={() => { setError(""); setRevision((value) => value + 1); }} />}
+    {!task && !error && <LoadingRows label="작업을 불러오는 중" />}
     {task && <>
       <div className="row spread wrap section-header task-detail-title">
         <h2 className="section-title">{task.title}</h2>
@@ -331,7 +331,7 @@ export function TaskDetail({ project, taskId }: { project: Project; taskId: stri
           <ul className="resource-list">
             {task.notes.map((note) => <li key={note.id}>
               <Link href={versionLink(project.id, note.version_id, note.id, note.start_ms)}>{timecode(note.start_ms)} · {note.deleted ? "삭제된 피드백" : note.body}</Link>
-              {note.resolved && <span className="status-label">해결됨</span>}
+              {note.resolved && <Badge variant="light" color="teal" tt="none">해결됨</Badge>}
             </li>)}
           </ul>
           {(task.result_version_id || task.review_text) && <section>
@@ -341,7 +341,7 @@ export function TaskDetail({ project, taskId }: { project: Project; taskId: stri
           </section>}
         </div>
         <dl className="task-metadata">
-          <dt>상태</dt><dd><TaskStatusBadge status={task.status} />{task.archived ? " · 보관됨" : ""}</dd>
+          <dt>상태</dt><dd><div className="row wrap"><TaskStatusBadge status={task.status} />{task.archived && <Badge variant="light" color="gray" tt="none">보관됨</Badge>}</div></dd>
           <dt>담당자</dt><dd>{assignee?.email ?? "미할당"}</dd>
           <dt>마감일</dt><dd>{task.due_on || "마감 없음"}</dd>
         </dl>
