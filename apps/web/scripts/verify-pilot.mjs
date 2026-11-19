@@ -229,7 +229,7 @@ try {
   await login(owner, { email: ownerEmail });
   const title = "UI 파일럿 " + new Date().toISOString();
   await button(owner, "새 프로젝트").click();
-  await owner.getByLabel("프로젝트 이름", { exact: true }).fill(title);
+  await owner.getByRole("textbox", { name: "프로젝트 이름", exact: true }).fill(title);
   await button(owner, "프로젝트 만들기").click();
   await owner.waitForURL("**/media");
   const media = owner.url();
@@ -251,7 +251,6 @@ try {
   await button(owner, "초대 링크 만들기").click();
   const invite = await owner.getByLabel("초대 링크", { exact: true }).inputValue();
   await login(editor, { email: reviewerEmail, url: invite, target: media });
-  const editorSession = await (await editor.request.get(origin + "/v1/me")).json();
 
   await link(editor, "mix-v1").click();
   await editor.waitForURL(first.url);
@@ -296,7 +295,8 @@ try {
   await button(owner, "작업 만들기").click();
   const taskTitle = "인트로 레벨 조정 " + project.slice(0, 8);
   await owner.getByLabel("작업 제목").fill(taskTitle);
-  await owner.getByLabel("담당자", { exact: true }).selectOption(editorSession.account_id);
+  await owner.getByRole("dialog", { name: "새 작업" }).getByRole("combobox", { name: "담당자", exact: true }).click();
+  await owner.getByRole("option", { name: reviewerEmail, exact: true }).click();
   await button(owner.getByRole("dialog", { name: "새 작업" }), "작업 만들기").click();
   assert.equal(owner.url(), feedbackURL);
   await link(owner, taskTitle).click();
@@ -331,7 +331,7 @@ try {
   await button(editor, "검토 요청").click();
   await editor.getByLabel("검토 설명").fill("수정본의 인트로 레벨을 확인해 주세요.");
   await editor.getByText("결과 버전 선택", { exact: true }).click();
-  await button(editor, "mix-v2.mp3").click();
+  await editor.getByRole("option", { name: "mix-v2.mp3", exact: true }).click();
   await button(editor, "저장").click();
   await link(editor, "결과 버전 열기").waitFor();
   const review = await (await owner.request.get(taskPath)).json();

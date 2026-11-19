@@ -1,9 +1,9 @@
 "use client";
 
+import { Button, Select, TextInput } from "@mantine/core";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
-import { Dialog } from "./dialog";
 import { AppModal } from "./app-modal";
 import { ConfirmAction, type Confirmation } from "./confirm-action";
 import { useWorkspace, type Project, type TeamWorkspace } from "./workspace";
@@ -19,14 +19,16 @@ export function WorkspacePicker({ selected, onSelect }: { selected: string; onSe
 
   return <section className="panel" aria-label="작업공간">
     <div className="row spread wrap">
-      <label>작업공간 <select value={selected} onChange={(event) => onSelect(event.target.value)}>
-        <option value="">전체 작업공간</option>
-        {teams.filter(({ active }) => active).map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
-        <option value="shared">공유 프로젝트</option>
-      </select></label>
+      <Select label="작업공간" searchable allowDeselect={false} value={selected || "all"}
+        data={[
+          { value: "all", label: "전체 작업공간" },
+          ...teams.filter(({ active }) => active).map(({ id, name }) => ({ value: id, label: name })),
+          { value: "shared", label: "공유 프로젝트" },
+        ]}
+        onChange={(value) => onSelect(value === "all" ? "" : value ?? "")} />
       <div className="row wrap">
-        {current?.owner && <button onClick={() => setManaging(current)}>멤버 관리</button>}
-        <button onClick={() => setCreating({ id: crypto.randomUUID(), name: "" })}>새 작업공간</button>
+        {current?.owner && <Button variant="default" onClick={() => setManaging(current)}>멤버 관리</Button>}
+        <Button variant="default" onClick={() => setCreating({ id: crypto.randomUUID(), name: "" })}>새 작업공간</Button>
       </div>
     </div>
     {teams.length === 0 && <p className="muted">내 작업실이나 팀 작업공간을 만들고 프로젝트를 추가하세요.</p>}
@@ -66,13 +68,14 @@ function CreateWorkspace({ initial, close, saved }: {
     }
   }
 
-  return <Dialog title="새 작업공간" close={() => { if (!busy) close(); }}>
+  return <AppModal title="새 작업공간" close={close} busy={busy}>
     <form onSubmit={submit}>
-      <label>작업공간 이름<input value={name} required maxLength={100} disabled={attempted} onChange={(event) => setName(event.target.value)} placeholder="내 작업실, 밴드, 스튜디오" /></label>
+      <TextInput label="작업공간 이름" value={name} required data-autofocus maxLength={100} disabled={attempted}
+        onChange={(event) => setName(event.currentTarget.value)} placeholder="내 작업실, 밴드, 스튜디오" />
       {error && <p role="alert" className="error">{error}</p>}
-      <button className="primary" disabled={busy}>{busy ? "작업공간 준비 중" : attempted ? "같은 작업공간으로 이어가기" : "작업공간 만들기"}</button>
+      <Button mt="sm" type="submit" loading={busy}>{busy ? "작업공간 준비 중" : attempted ? "같은 작업공간으로 이어가기" : "작업공간 만들기"}</Button>
     </form>
-  </Dialog>;
+  </AppModal>;
 }
 
 function WorkspaceMembers({ team, close }: { team: TeamWorkspace; close: () => void }) {
@@ -123,8 +126,8 @@ function WorkspaceMembers({ team, close }: { team: TeamWorkspace; close: () => v
     <AppModal title={team.name + " 멤버 관리"} close={close} busy={busy} suspended={!!confirmation}>
       <p className="muted">가입한 계정을 팀에 추가합니다. 프로젝트 참여는 프로젝트 설정에서 따로 초대하세요.</p>
       <form className="row wrap" onSubmit={(event) => { event.preventDefault(); void changeMember(); }}>
-        <label>계정 이메일<input ref={emailInput} data-autofocus type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-        <button disabled={busy}>팀원 추가</button>
+        <TextInput label="계정 이메일" ref={emailInput} data-autofocus type="email" required value={email} onChange={(event) => setEmail(event.currentTarget.value)} />
+        <Button type="submit" loading={busy}>팀원 추가</Button>
       </form>
       {error && <p role="alert" className="error">{error}</p>}
       <ul className="clean-list member-list">{members.map((member) => {
@@ -172,11 +175,10 @@ export function ProjectWorkspaceLink({ project }: { project: Project }) {
     <h2>작업공간</h2>
     <p className="muted">현재 프로젝트의 멤버가 모두 참여한 작업공간으로 옮길 수 있습니다.</p>
     <form className="row wrap" onSubmit={save}>
-      <label>대상 작업공간<select required value={destination} onChange={(event) => setDestination(event.target.value)}>
-        <option value="">선택해 주세요</option>
-        {teams.filter(({ active, owner }) => active && owner).map(({ id, name }) => <option key={id} value={id}>{name}</option>)}
-      </select></label>
-      <button disabled={busy || destination === project.workspace_id}>작업공간에 연결</button>
+      <Select label="대상 작업공간" searchable required placeholder="선택해 주세요" value={destination || null}
+        data={teams.filter(({ active, owner }) => active && owner).map(({ id, name }) => ({ value: id, label: name }))}
+        onChange={(value) => setDestination(value ?? "")} />
+      <Button type="submit" loading={busy} disabled={!destination || destination === project.workspace_id}>작업공간에 연결</Button>
     </form>
     {error && <p role="alert" className="error">{error}</p>}
   </section>;

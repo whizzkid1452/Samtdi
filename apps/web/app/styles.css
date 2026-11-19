@@ -115,7 +115,7 @@ label { font-size: .9rem; color: var(--muted); }
 .task-form { display: grid; gap: .8rem; }
 .task-form h3 { margin: 0; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .7rem; }
-.form-grid label { display: grid; gap: .35rem; }
+.form-grid > label { display: grid; gap: .35rem; }
 .form-grid select { margin-inline-start: 0; }
 .summary-counts { margin-block: .8rem; gap: 1.5rem; }
 .summary-counts strong { color: var(--accent); margin-left: .35rem; }
@@ -244,13 +244,12 @@ label { font-size: .9rem; color: var(--muted); }
 .task-metadata dd { margin: 0; font-weight: 600; }
 .confirm-actions { justify-content: flex-end; margin-top: 1rem; }
 .task-editor { display: grid; gap: .85rem; margin-top: .85rem; }
-.task-editor label:not(.row) { display: grid; gap: .35rem; }
 .task-editor ul { margin: 0; padding-inline-start: 1rem; }
 .task-editor .clean-list { padding: 0; }
 .task-editor p { margin: 0; }
-.option-picker { margin: .5rem 0; }
-.option-picker ul { max-height: 15rem; overflow: auto; }
-.option-picker button { text-align: left; overflow-wrap: anywhere; max-width: 100%; }
+.option-search { padding: .25rem; }
+.option-search > :first-child { flex: 1; }
+.task-option-list { max-height: 12rem; overflow: auto; overflow-wrap: anywhere; }
 @media (max-width: 800px) {
   .task-list-row { grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; }
   .task-list-row > :first-child { grid-column: 1 / -1; }
