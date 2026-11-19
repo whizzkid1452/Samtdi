@@ -45,7 +45,7 @@ a { color: inherit; }
 .brand { font-weight: 800; font-size: 1.25rem; color: var(--accent); letter-spacing: -.025em; }
 .login h1 { font-size: clamp(2rem, 6vw, 4.75rem); line-height: 1.1; letter-spacing: -.065em; margin: 1rem 0; }
 .muted { color: var(--muted); }
-.login .button { margin-top: 1rem; }
+.login-action { margin-top: 1rem; }
 h1, h2, h3 { word-break: keep-all; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .55rem clamp(.75rem, 4vw, 2rem); background: var(--surface); border-bottom: 1px solid var(--border); min-height: 3.75rem; }
 .brand { text-decoration: none; }
@@ -122,7 +122,8 @@ label { font-size: .9rem; color: var(--muted); }
 .activity { font-size: .9rem; }
 .inbox { position: relative; }
 .inbox summary { cursor: pointer; }
-.inbox strong { color: var(--accent); }
+.notification-popover { max-height: 70dvh; overflow-y: auto; }
+.account-email { overflow-wrap: anywhere; }
 .inbox-body { position: absolute; right: 0; top: 1.6rem; width: min(22rem, 85vw); max-height: 70vh; overflow: auto; z-index: 2; box-shadow: 0 .5rem 2rem #0007; }
 
 .section-title { margin: 0; font-size: 1.25rem; }
@@ -262,10 +263,9 @@ label { font-size: .9rem; color: var(--muted); }
 .activity-day { margin-top: 1.25rem; }
 .activity-day h3 { margin: 0; font-size: .9rem; color: var(--muted); }
 .activity-day li { padding-inline: .75rem; overflow-wrap: anywhere; }
-.project-switcher { margin-right: .2rem; }
-.project-switcher .inbox-body { left: 0; right: auto; }
-.project-switcher .inbox-body a { display: block; overflow-wrap: anywhere; }
-.project-switcher .inbox-body [aria-current] { font-weight: 700; color: var(--accent); }
+.project-switcher-list { max-height: 55dvh; overflow-y: auto; }
+.project-switcher-list a { display: block; overflow-wrap: anywhere; }
+.project-switcher-list [aria-current] { font-weight: 700; color: var(--accent); }
 .member-list li > span { overflow-wrap: anywhere; }
 .task-card { position: relative; }
 .task-card[draggable="true"] { cursor: grab; }

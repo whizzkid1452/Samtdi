@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@mantine/core";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -75,8 +76,10 @@ function DashboardTasks({ filter }: { filter: typeof filters[number][0] }) {
 
   return <section aria-label="내 작업 목록">
     <nav aria-label="내 작업 필터" className="row wrap work-filters">
-      {filters.map(([key, label, count]) => <Link className="button" key={key} aria-current={filter === key ? "page" : undefined}
-        href={"/work?filter=" + key}>{label}{dashboard && <strong> {dashboard[count]}</strong>}</Link>)}
+      {filters.map(([key, label, count]) => (
+        <Button component={Link} variant="default" key={key} aria-current={filter === key ? "page" : undefined}
+          href={"/work?filter=" + key}>{label}{dashboard && <strong> {dashboard[count]}</strong>}</Button>
+      ))}
     </nav>
     {filter === "review" && <p className="muted">참여 중인 프로젝트에서 검토를 기다리는 작업입니다.</p>}
     {error && <div className="row wrap" role="alert"><span className="error">{error}</span>
