@@ -27,3 +27,32 @@ SAMTDI_VERIFY_MOBILE=1 pnpm verify:pilot
 ```
 
 설치된 Chrome을 쓰려면 `SAMTDI_CHROME_CHANNEL=chrome`을 설정합니다. `ops/verify-web.sh`로 별도의 PostgreSQL에서 Go 검사·빌드를 실행합니다. 운영 준비와 복원은 [운영 문서](web-operations.md)에 정리했습니다.
+
+## Mantine 적용 검증
+
+2026년 11월 19일에 격리한 PostgreSQL, Dex OIDC, Versity Gateway, FFmpeg 환경에서 최종 웹 빌드를 검증했습니다.
+
+- `pnpm lint`, `pnpm test` 4개, `pnpm build`, `pnpm typecheck`와 `ops/verify-web.sh`를 통과했습니다.
+- Chrome·Firefox 및 모바일 크기 WebKit에서 WAV 업로드, 파형 조작과 피드백, 작업 배정, MP3 수정본 검토, 알림, 권한 철회까지 확인했습니다. 200개가 넘는 피드백의 페이지 이동과 기존 시간 링크도 확인했습니다.
+- 검토자로 다시 초대한 계정으로 음원·작업·피드백 링크를 열었습니다. 피드백 작성 버튼은 표시되고 업로드·작업 생성 버튼은 표시되지 않았습니다.
+- 작업공간 선택·생성·멤버 제거·프로젝트 연결 UI는 Chrome 390px 화면에서 격리된 API 응답으로 확인했습니다. 파일럿 인증은 Dex를 사용했습니다.
+
+별도 로컬 웹 포트를 사용하는 경우 `SAMTDI_VERIFY_ORIGIN`에 해당 루프백 주소를 지정합니다.
+
+```sh
+SAMTDI_VERIFY_ORIGIN=http://127.0.0.1:3218 \
+  SAMTDI_CHROME_CHANNEL=chrome SAMTDI_VERIFY_MOBILE=1 SAMTDI_VERIFY_PAGINATION=1 \
+  pnpm verify:pilot
+```
+
+### 초기 리소스 전송량
+
+Chrome의 새 컨텍스트에서 동일한 API 응답과 1440×900 화면으로 Next.js 프로덕션 빌드를 열었습니다. 초기 HTML이 참조하는 JS·CSS의 `encodedBodySize` 합계를 비교했습니다. 세 화면에서 같은 초기 번들이 로드됐습니다.
+
+| 초기 리소스 | 적용 전 `9836f3a` | Mantine 적용 | 차이 |
+| --- | ---: | ---: | ---: |
+| JavaScript | 194,688 B | 280,746 B | +86,058 B |
+| CSS | 3,936 B | 40,708 B | +36,772 B |
+| 합계 | 198,624 B | 321,454 B | +122,830 B |
+
+프로젝트 목록·작업 보드·음원 리뷰가 같은 앱 경로의 클라이언트 코드와 전역 Mantine 스타일을 불러옵니다. 위 수치는 로컬 전송량이며 실제 사용 환경의 로드 시간은 측정하지 않았습니다.

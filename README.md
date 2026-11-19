@@ -34,6 +34,8 @@ aws --endpoint-url "$AYOTBI_S3_ENDPOINT" s3 mb "s3://$AYOTBI_S3_BUCKET"
 
 [운영과 복원](docs/web-operations.md) · [MVP 검증 결과와 재현](docs/web-pilot-verification.md)
 
+웹 공통 UI는 Mantine과 사맛디 테마를 사용합니다. [Mantine 적용 검증과 초기 전송량 비교](docs/web-pilot-verification.md#mantine-적용-검증)를 참고하세요.
+
 ## 작업 보드
 
 보드에서 카드를 끌어 컬럼 사이로 이동하거나 카드 위·아래에 놓아 순서를 저장합니다. 더 보기 메뉴의 이동 버튼으로도 같은 작업을 수행할 수 있습니다. 검토 요청·완료로 전환할 때는 결과와 미해결 피드백을 확인합니다. 다른 사용자가 먼저 수정한 카드는 덮어쓰지 않고 최신 상태를 다시 불러옵니다.
