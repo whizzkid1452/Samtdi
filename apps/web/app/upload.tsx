@@ -1,5 +1,6 @@
 "use client";
 
+import { Button, FileInput, Progress, Textarea, TextInput } from "@mantine/core";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -186,34 +187,41 @@ export function UploadProvider({ accountId, children }: { accountId: string; chi
 
   const stageLabel = stage === "prepare" ? "업로드 준비 중" : stage === "transfer" ? "전송 중" : "버전 등록 중";
 
+  const transferProgress = stage === "transfer" && <Progress className="upload-progress" aria-label="업로드 진행률" value={progress} size="sm" />;
+
   return <UploadContext.Provider value={{ openUpload, uploadRevision }}>
     {children}
     {!visible && (draft || completion || completed) && <div className="upload-status" role="status">
-      {completed ? <><Link href={completed}>업로드한 버전 열기</Link><button onClick={() => setCompleted("")}>닫기</button></> :
-        <><button onClick={() => setVisible(true)}>{stage ? stageLabel : completion ? "버전 등록 이어가기" : "업로드 열기"}</button>
-          {stage === "transfer" && <progress aria-label="업로드 진행률" value={progress} max={100} />}</>}
+      {completed ? <>
+        <Button component={Link} href={completed}>업로드한 버전 열기</Button>
+        <Button variant="default" onClick={() => setCompleted("")}>닫기</Button>
+      </> : <>
+        <Button variant="default" onClick={() => setVisible(true)}>
+          {stage ? stageLabel : completion ? "버전 등록 이어가기" : "업로드 열기"}
+        </Button>
+        {transferProgress}
+      </>}
     </div>}
     {visible && (draft || completion) && <AppModal title={completion ? "버전 등록" : draft?.isNew ? "음원 업로드" : "수정본 업로드"} close={() => setVisible(false)} suspended={!!confirmation}>
       <form className="upload-form" onSubmit={submit}>
         {draft && !completion && <>
-          <label>WAV 또는 MP3<input data-autofocus name="file" type="file" accept=".wav,.mp3" disabled={!!stage}
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              setDraft({ ...draft, file, title: draft.title || (file ? suggestedTitle(file) : "") });
-            }} /></label>
-          {draft.file && <span className="muted">{draft.file.name}</span>}
-          {draft.isNew && <label>음원 이름<input name="title" required maxLength={160} disabled={!!stage}
-            value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>}
-          <label>수정 설명 <span className="muted">(선택)</span><textarea name="description" maxLength={2000} disabled={!!stage}
-            value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
+          <FileInput label="WAV 또는 MP3" placeholder="파일 선택" data-autofocus={!stage || undefined}
+            fileInputProps={{ "aria-label": "오디오 파일 입력" }} name="file" accept=".wav,.mp3" disabled={!!stage}
+            value={draft.file ?? null} onChange={(file) => {
+              setDraft({ ...draft, file: file ?? undefined, title: draft.title || (file ? suggestedTitle(file) : "") });
+            }} />
+          {draft.isNew && <TextInput label="음원 이름" name="title" required maxLength={160} disabled={!!stage}
+            value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.currentTarget.value })} />}
+          <Textarea label="수정 설명 (선택)" name="description" maxLength={2000} disabled={!!stage}
+            value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.currentTarget.value })} />
         </>}
         {error && <p role="alert" className="error">{error}</p>}
         {stage && <p role="status">{stageLabel}</p>}
-        {stage === "transfer" && <progress aria-label="업로드 진행률" value={progress} max={100} />}
+        {transferProgress}
         <div className="row wrap">
-          <button className="primary" disabled={!!stage || (!completion && !draft?.file)}>{completion ? "등록 계속하기" : "파일 업로드"}</button>
-          {stage === "transfer" && <button type="button" onClick={() => request.current?.abort()}>전송 취소</button>}
-          {!stage && <button type="button" onClick={(event) => {
+          <Button type="submit" loading={!!stage} disabled={!completion && !draft?.file}>{completion ? "등록 계속하기" : "파일 업로드"}</Button>
+          {stage === "transfer" && <Button type="button" variant="default" onClick={() => request.current?.abort()}>전송 취소</Button>}
+          {!stage && <Button type="button" variant="default" onClick={(event) => {
             if (!draft?.file && !completion) {
               discardUpload();
               return;
@@ -226,7 +234,7 @@ export function UploadProvider({ accountId, children }: { accountId: string; chi
               trigger: event.currentTarget,
               run: discardUpload,
             });
-          }}>그만두기</button>}
+          }}>그만두기</Button>}
         </div>
       </form>
     </AppModal>}

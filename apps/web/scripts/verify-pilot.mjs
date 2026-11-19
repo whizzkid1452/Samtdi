@@ -47,7 +47,7 @@ function tab(page, name) {
 
 async function upload(page, { file, action, expected }) {
   await button(page, action).click();
-  await page.getByLabel("WAV 또는 MP3").setInputFiles(file);
+  await page.getByLabel("오디오 파일 입력").setInputFiles(file);
   const registration = page.waitForResponse((response) =>
     response.url().endsWith("/complete") && response.request().method() === "POST");
   await button(page, "파일 업로드").click();

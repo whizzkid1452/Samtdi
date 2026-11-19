@@ -1,9 +1,9 @@
 "use client";
 
-import { Menu } from "@mantine/core";
+import { Badge, Button, Checkbox, Collapse, Menu, Table, TextInput } from "@mantine/core";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { api, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { itemHref, projectHref, versionHref } from "../lib/routes";
@@ -17,11 +17,12 @@ type MediaItem = components["schemas"]["MediaItem"];
 export type MediaVersion = components["schemas"]["MediaVersion"];
 
 const states: Record<MediaVersion["state"], string> = { queued: "처리 대기", processing: "처리 중", ready: "재생 가능", failed: "처리 실패" };
+const stateColors: Record<MediaVersion["state"], string> = { queued: "gray", processing: "blue", ready: "samtdi", failed: "red" };
 const uploadedAt = new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short" });
 const pageSize = 100;
 
 function VersionStatus({ version }: { version: MediaVersion }) {
-  return <span className={"status-label status-" + version.state}>{states[version.state]}</span>;
+  return <Badge variant="light" tt="none" color={stateColors[version.state]}>{states[version.state]}</Badge>;
 }
 
 export function MediaLibrary({ project }: { project: Project }) {
@@ -49,15 +50,16 @@ export function MediaLibrary({ project }: { project: Project }) {
   } : undefined}>
     <div className="row wrap spread section-header">
       <h2 className="section-title">음원</h2>
-      {canEdit && <button className="primary" onClick={() => openUpload({ projectId: project.id })}>음원 업로드</button>}
+      {canEdit && <Button onClick={() => openUpload({ projectId: project.id })}>음원 업로드</Button>}
     </div>
     <form className="row wrap filter-bar" onSubmit={(event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       filter(search, archived);
     }}>
-      <input type="search" aria-label="음원 검색" placeholder="음원 검색" maxLength={200} value={search} onChange={(event) => setSearch(event.target.value)} />
-      <button>검색</button>
-      <label className="row"><input type="checkbox" checked={archived} onChange={(event) => filter(query.get("q") ?? "", event.target.checked)} /> 보관된 음원</label>
+      <TextInput type="search" aria-label="음원 검색" placeholder="음원 검색" maxLength={200} value={search} onChange={(event) => setSearch(event.currentTarget.value)} />
+      <Button type="submit" variant="default">검색</Button>
+      <Checkbox label="보관된 음원" checked={archived}
+        onChange={(event) => filter(query.get("q") ?? "", event.currentTarget.checked)} />
     </form>
     <MediaRows key={query.toString()} projectId={project.id} search={query.get("q") ?? ""} archived={archived} />
   </section>;
@@ -119,20 +121,36 @@ function MediaRows({ projectId, search, archived }: { projectId: string; search:
       <p className="muted">{search || archived ? "조건에 맞는 음원이 없습니다." : "WAV 또는 MP3 파일을 올려 검토를 시작하세요."}</p>
       {(search || archived) && <Link href={projectHref(projectId)}>필터 초기화</Link>}
     </div>}
-    {items && items.length > 0 && <ul className="resource-list media-list">
-      <li className="media-row muted media-columns" aria-hidden="true"><span>음원</span><span>최신 버전</span><span>상태</span><span>업로드</span></li>
-      {items.map((item) => {
-        const selected = item.latest_ready_id ?? item.latest?.id;
-        const href = selected ? versionHref({ projectId, itemId: item.id, versionId: selected }) : itemHref(projectId, item.id);
-        return <li className="media-row" key={item.id}>
-          <Link className="resource-title" href={href}>{item.title}</Link>
-          <span className="muted">{item.latest?.filename ?? "버전 없음"}</span>
-          <span>{item.latest && <VersionStatus version={item.latest} />}</span>
-          <span className="muted">{item.latest && <time dateTime={item.latest.created_at}>{uploadedAt.format(new Date(item.latest.created_at))}</time>}</span>
-        </li>;
-      })}
-    </ul>}
-    {more && <button disabled={loadingMore} onClick={() => void loadMore()}>음원 더 보기</button>}
+    {items && items.length > 0 && (
+      <Table className="media-table" role="table" aria-label="음원과 최신 버전" withTableBorder layout="fixed" highlightOnHover>
+        <Table.Thead role="rowgroup">
+          <Table.Tr role="row">
+            <Table.Th scope="col">음원</Table.Th>
+            <Table.Th scope="col">최신 버전</Table.Th>
+            <Table.Th scope="col">상태</Table.Th>
+            <Table.Th scope="col">업로드</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody role="rowgroup">
+          {items.map((item) => {
+            const selected = item.latest_ready_id ?? item.latest?.id;
+            const href = selected ? versionHref({ projectId, itemId: item.id, versionId: selected }) : itemHref(projectId, item.id);
+
+            return (
+              <Table.Tr key={item.id} role="row">
+                <Table.Td role="cell"><Link className="resource-title" href={href}>{item.title}</Link></Table.Td>
+                <Table.Td role="cell" className="muted">{item.latest?.filename ?? "버전 없음"}</Table.Td>
+                <Table.Td role="cell">{item.latest && <VersionStatus version={item.latest} />}</Table.Td>
+                <Table.Td role="cell" className="muted">
+                  {item.latest && <time dateTime={item.latest.created_at}>{uploadedAt.format(new Date(item.latest.created_at))}</time>}
+                </Table.Td>
+              </Table.Tr>
+            );
+          })}
+        </Table.Tbody>
+      </Table>
+    )}
+    {more && <Button variant="default" loading={loadingMore} onClick={() => void loadMore()}>음원 더 보기</Button>}
   </>;
 }
 
@@ -142,6 +160,8 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
   const { openUpload, uploadRevision } = useUpload();
   const router = useRouter();
   const [confirmation, setConfirmation] = useState<Confirmation>();
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyId = useId();
   const base = "/v1/projects/" + project.id;
   const itemPath = base + "/media/" + encodeURIComponent(itemId);
   const [item, setItem] = useState<MediaItem>();
@@ -233,7 +253,7 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
       <div className="row spread wrap section-header review-header">
         <h2 className="section-title">{item.title}</h2>
         <div className="row wrap">
-          {canEdit && !item.archived_at && <button onClick={() => openUpload({ projectId: project.id, itemId })}>수정본 업로드</button>}
+          {canEdit && !item.archived_at && <Button variant="default" onClick={() => openUpload({ projectId: project.id, itemId })}>수정본 업로드</Button>}
           {canEdit && <ActionMenu label="관리" accessibleName="음원 관리">{(trigger) => <>
             {version?.state === "ready" && (
               <Menu.Item component="a" href={base + "/versions/" + version.id + "/files/original"}>원본 다운로드</Menu.Item>
@@ -250,7 +270,7 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
               });
             }}>{item.archived_at ? "음원 복원" : "음원 보관"}</Menu.Item>
           </>}</ActionMenu>}
-          {!canEdit && version?.state === "ready" && <a className="button" href={base + "/versions/" + version.id + "/files/original"}>원본 다운로드</a>}
+          {!canEdit && version?.state === "ready" && <Button component="a" variant="default" href={base + "/versions/" + version.id + "/files/original"}>원본 다운로드</Button>}
         </div>
       </div>
       {confirmation && <ConfirmAction confirmation={confirmation} actionError={error} close={() => setConfirmation(undefined)} />}
@@ -260,7 +280,7 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
           <strong>{version.filename}</strong>
           <VersionStatus version={version} />
           <time className="muted" dateTime={version.created_at}>{uploadedAt.format(new Date(version.created_at))}</time>
-          {item.latest_ready_id === version.id && <span className="status-label">최신 재생 가능 버전</span>}
+          {item.latest_ready_id === version.id && <Badge variant="outline" tt="none">최신 재생 가능 버전</Badge>}
           {version.state === "ready" && item.latest_ready_id && item.latest_ready_id !== version.id &&
             <Link href={versionHref({ projectId: project.id, itemId, versionId: item.latest_ready_id })}>최신 재생 가능 버전 열기</Link>}
         </div>
@@ -271,22 +291,25 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
           <p className="review-description"><Link href={versionHref({ projectId: project.id, itemId, versionId: item.latest.id })}>
             최신 버전 {states[item.latest.state]} 보기
           </Link></p>}
-        {versions.length > 0 && <details className="version-history">
-          <summary>버전 기록</summary>
-          <ul className="clean-list">
-            {versions.map((entry) => <li key={entry.id}>
-              <Link href={versionHref({ projectId: project.id, itemId, versionId: entry.id })}
-                aria-current={entry.id === version.id ? "page" : undefined}>
-                <strong>{entry.filename}</strong>
-                <span className="muted">{uploadedAt.format(new Date(entry.created_at))}</span>
-                <VersionStatus version={entry} />
-                {entry.id === version.id && <span className="status-label">현재 버전</span>}
-              </Link>
-              {entry.description && <p className="review-description muted">{entry.description}</p>}
-            </li>)}
-          </ul>
-          {more && <button disabled={busy} onClick={() => void loadMore()}>이전 버전 더 보기</button>}
-        </details>}
+        {versions.length > 0 && <div className="version-history">
+          <Button variant="default" aria-expanded={historyOpen} aria-controls={historyId}
+            onClick={() => setHistoryOpen((open) => !open)}>버전 기록</Button>
+          <Collapse id={historyId} expanded={historyOpen}>
+            <ul className="clean-list">
+              {versions.map((entry) => <li key={entry.id}>
+                <Link href={versionHref({ projectId: project.id, itemId, versionId: entry.id })}
+                  aria-current={entry.id === version.id ? "page" : undefined}>
+                  <strong>{entry.filename}</strong>
+                  <span className="muted">{uploadedAt.format(new Date(entry.created_at))}</span>
+                  <VersionStatus version={entry} />
+                  {entry.id === version.id && <Badge variant="outline" tt="none">현재 버전</Badge>}
+                </Link>
+                {entry.description && <p className="review-description muted">{entry.description}</p>}
+              </li>)}
+            </ul>
+            {more && <Button variant="default" loading={busy} onClick={() => void loadMore()}>이전 버전 더 보기</Button>}
+          </Collapse>
+        </div>}
       </div>}
       {version?.state === "ready" && <VersionReview key={version.id} base={base} version={version} initialAt={initialAt}
         initialNote={initialNote} projectId={project.id} accountId={accountId} canEdit={canEdit} writable={!project.archived_at && !item.archived_at} />}
