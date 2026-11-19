@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Popover, TextInput } from "@mantine/core";
+import { Button, Checkbox, Popover, Select, TextInput } from "@mantine/core";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -25,6 +25,7 @@ export function ProjectIndex() {
   const selectedWorkspace = query.get("workspace") ?? "";
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const availableTeams = teams.filter(({ active, can_create }) => active && can_create);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -53,25 +54,24 @@ export function ProjectIndex() {
   return <main className="main-content">
     <div className="row spread wrap section-header">
       <h1>프로젝트</h1>
-      {!creating && <button className="primary" disabled={teamsEnabled && !teams.some(({ active, can_create }) => active && can_create)} onClick={() => setCreating(true)}>새 프로젝트</button>}
+      {!creating && <Button disabled={teamsEnabled && !availableTeams.length} onClick={() => setCreating(true)}>새 프로젝트</Button>}
     </div>
     <WorkspacePicker selected={selectedWorkspace} onSelect={(id) => router.replace("/projects" + (id ? "?" + new URLSearchParams({ workspace: id }) : ""))} />
     {creating && <form className="panel row wrap" onSubmit={createProject}>
-      <label htmlFor="project-title">프로젝트 이름</label>
-      <input id="project-title" name="title" maxLength={160} required />
-      {teamsEnabled && <label>작업공간<select name="workspace_id" required defaultValue={teams.some(({ id }) => id === selectedWorkspace) ? selectedWorkspace : undefined}>
-        {teams.filter(({ active, can_create }) => active && can_create).map(({ id, name }) => <option key={id} value={id}>{name}</option>)}
-      </select></label>}
-      <button className="primary" disabled={saving}>프로젝트 만들기</button>
-      <button type="button" disabled={saving} onClick={() => setCreating(false)}>취소</button>
+      <TextInput label="프로젝트 이름" name="title" maxLength={160} required />
+      {teamsEnabled && <Select label="작업공간" name="workspace_id" searchable required allowDeselect={false}
+        defaultValue={availableTeams.find(({ id }) => id === selectedWorkspace)?.id ?? availableTeams[0]?.id}
+        data={availableTeams.map(({ id, name }) => ({ value: id, label: name }))} />}
+      <Button type="submit" loading={saving}>프로젝트 만들기</Button>
+      <Button type="button" variant="default" disabled={saving} onClick={() => setCreating(false)}>취소</Button>
     </form>}
     {error && <p role="alert" className="error">{error}</p>}
     {projects.length > 0 && <div className="row wrap filter-bar">
-      <input type="search" aria-label="프로젝트 검색" placeholder="프로젝트 검색" value={search}
+      <TextInput type="search" aria-label="프로젝트 검색" placeholder="프로젝트 검색" value={search}
         onChange={(event) => setSearch(event.target.value)} />
-      {projects.some((project) => project.archived_at) && <label className="row">
-        <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} /> 보관된 프로젝트
-      </label>}
+      {projects.some((project) => project.archived_at) && (
+        <Checkbox label="보관된 프로젝트" checked={showArchived} onChange={(event) => setShowArchived(event.currentTarget.checked)} />
+      )}
     </div>}
     <ul className="resource-list">
       {visible.map((project) => <li className="row spread wrap" key={project.id}>
@@ -191,8 +191,8 @@ function ProjectSettings({ project }: { project: Project }) {
     <section className="panel" aria-label="다운로드">
       <h2>다운로드</h2>
       <div className="row wrap">
-        <a className="button" href={"/v1/projects/" + project.id + "/export/json"}>JSON 다운로드</a>
-        <a className="button" href={"/v1/projects/" + project.id + "/export/csv"}>CSV 다운로드</a>
+        <Button component="a" variant="default" href={"/v1/projects/" + project.id + "/export/json"}>JSON 다운로드</Button>
+        <Button component="a" variant="default" href={"/v1/projects/" + project.id + "/export/csv"}>CSV 다운로드</Button>
       </div>
     </section>
     {project.role === "owner" && <section className="panel">

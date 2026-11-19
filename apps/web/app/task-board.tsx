@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Menu } from "@mantine/core";
+import { Button, Checkbox, Menu, NativeSelect, Select, TextInput } from "@mantine/core";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -182,7 +182,7 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
   return <section id="task-board" aria-label="작업">
     <div className="row spread wrap section-header">
       <h2 className="section-title">작업</h2>
-      {canWrite && <button className="primary" onClick={(event) => setSelection({ returnFocusTo: event.currentTarget })}>새 작업</button>}
+      {canWrite && <Button onClick={(event) => setSelection({ returnFocusTo: event.currentTarget })}>새 작업</Button>}
     </div>
     <div className="row wrap">
       <div className="segmented" aria-label="작업 보기">
@@ -193,23 +193,22 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
         event.preventDefault();
         router.push(href("q", input.trim()));
       }}>
-        <input type="search" aria-label="작업 검색" placeholder="작업 검색" maxLength={200} value={input} onChange={(event) => setInput(event.target.value)} />
-        <button>검색</button>
+        <TextInput type="search" aria-label="작업 검색" placeholder="작업 검색" maxLength={200} value={input} onChange={(event) => setInput(event.currentTarget.value)} />
+        <Button type="submit" variant="default">검색</Button>
       </form>
     </div>
     <div className="row wrap filter-bar">
-      <label>상태 <select value={filters.get("status") ?? ""} onChange={(event) => router.push(href("status", event.target.value))}>
-        <option value="">전체</option>{statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-      </select></label>
-      <label>담당자 <select value={filters.get("assignee") ?? ""} onChange={(event) => router.push(href("assignee", event.target.value))}>
-        <option value="">전체</option><option value="unassigned">미할당</option>
-        {members.map(({ account_id, email }) => <option key={account_id} value={account_id}>{email}</option>)}
-      </select></label>
-      <label>마감 <select value={filters.get("due") ?? ""} onChange={(event) => router.push(href("due", event.target.value))}>
-        <option value="">전체</option><option value="soon">7일 내</option><option value="late">지연</option><option value="none">마감 없음</option>
-      </select></label>
-      <label className="row"><input type="checkbox" checked={filters.get("archived") === "true"}
-        onChange={(event) => router.push(href("archived", event.target.checked ? "true" : ""))} />보관된 작업</label>
+      <NativeSelect label="상태" value={filters.get("status") ?? ""}
+        data={[{ value: "", label: "전체" }, ...statuses.map(([value, label]) => ({ value, label }))]}
+        onChange={(event) => router.push(href("status", event.currentTarget.value))} />
+      <Select label="담당자" searchable clearable placeholder="전체" value={filters.get("assignee")}
+        data={[{ value: "unassigned", label: "미할당" }, ...members.map(({ account_id, email }) => ({ value: account_id, label: email }))]}
+        onChange={(value) => router.push(href("assignee", value ?? ""))} />
+      <NativeSelect label="마감" value={filters.get("due") ?? ""}
+        data={[{ value: "", label: "전체" }, { value: "soon", label: "7일 내" }, { value: "late", label: "지연" }, { value: "none", label: "마감 없음" }]}
+        onChange={(event) => router.push(href("due", event.currentTarget.value))} />
+      <Checkbox label="보관된 작업" checked={filters.get("archived") === "true"}
+        onChange={(event) => router.push(href("archived", event.currentTarget.checked ? "true" : ""))} />
       {filters.size > (board ? 1 : 0) && <Link href={pathname + (board ? "?view=board" : "")}>필터 초기화</Link>}
     </div>
     {(error || memberError) && <p role="alert" className="error">{error || memberError}</p>}

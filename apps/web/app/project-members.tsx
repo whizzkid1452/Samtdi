@@ -1,9 +1,10 @@
 "use client";
 
+import { Button, NativeSelect, TextInput } from "@mantine/core";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, describeError } from "../lib/api";
 import { projectHref } from "../lib/routes";
-import { Dialog } from "./dialog";
+import { AppModal } from "./app-modal";
 import { ConfirmAction, type Confirmation } from "./confirm-action";
 import { useWorkspace, type Member, type Project } from "./workspace";
 
@@ -78,7 +79,7 @@ export function ProjectMembers({ project }: { project: Project }) {
   return <section className="panel" aria-label="팀원">
     <div className="row spread wrap">
       <h2 ref={heading} tabIndex={-1}>팀원</h2>
-      {canManage && <button className="primary" onClick={() => { setError(""); setInviting(true); }}>팀원 초대</button>}
+      {canManage && <Button onClick={() => { setError(""); setInviting(true); }}>팀원 초대</Button>}
     </div>
     {error && !inviting && <div className="row wrap" role="alert"><span className="error">{error}</span>
       <button onClick={() => { setError(""); setAttempt((value) => value + 1); }}>팀원 다시 불러오기</button></div>}
@@ -87,10 +88,9 @@ export function ProjectMembers({ project }: { project: Project }) {
       {members?.map((member) => <li className="row spread wrap" key={member.account_id}>
         <span>{member.email}</span>
         {canManage ? <div className="row wrap">
-          <select aria-label={member.email + " 역할"} value={member.role} disabled={busy}
-            onChange={(event) => void editMember(member, event.target.value as Project["role"])}>
-            {Object.entries(roles).map(([role, label]) => <option key={role} value={role}>{label}</option>)}
-          </select>
+          <NativeSelect aria-label={member.email + " 역할"} value={member.role} disabled={busy}
+            data={Object.entries(roles).map(([value, label]) => ({ value, label }))}
+            onChange={(event) => void editMember(member, event.currentTarget.value as Project["role"])} />
           <button disabled={busy} aria-label={member.email + " 제거"} onClick={(event) => setConfirmation({
             title: "팀원 제거",
             description: member.email + "의 프로젝트 접근 권한을 제거할까요?",
@@ -104,7 +104,7 @@ export function ProjectMembers({ project }: { project: Project }) {
     </ul>
     {invite && canManage && <div className="notice">
       <div className="row wrap">
-        <input aria-label="초대 링크" readOnly value={invite.accept_url} />
+        <TextInput aria-label="초대 링크" readOnly value={invite.accept_url} />
         <button disabled={busy} onClick={() => void change(async () => {
           await navigator.clipboard.writeText(invite.accept_url);
           setNotice("초대 링크를 복사했습니다.");
@@ -126,15 +126,14 @@ export function ProjectMembers({ project }: { project: Project }) {
     </div>}
     {confirmation && <ConfirmAction confirmation={confirmation} actionError={error} close={() => setConfirmation(undefined)} />}
     {notice && <p role="status">{notice}</p>}
-    {inviting && canManage && <Dialog title="팀원 초대" close={() => { if (!busy) setInviting(false); }}>
+    {inviting && canManage && <AppModal title="팀원 초대" close={() => setInviting(false)} busy={busy}>
       <form className="task-editor" onSubmit={inviteMember}>
-        <label>초대할 이메일<input type="email" name="email" required /></label>
-        <label>역할<select name="role" aria-label="초대 역할">
-          <option value="reviewer">검토자</option><option value="editor">편집자</option><option value="owner">소유자</option>
-        </select></label>
+        <TextInput label="초대할 이메일" type="email" name="email" required data-autofocus />
+        <NativeSelect label="역할" name="role" aria-label="초대 역할" defaultValue="reviewer"
+          data={Object.entries(roles).map(([value, label]) => ({ value, label }))} />
         {error && <p role="alert" className="error">{error}</p>}
-        <button className="primary" disabled={busy}>초대 링크 만들기</button>
+        <Button type="submit" loading={busy}>초대 링크 만들기</Button>
       </form>
-    </Dialog>}
+    </AppModal>}
   </section>;
 }
