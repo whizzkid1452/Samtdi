@@ -1,3 +1,6 @@
+/* Keep legacy element rules below component styles in the cascade. */
+@layer native, mantine;
+
 :root {
   color-scheme: light;
   --bg: #ffffff;
@@ -13,18 +16,29 @@
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; font-size: 15px; line-height: 1.5; }
 a { color: inherit; }
-button, input, select, textarea { font: inherit; }
-button, .button {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  padding: .55rem .85rem;
-  cursor: pointer;
+@layer native {
+  button, input, select, textarea { font: inherit; }
+  button, .button {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    padding: .55rem .85rem;
+    cursor: pointer;
+  }
+  button:disabled { cursor: wait; opacity: .55; }
+  input, select, textarea {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: .55rem .6rem;
+    min-width: 0;
+    max-width: 100%;
+  }
 }
 .button { display: inline-block; text-decoration: none; }
 .primary { background: var(--accent); border-color: var(--accent); color: #ffffff; font-weight: 650; }
-button:disabled { cursor: wait; opacity: .55; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .login { min-height: 100svh; display: grid; align-items: center; padding: clamp(1.5rem, 8vw, 8rem); }
 .login-content { max-width: 41rem; }
@@ -63,7 +77,6 @@ h1, h2, h3 { word-break: keep-all; }
 .panel summary { cursor: pointer; font-weight: 700; }
 .clean-list { list-style: none; padding: 0; margin: .75rem 0; }
 .clean-list > li { padding: .55rem 0; border-bottom: 1px solid var(--border); }
-input, select, textarea { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 7px; padding: .55rem .6rem; min-width: 0; max-width: 100%; }
 label { font-size: .9rem; color: var(--muted); }
 .error { color: #a40e26; }
 .empty { padding: 2rem 0; }
@@ -221,8 +234,7 @@ label { font-size: .9rem; color: var(--muted); }
 .task-card { display: grid; gap: .35rem; background: var(--bg); }
 .task-card .resource-title { margin: 0; }
 .lane { background: var(--surface); }
-.task-menu summary { color: var(--muted); cursor: pointer; }
-.task-menu > div { margin-top: .45rem; }
+.task-card > button[aria-haspopup="menu"] { justify-self: start; }
 .task-detail-title { margin-top: 1rem; }
 .task-detail-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(12rem, 1fr); gap: 1rem; }
 .task-detail-grid a, .task-metadata dd { overflow-wrap: anywhere; }

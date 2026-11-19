@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
-import { Dialog } from "./dialog";
+import { AppModal } from "./app-modal";
 import { timecode } from "../lib/timecode";
 import { useWorkspace, type Member } from "./workspace";
 
@@ -45,8 +45,9 @@ function storeTaskDraft(key: string, draft?: TaskDraft) {
   }
 }
 
-export function TaskEditor({ base, members, task, seedNote, change, close, saved }: {
+export function TaskEditor({ base, members, task, seedNote, change, close, saved, returnFocusTo }: {
   base: string; members: Member[]; task?: Task; seedNote?: TaskNote; change?: TaskChange; close: () => void; saved: (id: string) => void;
+  returnFocusTo?: HTMLElement | null;
 }) {
   const { session } = useWorkspace();
   const key = "samtdi-task-draft:" + session.account_id + ":" + base + ":" +
@@ -127,7 +128,7 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
     }
   }
 
-  return <Dialog title={heading} close={() => {
+  return <AppModal title={heading} busy={busy} returnFocusTo={returnFocusTo} close={() => {
     if (busy || (dirty && !window.confirm("저장하지 않은 변경을 버릴까요?"))) return;
     storeTaskDraft(key);
     close();
@@ -135,7 +136,7 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
     <form className="task-editor" onSubmit={submit} onChange={() => setDirty(true)}>
       {restored && <p className="muted" role="status">이전에 작성하던 내용을 불러왔습니다.</p>}
       {!change && <>
-        <label>작업 제목<input autoComplete="off" value={title} required maxLength={160} onChange={(event) => setTitle(event.target.value)} /></label>
+        <label>작업 제목<input data-autofocus autoComplete="off" value={title} required maxLength={160} onChange={(event) => setTitle(event.target.value)} /></label>
         <label>작업 설명<textarea value={description} maxLength={4000} onChange={(event) => setDescription(event.target.value)} /></label>
         <div className="form-grid">
           <label>담당자<select aria-label="담당자" value={assignee} onChange={(event) => setAssignee(event.target.value)}>
@@ -150,7 +151,7 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
       </>}
       {change && <p>{task?.title}</p>}
       {status === "review" && <>
-        <label>검토 설명<textarea value={review} maxLength={2000} onChange={(event) => setReview(event.target.value)} /></label>
+        <label>검토 설명<textarea data-autofocus={!!change || undefined} value={review} maxLength={2000} onChange={(event) => setReview(event.target.value)} /></label>
         <ResultPicker base={base} resultId={resultId} select={(id) => { setDirty(true); setResultId(id); }} />
         <p className="muted">결과 버전 또는 검토 설명을 입력해 주세요.</p>
       </>}
@@ -182,7 +183,7 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
         {task ? "저장" : "작업 만들기"}
       </button>
     </form>
-  </Dialog>;
+  </AppModal>;
 }
 
 function ResultPicker({ base, resultId, select }: { base: string; resultId: string; select: (id: string) => void }) {

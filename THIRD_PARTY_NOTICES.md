@@ -20,3 +20,10 @@
 - Copyright (c) 2012-2023, katspaugh and contributors
 - [원본](https://github.com/katspaugh/wavesurfer.js)
 - BSD 3-Clause License. [라이선스 전문](apps/web/public/licenses/wavesurfer-BSD-3-Clause.txt)
+
+## Mantine
+
+- `@mantine/core` 9.8.1 및 `@mantine/hooks` 9.8.1
+- Copyright (c) 2021 Vitaly Rtishchev
+- [원본](https://github.com/mantinedev/mantine)
+- MIT License. [라이선스 전문](apps/web/public/licenses/Mantine-MIT.txt)

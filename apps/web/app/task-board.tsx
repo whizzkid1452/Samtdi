@@ -1,5 +1,6 @@
 "use client";
 
+import { Menu } from "@mantine/core";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -9,10 +10,12 @@ import { projectHref, taskHref, versionLink } from "../lib/routes";
 import { TaskEditor, statuses, statusLabel, type Status, type Task, type TaskChange, type TaskNote } from "./task-editor";
 import { timecode } from "../lib/timecode";
 import type { Member, Project } from "./workspace";
+import { ActionMenu } from "./action-menu";
+import { TaskStatusBadge } from "./task-status-badge";
 import { DraggableTask, TaskLane, type TaskMove } from "./task-drag";
 
 type Counts = Record<Status, number>;
-type TaskSelection = { task?: Task; change?: TaskChange };
+type TaskSelection = { task?: Task; change?: TaskChange; returnFocusTo?: HTMLButtonElement | null };
 const pageSize = 100;
 
 export function todayInSeoul() {
@@ -73,10 +76,10 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
   if (!apiFilters.has("archived")) apiFilters.set("archived", "false");
   const queryString = apiFilters.toString();
 
-  const moveTask = useCallback(({ task, status, position }: TaskMove) => {
+  const moveTask = useCallback(({ task, status, position }: TaskMove, returnFocusTo?: HTMLButtonElement | null) => {
     if (!canWrite || task.archived || moveLockRef.current) return;
     if (task.status !== status && (status === "review" || status === "done")) {
-      setSelection({ task, change: { status, position } });
+      setSelection({ task, change: { status, position }, returnFocusTo });
       return;
     }
 
@@ -151,19 +154,25 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
 
     const content = <>
       <Link href={link} className="resource-title">{task.title}</Link>
-      {!board && <span className="status-label">{statusLabel(task.status)}</span>}
+      {!board && <TaskStatusBadge status={task.status} />}
       <span className="muted">{assignee?.email ?? "미할당"}</span>
       <span className={late ? "error" : "muted"}>{task.due_on || "마감 없음"}{late ? " · 지연" : ""}</span>
       <span className="muted">피드백 {task.notes.length}</span>
-      {canWrite && <details className="task-menu">
-        <summary aria-label={task.title + " 관리"}>더 보기</summary>
-        <div className="row wrap">
-          {previous && <button type="button" disabled={moving} onClick={() => moveTask({ task, status: task.status, position: previous.position })}>위로 이동</button>}
-          {statuses.filter(([value]) => value !== task.status).map(([value, label]) => <button type="button" key={value}
-            disabled={moving} onClick={() => moveTask({ task, status: value })}>{label}으로 이동</button>)}
-          <button type="button" onClick={() => setSelection({ task, change: { archived: !task.archived } })}>{task.archived ? "복원" : "보관"}</button>
-        </div>
-      </details>}
+      {canWrite && <ActionMenu label="더 보기" accessibleName={task.title + " 관리"}>{(trigger) => <>
+        {!task.archived && previous && (
+          <Menu.Item disabled={moving} onClick={() => moveTask({ task, status: task.status, position: previous.position })}>
+            위로 이동
+          </Menu.Item>
+        )}
+        {!task.archived && statuses.filter(([value]) => value !== task.status).map(([value, label]) => (
+          <Menu.Item key={value} disabled={moving} onClick={() => moveTask({ task, status: value }, trigger.current)}>
+            {label}으로 이동
+          </Menu.Item>
+        ))}
+        <Menu.Item onClick={() => setSelection({ task, change: { archived: !task.archived }, returnFocusTo: trigger.current })}>
+          {task.archived ? "복원" : "보관"}
+        </Menu.Item>
+      </>}</ActionMenu>}
     </>;
 
     return board ? <DraggableTask projectId={project.id} task={task} enabled={canWrite && !moving && !task.archived} onMove={moveTask}>{content}</DraggableTask>
@@ -173,7 +182,7 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
   return <section id="task-board" aria-label="작업">
     <div className="row spread wrap section-header">
       <h2 className="section-title">작업</h2>
-      {canWrite && <button className="primary" onClick={() => setSelection({})}>새 작업</button>}
+      {canWrite && <button className="primary" onClick={(event) => setSelection({ returnFocusTo: event.currentTarget })}>새 작업</button>}
     </div>
     <div className="row wrap">
       <div className="segmented" aria-label="작업 보기">
@@ -210,14 +219,14 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
         const lane = new URLSearchParams(queryString);
         lane.set("status", value);
         return <TaskLane key={value} projectId={project.id} status={value} label={label} enabled={canWrite && !moving} onMove={moveTask}>
-          <h3>{label} {counts && <span className="muted">{counts[value]}</span>}</h3>
+          <h3><TaskStatusBadge status={value} /> {counts && <span className="muted">{counts[value]}</span>}</h3>
           <TaskRows key={lane.toString() + ":" + revision} path={base + "/tasks?" + lane} render={taskCard} />
         </TaskLane>;
       })}
     </div> : <div className="task-list">
       <TaskRows key={queryString + ":" + revision} path={base + "/tasks?" + queryString} render={taskCard} />
     </div>}
-    {selection && canWrite && <TaskEditor base={base} members={members} task={selection.task} seedNote={seedNote} change={selection.change}
+    {selection && canWrite && <TaskEditor base={base} members={members} task={selection.task} seedNote={seedNote} change={selection.change} returnFocusTo={selection.returnFocusTo}
       close={close} saved={(id) => {
         close();
         setRevision((value) => value + 1);
@@ -278,7 +287,7 @@ export function TaskDetail({ project, taskId }: { project: Project; taskId: stri
   const { members, error: memberError } = useMembers(base);
   const params = taskFilters(new URLSearchParams(useSearchParams()));
   const [task, setTask] = useState<Task>();
-  const [change, setChange] = useState<TaskChange | null>();
+  const [selection, setSelection] = useState<TaskSelection>();
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   const canWrite = project.role !== "reviewer" && !project.archived_at;
@@ -306,11 +315,13 @@ export function TaskDetail({ project, taskId }: { project: Project; taskId: stri
       <div className="row spread wrap section-header task-detail-title">
         <h2 className="section-title">{task.title}</h2>
         {canWrite && <div className="row wrap">
-          {!task.archived && nextStatus && <button className="primary" onClick={() => setChange({ status: nextStatus })}>{nextLabel}</button>}
-          {!task.archived && <button onClick={() => setChange(null)}>작업 편집</button>}
-          <details className="inbox"><summary>관리</summary><div className="inbox-body panel">
-            <button onClick={() => setChange({ archived: !task.archived })}>{task.archived ? "작업 복원" : "작업 보관"}</button>
-          </div></details>
+          {!task.archived && nextStatus && <button className="primary" onClick={(event) => setSelection({ change: { status: nextStatus }, returnFocusTo: event.currentTarget })}>{nextLabel}</button>}
+          {!task.archived && <button onClick={(event) => setSelection({ returnFocusTo: event.currentTarget })}>작업 편집</button>}
+          <ActionMenu label="관리">{(trigger) => (
+            <Menu.Item onClick={() => setSelection({ change: { archived: !task.archived }, returnFocusTo: trigger.current })}>
+              {task.archived ? "작업 복원" : "작업 보관"}
+            </Menu.Item>
+          )}</ActionMenu>
         </div>}
       </div>
       <div className="task-detail-grid">
@@ -331,13 +342,16 @@ export function TaskDetail({ project, taskId }: { project: Project; taskId: stri
           </section>}
         </div>
         <dl className="task-metadata">
-          <dt>상태</dt><dd>{statusLabel(task.status)}{task.archived ? " · 보관됨" : ""}</dd>
+          <dt>상태</dt><dd><TaskStatusBadge status={task.status} />{task.archived ? " · 보관됨" : ""}</dd>
           <dt>담당자</dt><dd>{assignee?.email ?? "미할당"}</dd>
           <dt>마감일</dt><dd>{task.due_on || "마감 없음"}</dd>
         </dl>
       </div>
-      {change !== undefined && canWrite && <TaskEditor base={base} members={members} task={task} change={change ?? undefined}
-        close={() => setChange(undefined)} saved={() => { setChange(undefined); setRevision((value) => value + 1); }} />}
+      {selection && canWrite && <TaskEditor base={base} members={members} task={task} change={selection.change}
+        returnFocusTo={selection.returnFocusTo} close={() => setSelection(undefined)} saved={() => {
+          setSelection(undefined);
+          setRevision((value) => value + 1);
+        }} />}
     </>}
   </section>;
 }
