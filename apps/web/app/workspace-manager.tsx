@@ -7,6 +7,7 @@ import type { components } from "../lib/api-types";
 import { AppModal } from "./app-modal";
 import { ConfirmAction, type Confirmation } from "./confirm-action";
 import { useWorkspace, type Project, type TeamWorkspace } from "./workspace";
+import { InlineError } from "./request-states";
 
 type TeamMember = components["schemas"]["WorkspaceMember"];
 
@@ -72,7 +73,7 @@ function CreateWorkspace({ initial, close, saved }: {
     <form onSubmit={submit}>
       <TextInput label="작업공간 이름" value={name} required data-autofocus maxLength={100} disabled={attempted}
         onChange={(event) => setName(event.currentTarget.value)} placeholder="내 작업실, 밴드, 스튜디오" />
-      {error && <p role="alert" className="error">{error}</p>}
+      {error && <InlineError message={error} />}
       <Button mt="sm" type="submit" loading={busy}>{busy ? "작업공간 준비 중" : attempted ? "같은 작업공간으로 이어가기" : "작업공간 만들기"}</Button>
     </form>
   </AppModal>;
@@ -129,7 +130,7 @@ function WorkspaceMembers({ team, close }: { team: TeamWorkspace; close: () => v
         <TextInput label="계정 이메일" ref={emailInput} data-autofocus type="email" required value={email} onChange={(event) => setEmail(event.currentTarget.value)} />
         <Button type="submit" loading={busy}>팀원 추가</Button>
       </form>
-      {error && <p role="alert" className="error">{error}</p>}
+      {error && <InlineError message={error} />}
       <ul className="clean-list member-list">{members.map((member) => {
         const owner = member.organizationRoles.some(({ name }) => name === "samtdi-owner");
         return <li key={member.id} className="row spread wrap">
@@ -180,6 +181,6 @@ export function ProjectWorkspaceLink({ project }: { project: Project }) {
         onChange={(value) => setDestination(value ?? "")} />
       <Button type="submit" loading={busy} disabled={!destination || destination === project.workspace_id}>작업공간에 연결</Button>
     </form>
-    {error && <p role="alert" className="error">{error}</p>}
+    {error && <InlineError message={error} />}
   </section>;
 }

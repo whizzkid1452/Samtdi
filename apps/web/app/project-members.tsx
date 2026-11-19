@@ -1,15 +1,20 @@
 "use client";
 
-import { Button, NativeSelect, TextInput } from "@mantine/core";
+import { Badge, Button, NativeSelect, TextInput } from "@mantine/core";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, describeError } from "../lib/api";
 import { projectHref } from "../lib/routes";
 import { AppModal } from "./app-modal";
 import { ConfirmAction, type Confirmation } from "./confirm-action";
 import { useWorkspace, type Member, type Project } from "./workspace";
+import { EmptyState, InlineError, LoadingRows } from "./request-states";
 
 const roles = { reviewer: "검토자", editor: "편집자", owner: "소유자" };
 const formatExpiry = new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Seoul" });
+
+export function ProjectRoleBadge({ role }: { role: Project["role"] }) {
+  return <Badge variant="light" color={role === "owner" ? "samtdi" : role === "editor" ? "blue" : "gray"} tt="none">{roles[role]}</Badge>;
+}
 
 export function ProjectMembers({ project }: { project: Project }) {
   const { refreshProjects } = useWorkspace();
@@ -81,9 +86,10 @@ export function ProjectMembers({ project }: { project: Project }) {
       <h2 ref={heading} tabIndex={-1}>팀원</h2>
       {canManage && <Button onClick={() => { setError(""); setInviting(true); }}>팀원 초대</Button>}
     </div>
-    {error && !inviting && <div className="row wrap" role="alert"><span className="error">{error}</span>
-      <button onClick={() => { setError(""); setAttempt((value) => value + 1); }}>팀원 다시 불러오기</button></div>}
-    {!members && !error && <p role="status">팀원을 불러오는 중</p>}
+    {error && !inviting && <InlineError message={error} retryLabel="팀원 다시 불러오기"
+      retry={() => { setError(""); setAttempt((value) => value + 1); }} />}
+    {!members && !error && <LoadingRows label="팀원을 불러오는 중" />}
+    {members?.length === 0 && <EmptyState message="표시할 팀원이 없습니다." />}
     <ul className="clean-list member-list">
       {members?.map((member) => <li className="row spread wrap" key={member.account_id}>
         <span>{member.email}</span>
@@ -99,7 +105,7 @@ export function ProjectMembers({ project }: { project: Project }) {
             focusAfterSuccess: heading.current,
             run: () => editMember(member),
           })}>제거</button>
-        </div> : <span className="status-label">{roles[member.role]}</span>}
+        </div> : <ProjectRoleBadge role={member.role} />}
       </li>)}
     </ul>
     {invite && canManage && <div className="notice">
@@ -131,7 +137,7 @@ export function ProjectMembers({ project }: { project: Project }) {
         <TextInput label="초대할 이메일" type="email" name="email" required data-autofocus />
         <NativeSelect label="역할" name="role" aria-label="초대 역할" defaultValue="reviewer"
           data={Object.entries(roles).map(([value, label]) => ({ value, label }))} />
-        {error && <p role="alert" className="error">{error}</p>}
+        {error && <InlineError message={error} />}
         <Button type="submit" loading={busy}>초대 링크 만들기</Button>
       </form>
     </AppModal>}

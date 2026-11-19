@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@mantine/core";
+import { Button, NativeSelect } from "@mantine/core";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -8,6 +8,8 @@ import { api, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { itemHref, projectHref, taskHref, versionLink } from "../lib/routes";
 import { statusLabel } from "./task-editor";
+import { TaskStatusBadge } from "./task-status-badge";
+import { EmptyState, InlineError, LoadingRows } from "./request-states";
 
 type Dashboard = components["schemas"]["Dashboard"];
 type Activity = components["schemas"]["Activity"];
@@ -82,19 +84,18 @@ function DashboardTasks({ filter }: { filter: typeof filters[number][0] }) {
       ))}
     </nav>
     {filter === "review" && <p className="muted">참여 중인 프로젝트에서 검토를 기다리는 작업입니다.</p>}
-    {error && <div className="row wrap" role="alert"><span className="error">{error}</span>
-      <button onClick={() => setAttempt((value) => value + 1)}>다시 시도</button></div>}
-    {!dashboard && !error && <p role="status">작업을 불러오는 중</p>}
-    {dashboard?.tasks.length === 0 && <p className="empty muted">이 조건에 해당하는 작업이 없습니다.</p>}
+    {error && <InlineError message={error} retry={() => { setError(""); setAttempt((value) => value + 1); }} />}
+    {!dashboard && !error && <LoadingRows label="작업을 불러오는 중" />}
+    {dashboard?.tasks.length === 0 && <EmptyState message="이 조건에 해당하는 작업이 없습니다." />}
     <ul className="resource-list">
       {dashboard?.tasks.map((task) => <li className="row spread wrap" key={task.id}>
         <div><Link className="resource-title" href={taskHref(task.project_id, task.id)}>{task.title}</Link>
           <div className="muted">{task.project_title}</div></div>
-        <div className="row wrap"><span className="status-label">{statusLabel(task.status)}</span>
+        <div className="row wrap"><TaskStatusBadge status={task.status} />
           {task.due_on && <time dateTime={task.due_on}>{task.due_on}</time>}</div>
       </li>)}
     </ul>
-    {dashboard?.next_cursor && <button disabled={loadingMore} onClick={() => void loadMore()}>작업 더 보기</button>}
+    {dashboard?.next_cursor && <Button variant="default" loading={loadingMore} onClick={() => void loadMore()}>작업 더 보기</Button>}
   </section>;
 }
 
@@ -118,12 +119,14 @@ export function ProjectActivity({ projectId }: { projectId: string }) {
   return <section aria-label="프로젝트 활동">
     <div className="row spread wrap section-header">
       <h2 className="section-title">프로젝트 활동</h2>
-      <label>활동 종류 <select aria-label="활동 종류" value={type}
-        onChange={(event) => router.push(pathname + (event.target.value ? "?type=" + event.target.value : ""))}>
-        <option value="">전체</option><option value="media">음원</option><option value="version">버전</option>
-        <option value="note">피드백</option><option value="reply">답글</option><option value="task">작업</option>
-        <option value="membership">팀원</option><option value="invitation">초대</option><option value="project">프로젝트</option>
-      </select></label>
+      <NativeSelect label="활동 종류" value={type} onChange={(event) => {
+        const value = event.currentTarget.value;
+        router.push(pathname + (value ? "?" + new URLSearchParams({ type: value }) : ""));
+      }} data={[
+        { value: "", label: "전체" }, { value: "media", label: "음원" }, { value: "version", label: "버전" },
+        { value: "note", label: "피드백" }, { value: "reply", label: "답글" }, { value: "task", label: "작업" },
+        { value: "membership", label: "팀원" }, { value: "invitation", label: "초대" }, { value: "project", label: "프로젝트" },
+      ]} />
     </div>
     <ActivityEntries key={type} projectId={projectId} type={type} />
   </section>;
@@ -172,10 +175,9 @@ function ActivityEntries({ projectId, type }: { projectId: string; type: string 
   }
 
   return <>
-    {error && <div className="row wrap" role="alert"><span className="error">{error}</span>
-      <button onClick={() => { setError(""); setAttempt((value) => value + 1); }}>다시 시도</button></div>}
-    {!events && !error && <p role="status">활동을 불러오는 중</p>}
-    {events?.length === 0 && <p className="empty muted">이 조건에 해당하는 활동이 없습니다.</p>}
+    {error && <InlineError message={error} retry={() => { setError(""); setAttempt((value) => value + 1); }} />}
+    {!events && !error && <LoadingRows label="활동을 불러오는 중" />}
+    {events?.length === 0 && <EmptyState message="이 조건에 해당하는 활동이 없습니다." />}
     {[...groups].map(([date, rows]) => <section className="activity-day" key={date}>
       <h3>{date}</h3>
       <ul className="clean-list">
@@ -193,6 +195,6 @@ function ActivityEntries({ projectId, type }: { projectId: string; type: string 
         })}
       </ul>
     </section>)}
-    {more && <button disabled={busy} onClick={() => void loadMore()}>이전 활동 더 보기</button>}
+    {more && <Button variant="default" loading={busy} onClick={() => void loadMore()}>이전 활동 더 보기</Button>}
   </>;
 }

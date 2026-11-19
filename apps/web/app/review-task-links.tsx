@@ -8,6 +8,7 @@ import { taskHref } from "../lib/routes";
 import { TaskStatusBadge } from "./task-status-badge";
 import { TaskEditor, type Task, type TaskNote } from "./task-editor";
 import type { Member } from "./workspace";
+import { EmptyState, InlineError, LoadingRows } from "./request-states";
 
 const pageSize = 100;
 
@@ -86,17 +87,15 @@ export function ReviewTaskLinks({ projectId, note, canCreate, pause }: {
 
   return <div className="review-task-links">
     <strong>연결된 작업</strong>
-    {tasks?.length === 0 && <p className="muted">연결된 작업이 없습니다.</p>}
-    {!tasks && !error && <p className="muted" role="status">연결된 작업을 불러오는 중</p>}
+    {tasks?.length === 0 && <EmptyState message="연결된 작업이 없습니다." />}
+    {!tasks && !error && <LoadingRows label="연결된 작업을 불러오는 중" />}
     {tasks && tasks.length > 0 && <ul className="clean-list">
       {tasks.map((task) => <li className="row wrap" key={task.id}>
         <Link href={taskHref(projectId, task.id)}>{task.title}</Link>
         <TaskStatusBadge status={task.status} />{task.archived && <small className="muted">보관됨</small>}
       </li>)}
     </ul>}
-    {error && <div className="row wrap"><span className="error" role="alert">{error}</span>
-      <button type="button" onClick={() => { setError(""); setRevision((value) => value + 1); }}>다시 시도</button>
-    </div>}
+    {error && <InlineError message={error} retry={() => { setError(""); setRevision((value) => value + 1); }} />}
     <div className="row wrap">
       {more && <Button type="button" variant="default" loading={loading} onClick={() => void loadMore()}>연결 작업 더 보기</Button>}
       {canCreate && <Button type="button" variant="default" loading={editing && !members} onClick={() => {

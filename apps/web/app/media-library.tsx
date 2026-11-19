@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Checkbox, Collapse, Menu, Table, TextInput } from "@mantine/core";
+import { Alert, Badge, Button, Checkbox, Collapse, Menu, Table, TextInput } from "@mantine/core";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useState, type FormEvent } from "react";
@@ -12,6 +12,7 @@ import { ActionMenu } from "./action-menu";
 import { ConfirmAction, type Confirmation } from "./confirm-action";
 import { VersionReview } from "./version-review";
 import type { Project } from "./workspace";
+import { EmptyState, InlineError, LoadingRows } from "./request-states";
 
 type MediaItem = components["schemas"]["MediaItem"];
 export type MediaVersion = components["schemas"]["MediaVersion"];
@@ -114,13 +115,13 @@ function MediaRows({ projectId, search, archived }: { projectId: string; search:
   }
 
   return <>
-    {error && <div className="row wrap" role="alert"><span className="error">{error}</span>
-      <button onClick={() => setRefresh((value) => value + 1)}>다시 시도</button></div>}
-    {!items && !error && <p role="status">음원을 불러오는 중</p>}
-    {items?.length === 0 && <div className="empty">
-      <p className="muted">{search || archived ? "조건에 맞는 음원이 없습니다." : "WAV 또는 MP3 파일을 올려 검토를 시작하세요."}</p>
-      {(search || archived) && <Link href={projectHref(projectId)}>필터 초기화</Link>}
-    </div>}
+    {error && <InlineError message={error} retry={() => { setError(""); setRefresh((value) => value + 1); }} />}
+    {!items && !error && <LoadingRows label="음원을 불러오는 중" />}
+    {items?.length === 0 && (
+      <EmptyState message={search || archived ? "조건에 맞는 음원이 없습니다." : "WAV 또는 MP3 파일을 올려 검토를 시작하세요."}>
+        {(search || archived) && <Link href={projectHref(projectId)}>필터 초기화</Link>}
+      </EmptyState>
+    )}
     {items && items.length > 0 && (
       <Table className="media-table" role="table" aria-label="음원과 최신 버전" withTableBorder layout="fixed" highlightOnHover>
         <Table.Thead role="rowgroup">
@@ -246,9 +247,8 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
 
   return <section aria-label="음원 상세">
     <Link href={projectHref(project.id)}>음원 목록</Link>
-    {error && <div className="row wrap" role="alert"><span className="error">{error}</span>
-      <button onClick={() => setRefresh((value) => value + 1)}>다시 시도</button></div>}
-    {!item && !error && <p role="status">음원을 불러오는 중</p>}
+    {error && <InlineError message={error} retry={() => { setError(""); setRefresh((value) => value + 1); }} />}
+    {!item && !error && <LoadingRows label="음원을 불러오는 중" />}
     {item && <>
       <div className="row spread wrap section-header review-header">
         <h2 className="section-title">{item.title}</h2>
@@ -274,7 +274,7 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
         </div>
       </div>
       {confirmation && <ConfirmAction confirmation={confirmation} actionError={error} close={() => setConfirmation(undefined)} />}
-      {item.archived_at && <p className="notice">보관된 음원입니다.</p>}
+      {item.archived_at && <Alert color="gray">보관된 음원입니다.</Alert>}
       {version && <div className="version-overview">
         <div className="row wrap">
           <strong>{version.filename}</strong>
@@ -313,13 +313,16 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
       </div>}
       {version?.state === "ready" && <VersionReview key={version.id} base={base} version={version} initialAt={initialAt}
         initialNote={initialNote} projectId={project.id} accountId={accountId} canEdit={canEdit} writable={!project.archived_at && !item.archived_at} />}
-      {(version?.state === "queued" || version?.state === "processing") && <p role="status">재생 준비 중입니다.</p>}
-      {version?.state === "failed" && <div className="row wrap" role="status">
-        <p className="error">{version.failure === "invalid_audio" ? "지원되는 파일 형식과 길이를 확인하고 수정본을 다시 올려 주세요." : "미디어를 처리하지 못했습니다."}</p>
-        {canEdit && !item.archived_at && version.failure === "processing_failed" && <button disabled={busy} onClick={() => void change(
-          () => api(base + "/versions/" + version.id + "/retry", { method: "POST" }),
-        )}>처리 재시도</button>}
-      </div>}
+      {(version?.state === "queued" || version?.state === "processing") && <Alert color="gray" role="status">재생 준비 중입니다.</Alert>}
+      {version?.state === "failed" && <InlineError
+        message={version.failure === "invalid_audio"
+          ? "지원되는 파일 형식과 길이를 확인하고 수정본을 다시 올려 주세요."
+          : "미디어를 처리하지 못했습니다."}
+        retryLabel="처리 재시도"
+        retrying={busy}
+        retry={canEdit && !item.archived_at && version.failure === "processing_failed"
+          ? () => void change(() => api(base + "/versions/" + version.id + "/retry", { method: "POST" }))
+          : undefined} />}
       {!version && <p className="muted">등록된 버전이 없습니다.</p>}
     </>}
   </section>;

@@ -5,6 +5,7 @@ import { useEffect, useRef, type FormEvent } from "react";
 import { noteLabel } from "./version-notes";
 import type { FeedbackDraft } from "./feedback-drafts";
 import { submitFeedbackShortcut } from "./feedback-shortcut";
+import { InlineError } from "./request-states";
 
 export function FeedbackComposer({ draft, busy, error, save, close, discard, changeBody, moveAnchor }: {
   draft: FeedbackDraft;
@@ -31,7 +32,7 @@ export function FeedbackComposer({ draft, busy, error, save, close, discard, cha
     </div>
     <Textarea ref={input} w="100%" aria-label="피드백 내용" placeholder="이 부분에서 들은 내용을 남겨 주세요" maxLength={4000} readOnly={busy}
       value={draft.body} onChange={(event) => changeBody(event.target.value)} onKeyDown={submitFeedbackShortcut} required />
-    {error && <p role="alert" className="error">{error}</p>}
+    {error && <InlineError message={error} />}
     <div className="row wrap">
       <Button type="submit" loading={busy} disabled={!draft.body.trim()}>피드백 저장</Button>
       <Button type="button" variant="default" disabled={busy} onClick={close}>작성 접기</Button>
