@@ -1,5 +1,6 @@
 "use client";
 
+import { Button, Popover } from "@mantine/core";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
@@ -101,9 +102,9 @@ export function Workspace({ children }: { children: ReactNode }) {
         <p className="brand">사맛디</p>
         <h1>음악을 함께 완성하는 공간</h1>
         <p className="muted">초대받은 프로젝트에 로그인해 작업을 이어가세요.</p>
-        {session === null ? <a className="button primary" href={login} onClick={(event) => {
+        {session === null ? <Button component="a" className="login-action" href={login} onClick={(event) => {
           if (window.location.hash) event.currentTarget.href = "/v1/auth/login?" + new URLSearchParams({ return_to: target + window.location.hash });
-        }}>로그인</a> : error ? <>
+        }}>로그인</Button> : error ? <>
           <p role="alert">{error}</p>
           <button onClick={() => { setError(""); setAttempt((value) => value + 1); }}>다시 시도</button>
         </> : <p role="status">로그인 상태 확인 중</p>}
@@ -117,20 +118,20 @@ export function Workspace({ children }: { children: ReactNode }) {
       <div className="row">
         <Link href="/projects" className="brand">사맛디</Link>
         <nav className="top-links" aria-label="주 메뉴">
-          <Link href="/projects" aria-current={pathname === "/projects" ? "page" : undefined}>프로젝트</Link>
-          <Link href="/work" aria-current={pathname === "/work" ? "page" : undefined}>내 작업</Link>
+          <Button component={Link} variant="subtle" href="/projects" aria-current={pathname === "/projects" ? "page" : undefined}>프로젝트</Button>
+          <Button component={Link} variant="subtle" href="/work" aria-current={pathname === "/work" ? "page" : undefined}>내 작업</Button>
         </nav>
       </div>
       <div className="row">
         <Notifications />
-        <details className="inbox">
-          <summary className="account-label">계정</summary>
-          <div className="inbox-body panel">
-            <p className="muted">{session.email}</p>
+        <Popover trapFocus returnFocus position="bottom-end" width="min(19rem, calc(100vw - 2rem))" shadow="sm">
+          <Popover.Target><Button variant="subtle" size="sm">계정</Button></Popover.Target>
+          <Popover.Dropdown>
+            <p className="account-email muted">{session.email}</p>
             <p><a href="/third-party-notices.txt">오픈소스 고지</a></p>
-            <button disabled={loggingOut} onClick={() => void logout()}>로그아웃</button>
-          </div>
-        </details>
+            <Button variant="default" loading={loggingOut} onClick={() => void logout()}>로그아웃</Button>
+          </Popover.Dropdown>
+        </Popover>
       </div>
     </header>
     {error && <p className="error main-content" role="alert">{error}</p>}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu } from "@mantine/core";
+import { Button, Menu } from "@mantine/core";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -186,8 +186,8 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
     </div>
     <div className="row wrap">
       <div className="segmented" aria-label="작업 보기">
-        <Link className="button" href={href("view", "")} aria-current={!board ? "page" : undefined}>목록</Link>
-        <Link className="button" href={href("view", "board")} aria-current={board ? "page" : undefined}>보드</Link>
+        <Button component={Link} variant="default" href={href("view", "")} aria-current={!board ? "page" : undefined}>목록</Button>
+        <Button component={Link} variant="default" href={href("view", "board")} aria-current={board ? "page" : undefined}>보드</Button>
       </div>
       <form className="row wrap" onSubmit={(event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();

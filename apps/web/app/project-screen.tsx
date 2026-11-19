@@ -1,5 +1,6 @@
 "use client";
 
+import { Button, Popover, TextInput } from "@mantine/core";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -85,6 +86,39 @@ export function ProjectIndex() {
   </main>;
 }
 
+function ProjectSwitcher({ projects, projectId, tab }: { projects: Project[]; projectId: string; tab: ProjectTab }) {
+  const [opened, setOpened] = useState(false);
+  const [search, setSearch] = useState("");
+  const query = search.trim().toLocaleLowerCase("ko-KR");
+  const visible = projects.filter(({ id, title, archived_at }) =>
+    (!archived_at || id === projectId) && title.toLocaleLowerCase("ko-KR").includes(query));
+
+  function changeOpened(value: boolean) {
+    setOpened(value);
+    if (!value) setSearch("");
+  }
+
+  return (
+    <Popover opened={opened} onChange={changeOpened} onDismiss={() => changeOpened(false)}
+      trapFocus returnFocus position="bottom-start" width="min(22rem, calc(100vw - 2rem))" shadow="sm">
+      <Popover.Target><Button variant="default" size="sm" onClick={() => changeOpened(!opened)}>프로젝트 전환</Button></Popover.Target>
+      <Popover.Dropdown>
+        <TextInput aria-label="프로젝트 검색" placeholder="프로젝트 검색" data-autofocus value={search}
+          onChange={(event) => setSearch(event.currentTarget.value)} />
+        {visible.length === 0 && <p className="muted">일치하는 프로젝트가 없습니다.</p>}
+        <ul className="clean-list project-switcher-list">
+          {visible.map(({ id, title }) => (
+            <li key={id}>
+              <Link href={projectHref(id, tab)} aria-current={id === projectId ? "page" : undefined}
+                onNavigate={() => changeOpened(false)}>{title}</Link>
+            </li>
+          ))}
+        </ul>
+      </Popover.Dropdown>
+    </Popover>
+  );
+}
+
 export function ProjectScreen({ projectId, tab, itemId, versionId, taskId }: { projectId: string; tab: ProjectTab; itemId?: string; versionId?: string; taskId?: string }) {
   const { projects, session } = useWorkspace();
   const query = useSearchParams();
@@ -101,23 +135,15 @@ export function ProjectScreen({ projectId, tab, itemId, versionId, taskId }: { p
     <div className="project-header">
       <div className="project-header-inner">
         <div className="row wrap project-title">
-          <details className="inbox project-switcher">
-            <summary>프로젝트 전환</summary>
-            <ul className="inbox-body panel clean-list">
-              {projects.filter((entry) => !entry.archived_at || entry.id === project.id).map(({ id, title }) => <li key={id}>
-                <Link href={projectHref(id, tab)} aria-current={id === project.id ? "page" : undefined} onClick={(event) => {
-                  const menu = event.currentTarget.closest("details");
-                  if (menu) menu.open = false;
-                }}>{title}</Link>
-              </li>)}
-            </ul>
-          </details>
+          <ProjectSwitcher projects={projects} projectId={projectId} tab={tab} />
           <h1>{project.title}</h1>
           <span className="status-label">{project.archived_at ? "보관됨" : "비공개"}</span>
         </div>
         <nav className="project-tabs" aria-label="프로젝트 탭">
-          {tabs.map(([value, label]) => <Link key={value} href={projectHref(projectId, value)}
-            aria-current={tab === value ? "page" : undefined}>{label}</Link>)}
+          {tabs.map(([value, label]) => (
+            <Button component={Link} variant="subtle" radius={0} key={value} href={projectHref(projectId, value)}
+              aria-current={tab === value ? "page" : undefined}>{label}</Button>
+          ))}
         </nav>
       </div>
     </div>
