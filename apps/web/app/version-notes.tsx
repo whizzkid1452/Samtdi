@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu } from "@mantine/core";
+import { Button, Menu, NativeSelect, SegmentedControl, Textarea } from "@mantine/core";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -195,17 +195,12 @@ export function VersionNotes({ feedback, url, projectId, itemId, versionId, acco
   return <aside className="feedback-panel" aria-label="피드백">
     <div className="row spread wrap">
       <h3>피드백</h3>
-      <div className="segmented" aria-label="피드백 필터">
-        <button aria-pressed={!filter} onClick={() => feedback.setFilter("all")}>전체</button>
-        <button aria-pressed={filter === "open"} onClick={() => feedback.setFilter("open")}>미해결</button>
-        <button aria-pressed={filter === "resolved"} onClick={() => feedback.setFilter("resolved")}>해결됨</button>
-      </div>
+      <SegmentedControl aria-label="피드백 필터" value={filter || "all"} onChange={feedback.setFilter}
+        data={[{ value: "all", label: "전체" }, { value: "open", label: "미해결" }, { value: "resolved", label: "해결됨" }]} />
     </div>
     <div className="row wrap feedback-sort">
-      <label>정렬 <select value={sort} onChange={(event) => feedback.setSort(event.target.value)}>
-        <option value="time">시간순</option>
-        <option value="recent">최신순</option>
-      </select></label>
+      <NativeSelect label="정렬" value={sort} onChange={(event) => feedback.setSort(event.currentTarget.value)}
+        data={[{ value: "time", label: "시간순" }, { value: "recent", label: "최신순" }]} />
     </div>
     {composer}
     {error && <div role="alert"><p className="error">{error}</p><button onClick={feedback.retry}>다시 시도</button></div>}
@@ -229,7 +224,7 @@ export function VersionNotes({ feedback, url, projectId, itemId, versionId, acco
     </ul>
     {feedback.more && <div className="row wrap">
       <span className="muted">불러온 피드백 {notes?.length}개 표시</span>
-      <button disabled={busy} onClick={() => void feedback.loadMore()}>피드백 더 보기</button>
+      <Button variant="default" loading={busy} onClick={() => void feedback.loadMore()}>피드백 더 보기</Button>
     </div>}
     {selected && !notes?.some(({ id }) => id === selected.id) && <>
       <p className="muted">현재 목록 밖의 피드백</p>
@@ -269,7 +264,7 @@ function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, acco
   return <section className="feedback-thread" id={"note-" + note.id} aria-label="선택한 피드백" tabIndex={-1}>
     <div className="row spread wrap">
       <strong className="feedback-time">{noteLabel(note)}</strong>
-      <button type="button" onClick={() => feedback.select(undefined)}>대화 닫기</button>
+      <Button type="button" variant="default" onClick={() => feedback.select(undefined)}>대화 닫기</Button>
     </div>
     <p className="muted">{note.email}</p>
     <p className="message-body">{note.deleted ? "삭제된 피드백" : note.body}</p>
@@ -295,10 +290,10 @@ function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, acco
     {storageError && <p className="error" role="alert">{storageError}</p>}
     {writable && !note.deleted && (replyActive
       ? <form className="notes-form" onSubmit={submit}>
-        <textarea ref={replyInput} aria-label="답글" placeholder="답글 쓰기" maxLength={4000} required
+        <Textarea ref={replyInput} w="100%" aria-label="답글" placeholder="답글 쓰기" maxLength={4000} required
           readOnly={feedback.busy} value={reply ?? ""} onChange={(event) => updateDraft(event.target.value)} onKeyDown={submitFeedbackShortcut} />
         <div className="row wrap">
-          <button disabled={feedback.busy || !reply?.trim()}>답글 남기기</button>
+          <Button type="submit" loading={feedback.busy} disabled={!reply?.trim()}>답글 남기기</Button>
           {reply?.trim() && <button type="button" disabled={feedback.busy} onClick={() => updateDraft(null)}>답글 초안 버리기</button>}
         </div>
       </form>
@@ -318,10 +313,10 @@ function MessageEditor({ message, busy, change }: {
   }
 
   if (body !== undefined) return <form className="notes-form" onSubmit={submit}>
-    <textarea aria-label="피드백 내용 수정" value={body} maxLength={4000} required onChange={(event) => setBody(event.target.value)} />
+    <Textarea w="100%" aria-label="피드백 내용 수정" value={body} maxLength={4000} required onChange={(event) => setBody(event.target.value)} />
     <div className="row wrap">
-      <button disabled={busy || !body.trim()}>수정 저장</button>
-      <button type="button" onClick={() => setBody(undefined)}>취소</button>
+      <Button type="submit" loading={busy} disabled={!body.trim()}>수정 저장</Button>
+      <Button type="button" variant="default" onClick={() => setBody(undefined)}>취소</Button>
     </div>
   </form>;
 

@@ -1,10 +1,12 @@
 "use client";
 
+import { Button } from "@mantine/core";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { api, describeError } from "../lib/api";
 import { taskHref } from "../lib/routes";
-import { TaskEditor, statusLabel, type Task, type TaskNote } from "./task-editor";
+import { TaskStatusBadge } from "./task-status-badge";
+import { TaskEditor, type Task, type TaskNote } from "./task-editor";
 import type { Member } from "./workspace";
 
 const pageSize = 100;
@@ -89,19 +91,19 @@ export function ReviewTaskLinks({ projectId, note, canCreate, pause }: {
     {tasks && tasks.length > 0 && <ul className="clean-list">
       {tasks.map((task) => <li className="row wrap" key={task.id}>
         <Link href={taskHref(projectId, task.id)}>{task.title}</Link>
-        <span className="status-label">{statusLabel(task.status)}{task.archived ? " · 보관됨" : ""}</span>
+        <TaskStatusBadge status={task.status} />{task.archived && <small className="muted">보관됨</small>}
       </li>)}
     </ul>}
     {error && <div className="row wrap"><span className="error" role="alert">{error}</span>
       <button type="button" onClick={() => { setError(""); setRevision((value) => value + 1); }}>다시 시도</button>
     </div>}
     <div className="row wrap">
-      {more && <button type="button" disabled={loading} onClick={() => void loadMore()}>연결 작업 더 보기</button>}
-      {canCreate && <button type="button" disabled={editing && !members} onClick={() => {
+      {more && <Button type="button" variant="default" loading={loading} onClick={() => void loadMore()}>연결 작업 더 보기</Button>}
+      {canCreate && <Button type="button" variant="default" loading={editing && !members} onClick={() => {
         setError("");
         pause();
         setEditing(true);
-      }}>작업 만들기</button>}
+      }}>작업 만들기</Button>}
     </div>
     {editing && members && canCreate && <TaskEditor base={base} members={members} seedNote={note}
       close={() => setEditing(false)} saved={() => {

@@ -112,7 +112,10 @@ async function verifyWaveformSeeking(page, durationMs) {
   const waveform = page.getByRole("slider", { name: "재생 위치", exact: true });
   const bounds = await waveform.boundingBox();
   assert.ok(bounds);
-  assert.equal(await page.getByRole("region", { name: "음원 플레이어" }).locator('input[type="range"]').count(), 1);
+  const volume = page.getByRole("slider", { name: "음량", exact: true });
+  await volume.press("ArrowLeft");
+  assert.equal(await page.locator("audio").evaluate((audio) => audio.volume), 0.95);
+  await volume.press("End");
 
   const y = bounds.y + bounds.height / 4;
   const start = bounds.x + bounds.width * .2;
