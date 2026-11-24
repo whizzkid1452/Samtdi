@@ -1,18 +1,20 @@
 "use client";
 
-import { Alert, Badge, Button, Checkbox, Popover, Select, TextInput } from "@mantine/core";
+import { Alert, Badge, Button, Popover, Select, TextInput } from "@mantine/core";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api, describeError } from "../lib/api";
-import { projectHref, type ProjectTab } from "../lib/routes";
+import type { components } from "../lib/api-types";
+import { projectHref, taskHref, type ProjectTab } from "../lib/routes";
 import { MediaDetail, MediaLibrary } from "./media-library";
 import { ConfirmAction, type Confirmation } from "./confirm-action";
 import { ProjectMembers, ProjectRoleBadge } from "./project-members";
 import { TaskBoard, TaskDetail } from "./task-board";
 import { ProjectActivity } from "./workspace-activity";
 import { useWorkspace, type Project } from "./workspace";
-import { ProjectWorkspaceLink, WorkspacePicker } from "./workspace-manager";
+import { ProjectWorkspaceLink } from "./workspace-manager";
+import { TaskStatusBadge } from "./task-status-badge";
 import { EmptyState, InlineError } from "./request-states";
 
 const tabs = [
@@ -25,13 +27,20 @@ export function ProjectIndex() {
   const query = useSearchParams();
   const selectedWorkspace = query.get("workspace") ?? "";
   const [search, setSearch] = useState("");
-  const [showArchived, setShowArchived] = useState(false);
+  const showArchived = query.get("archived") === "true";
   const availableTeams = teams.filter(({ active, can_create }) => active && can_create);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const visible = projects.filter((project) => (!selectedWorkspace || (selectedWorkspace === "shared" ? !project.workspace_id : project.workspace_id === selectedWorkspace)) && Boolean(project.archived_at) === showArchived && project.title.toLowerCase().includes(search.trim().toLowerCase()))
     .sort((left, right) => (right.updated_at ?? "").localeCompare(left.updated_at ?? ""));
+
+  function showProjects(archived: boolean) {
+    const params = new URLSearchParams(query);
+    if (archived) params.set("archived", "true");
+    else params.delete("archived");
+    router.push("/projects" + (params.size ? "?" + params : ""));
+  }
 
   async function createProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -52,12 +61,11 @@ export function ProjectIndex() {
     }
   }
 
-  return <main className="main-content">
+  return <main className="main-content project-home">
     <div className="row spread wrap section-header">
       <h1>프로젝트</h1>
       {!creating && <Button disabled={teamsEnabled && !availableTeams.length} onClick={() => setCreating(true)}>새 프로젝트</Button>}
     </div>
-    <WorkspacePicker selected={selectedWorkspace} onSelect={(id) => router.replace("/projects" + (id ? "?" + new URLSearchParams({ workspace: id }) : ""))} />
     {creating && <form className="panel row wrap" onSubmit={createProject}>
       <TextInput label="프로젝트 이름" name="title" maxLength={160} required />
       {teamsEnabled && <Select label="작업공간" name="workspace_id" searchable required allowDeselect={false}
@@ -67,27 +75,74 @@ export function ProjectIndex() {
       <Button type="button" variant="default" disabled={saving} onClick={() => setCreating(false)}>취소</Button>
     </form>}
     {error && <InlineError message={error} />}
-    {projects.length > 0 && <div className="row wrap filter-bar">
+    <div className="row spread wrap project-home-toolbar">
+      <div className="row" role="group" aria-label="프로젝트 상태">
+        <Button variant={showArchived ? "default" : "light"} aria-pressed={!showArchived} onClick={() => showProjects(false)}>활성</Button>
+        <Button variant={showArchived ? "light" : "default"} aria-pressed={showArchived} onClick={() => showProjects(true)}>보관</Button>
+      </div>
       <TextInput type="search" aria-label="프로젝트 검색" placeholder="프로젝트 검색" value={search}
-        onChange={(event) => setSearch(event.target.value)} />
-      {projects.some((project) => project.archived_at) && (
-        <Checkbox label="보관된 프로젝트" checked={showArchived} onChange={(event) => setShowArchived(event.currentTarget.checked)} />
-      )}
-    </div>}
-    <ul className="resource-list">
-      {visible.map((project) => <li className="row spread wrap" key={project.id}>
-        <Link className="resource-title" href={projectHref(project.id)}>{project.title}</Link>
-        <div className="row wrap muted">
-          {project.updated_at && <time dateTime={project.updated_at}>{new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeZone: "Asia/Seoul" }).format(new Date(project.updated_at))}</time>}
-          <ProjectRoleBadge role={project.role} />
-          {project.archived_at && <Badge variant="light" color="gray" tt="none">보관됨</Badge>}
-        </div>
-      </li>)}
+        onChange={(event) => setSearch(event.currentTarget.value)} />
+    </div>
+    <ul className="project-card-grid">
+      {visible.map((project) => {
+        const workspace = teams.find(({ id }) => id === project.workspace_id);
+        const tone = parseInt(project.id.slice(-2), 16) % 3;
+
+        return <li key={project.id}>
+          <Link className="project-card-link" href={projectHref(project.id)}>
+            <div className={"project-card-cover cover-tone-" + tone} aria-hidden="true"><i /><i /><i /></div>
+            <div className="project-card-details">
+              <h2>{project.title}</h2>
+              <p className="muted">{workspace?.name ?? "공유 프로젝트"}</p>
+              <div className="row spread wrap">
+                <ProjectRoleBadge role={project.role} />
+                {project.updated_at && <time className="muted" dateTime={project.updated_at}>{projectDate.format(new Date(project.updated_at))}</time>}
+              </div>
+            </div>
+          </Link>
+        </li>;
+      })}
     </ul>
     {visible.length === 0 && (
       <EmptyState message={search || showArchived ? "조건에 맞는 프로젝트가 없습니다." : "새 프로젝트를 만들어 음원을 공유하세요."} />
     )}
+    {!showArchived && <ProjectHomeTasks projects={visible} />}
   </main>;
+}
+
+const projectDate = new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeZone: "Asia/Seoul" });
+type DashboardTask = components["schemas"]["Dashboard"]["tasks"][number];
+
+function ProjectHomeTasks({ projects }: { projects: Project[] }) {
+  const [tasks, setTasks] = useState<DashboardTask[]>();
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const request = new AbortController();
+
+    api<components["schemas"]["Dashboard"]>("/v1/dashboard?filter=assigned", { signal: request.signal })
+      .then(({ tasks }) => { if (!request.signal.aborted) setTasks(tasks); })
+      .catch((cause) => { if (!request.signal.aborted) setError(describeError(cause)); });
+
+    return () => request.abort();
+  }, []);
+
+  const visible = tasks?.filter((task) => projects.some(({ id }) => id === task.project_id)).slice(0, 3);
+
+  return <section className="project-home-work" aria-label="내 작업 요약">
+    <div className="row spread wrap"><h2>내 작업</h2><Link href="/work">내 작업 모두 보기</Link></div>
+    {error && <InlineError message={error} />}
+    {!error && !visible && <p role="status">작업을 불러오는 중</p>}
+    {visible?.length === 0 && <EmptyState message="담당한 작업이 없습니다." />}
+    {visible && visible.length > 0 && <ul className="resource-list">
+      {visible.map((task) => <li className="row spread wrap" key={task.id}>
+        <Link href={taskHref(task.project_id, task.id)}>{task.title}</Link>
+        <span className="muted">{task.project_title}</span>
+        {task.due_on && <time dateTime={task.due_on}>{task.due_on}</time>}
+        <TaskStatusBadge status={task.status} />
+      </li>)}
+    </ul>}
+  </section>;
 }
 
 function ProjectSwitcher({ projects, projectId, tab }: { projects: Project[]; projectId: string; tab: ProjectTab }) {

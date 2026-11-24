@@ -1,14 +1,16 @@
 "use client";
 
-import { Avatar, Button, Popover } from "@mantine/core";
+import { Avatar, Button, Drawer, Popover } from "@mantine/core";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
+import { projectHref } from "../lib/routes";
 import { displayName, initials } from "../lib/people";
 import { AccountProfile } from "./account-profile";
 import { Notifications } from "./notifications";
+import { WorkspacePicker } from "./workspace-manager";
 import { UploadProvider } from "./upload";
 
 type Session = components["schemas"]["Session"];
@@ -46,6 +48,7 @@ export function Workspace({ children }: { children: ReactNode }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [accountOpened, setAccountOpened] = useState(false);
+  const [navigationOpened, setNavigationOpened] = useState(false);
 
   useEffect(() => {
     const request = new AbortController();
@@ -103,7 +106,7 @@ export function Workspace({ children }: { children: ReactNode }) {
 
     return <main className="login">
       <div className="login-content">
-        <p className="brand">사맛디</p>
+        <p className="brand"><BrandMark />사맛디</p>
         <h1>음악을 함께 완성하는 공간</h1>
         <p className="muted">초대받은 프로젝트에 로그인해 작업을 이어가세요.</p>
         {session === null ? <Button component="a" className="login-action" href={login} onClick={(event) => {
@@ -113,17 +116,35 @@ export function Workspace({ children }: { children: ReactNode }) {
           <button onClick={() => { setError(""); setAttempt((value) => value + 1); }}>다시 시도</button>
         </> : <p role="status">로그인 상태 확인 중</p>}
       </div>
+      <div className="login-art" aria-hidden="true"><BrandMark /></div>
     </main>;
   }
 
+  const project = projects.find(({ id }) => pathname.split("/")[2] === id);
+  const workspace = query.get("workspace") || project?.workspace_id || "";
+
+  function selectWorkspace(id: string) {
+    const filter = id ? "?" + new URLSearchParams({ workspace: id }) : "";
+    router.push("/projects" + filter);
+    setNavigationOpened(false);
+  }
+
+  const navigation = { pathname, projectId: project?.id, projects, workspace, selectWorkspace };
+
   return <WorkspaceContext.Provider value={{ session, projects, refreshProjects, teams, teamsEnabled, refreshTeams }}>
     <UploadProvider key={session.account_id} accountId={session.account_id}>
+    <div className="workspace-shell">
+      <aside className="workspace-sidebar">
+        <WorkspaceNavigation {...navigation} />
+      </aside>
+      <div className="workspace-content">
     <header className="topbar">
       <div className="row">
-        <Link href="/projects" className="brand">사맛디</Link>
-        <nav className="top-links" aria-label="주 메뉴">
-          <Button component={Link} variant="subtle" href="/projects" aria-current={pathname === "/projects" ? "page" : undefined}>프로젝트</Button>
-          <Button component={Link} variant="subtle" href="/work" aria-current={pathname === "/work" ? "page" : undefined}>내 작업</Button>
+        <Button className="mobile-navigation-trigger" variant="default" size="compact-sm" onClick={() => setNavigationOpened(true)}>메뉴</Button>
+        <nav aria-label="현재 위치" className="row wrap workspace-breadcrumb">
+          {pathname === "/work" ? <span aria-current="page">내 작업</span> :
+            <Link href="/projects" aria-current={!project ? "page" : undefined}>프로젝트</Link>}
+          {project && <><span aria-hidden="true">›</span><span aria-current="page">{project.title}</span></>}
         </nav>
       </div>
       <div className="row">
@@ -149,6 +170,45 @@ export function Workspace({ children }: { children: ReactNode }) {
     {editingProfile && <AccountProfile name={session.name ?? ""} close={() => setEditingProfile(false)}
       saved={(updated) => { setSession(updated); setEditingProfile(false); }} />}
     {children}
+      </div>
+    </div>
+    <Drawer opened={navigationOpened} onClose={() => setNavigationOpened(false)} title="작업공간 메뉴" size="xs">
+      <WorkspaceNavigation {...navigation} close={() => setNavigationOpened(false)} />
+    </Drawer>
     </UploadProvider>
   </WorkspaceContext.Provider>;
+}
+
+
+function WorkspaceNavigation({ pathname, projectId, projects, workspace, selectWorkspace, close }: {
+  pathname: string;
+  projectId?: string;
+  projects: Project[];
+  workspace: string;
+  selectWorkspace: (id: string) => void;
+  close?: () => void;
+}) {
+  const shortcuts = projects.filter((project) => !project.archived_at && (
+    !workspace || (workspace === "shared" ? !project.workspace_id : project.workspace_id === workspace)
+  )).sort((left, right) => (right.updated_at ?? "").localeCompare(left.updated_at ?? "")).slice(0, 6);
+
+  return <nav className="workspace-navigation" aria-label="주 메뉴">
+    <Link href="/projects" className="brand" onClick={close}><BrandMark />사맛디</Link>
+    <WorkspacePicker selected={workspace} onSelect={selectWorkspace} />
+    <Link className="workspace-link" href="/projects" aria-current={pathname === "/projects" ? "page" : undefined} onClick={close}>프로젝트</Link>
+    <Link className="workspace-link" href="/work" aria-current={pathname === "/work" ? "page" : undefined} onClick={close}>내 작업</Link>
+    {shortcuts.length > 0 && <section aria-label="프로젝트 바로가기">
+      <h2>프로젝트 바로가기</h2>
+      <ul className="clean-list">
+        {shortcuts.map((project) => <li key={project.id}>
+          <Link className="workspace-link" href={projectHref(project.id)} onClick={close}
+            aria-current={project.id === projectId ? "page" : undefined}>{project.title}</Link>
+        </li>)}
+      </ul>
+    </section>}
+  </nav>;
+}
+
+function BrandMark() {
+  return <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>;
 }
