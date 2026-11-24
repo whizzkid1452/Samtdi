@@ -41,6 +41,13 @@ func main() {
 		}
 		return
 	}
+	if len(os.Args) == 2 && os.Args[1] == "rebuild-waveforms" {
+		if err := maintenance(os.Args[1], ""); err != nil {
+			slog.Error("waveform rebuild failed", "reason", err.Error())
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) == 2 && os.Args[1] == "media-worker" {
 		if err := mediaWorker(); err != nil {
 			slog.Error("media worker stopped", "reason", err.Error())
@@ -49,7 +56,7 @@ func main() {
 		return
 	}
 	if len(os.Args) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: ayotbi-collaboration [media-worker|snapshot <folder>|restore <folder>|link-logto-identity <account-id> <subject>]")
+		fmt.Fprintln(os.Stderr, "usage: ayotbi-collaboration [media-worker|rebuild-waveforms|snapshot <folder>|restore <folder>|link-logto-identity <account-id> <subject>]")
 		os.Exit(2)
 	}
 

@@ -196,16 +196,7 @@ func (w webMediaWorker) prepare(ctx context.Context, job webMediaJob) (int64, [3
 	if err != nil {
 		return 0, assets, err
 	}
-	pcm, err := exec.CommandContext(ctx, w.ffmpeg, "-nostdin", "-v", "error", "-protocol_whitelist", "file,pipe",
-		"-f", "wav", "-i", playback, "-t", "1800", "-ac", strconv.Itoa(channelCount), "-ar", "4000", "-f", "s16le", "pipe:1").Output()
-	if err != nil {
-		return 0, assets, err
-	}
-	peaks, channelPeaks, err := encodeWebPeaks(pcm, channelCount)
-	if err != nil {
-		return 0, assets, err
-	}
-	encoded, err := json.Marshal(webWaveform{DurationMS: duration, Peaks: peaks, ChannelPeaks: channelPeaks})
+	encoded, err := w.webWaveform(ctx, playback, channelCount, duration)
 	if err != nil {
 		return 0, assets, err
 	}
@@ -265,6 +256,20 @@ func (w webMediaWorker) playbackDuration(ctx context.Context, path string) (int6
 		return 0, errInvalidMedia
 	}
 	return max(1, int64(math.Round(seconds*1000))), nil
+}
+
+func (w webMediaWorker) webWaveform(ctx context.Context, path string, channels int, duration int64) ([]byte, error) {
+	pcm, err := exec.CommandContext(ctx, w.ffmpeg, "-nostdin", "-v", "error", "-protocol_whitelist", "file,pipe",
+		"-f", "wav", "-i", path, "-t", "1800", "-ac", strconv.Itoa(channels), "-ar", "4000", "-f", "s16le", "pipe:1").Output()
+	if err != nil {
+		return nil, err
+	}
+
+	peaks, channelPeaks, err := encodeWebPeaks(pcm, channels)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(webWaveform{DurationMS: duration, Peaks: peaks, ChannelPeaks: channelPeaks})
 }
 
 type webWaveform struct {
@@ -361,7 +366,7 @@ func (w webMediaWorker) finish(ctx context.Context, job webMediaJob, duration in
 	}
 	_, err = tx.Exec(ctx, `UPDATE web_media_versions SET state='ready',duration_ms=$2,failure=NULL,
  original_key=$3,original_bytes=$4,original_hash=$5,playback_key=$6,playback_bytes=$7,playback_hash=$8,
- peaks_key=$9,peaks_bytes=$10,peaks_hash=$11 WHERE id=$1`, job.version, duration,
+ peaks_key=$9,peaks_bytes=$10,peaks_hash=$11,peaks_revision=2 WHERE id=$1`, job.version, duration,
 		assets[0].key, assets[0].size, assets[0].digest, assets[1].key, assets[1].size, assets[1].digest, assets[2].key, assets[2].size, assets[2].digest)
 	if err != nil {
 		return err

@@ -386,6 +386,10 @@ func snapshotCopyTable(table string, manifest snapshotManifest) string {
 		if !slices.Contains(manifest.Schema, "017_web_task_schedule.sql") {
 			return table + " (id,project_id,title,description,status,assignee_id,due_on,result_version_id,review_text,position,archived,revision,created_at)"
 		}
+	case "web_media_versions":
+		if !slices.Contains(manifest.Schema, "021_channel_waveforms.sql") {
+			return table + " (id,project_id,item_id,filename,description,state,duration_ms,failure,original_key,original_bytes,original_hash,playback_key,playback_bytes,playback_hash,peaks_key,peaks_bytes,peaks_hash,created_at)"
+		}
 	case "web_uploads":
 		if !slices.Contains(manifest.Schema, "020_render_source.sql") {
 			return table + " (id,project_id,item_id,actor_id,filename,description,bytes,kind,expires_at,completion_key,cleaned_at)"
