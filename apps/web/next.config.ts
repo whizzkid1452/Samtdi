@@ -5,7 +5,11 @@ const config: NextConfig = {
   poweredByHeader: false,
   devIndicators: false,
   async rewrites() {
-    return [{ source: "/v1/:path*", destination: `${apiOrigin}/v1/:path*` }];
+    return [
+      { source: "/v1/:path*", destination: `${apiOrigin}/v1/:path*` },
+      { source: "/review/:path*", destination: `${apiOrigin}/review/:path*` },
+      { source: "/review-assets/:path*", destination: `${apiOrigin}/review-assets/:path*` },
+    ];
   },
 };
 

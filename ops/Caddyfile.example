@@ -1,5 +1,5 @@
 samtdi.example.com {
-    @api path /v1/* /livez /readyz
+    @api path /v1/* /review /review/* /review-assets/* /livez /readyz
     handle @api {
         reverse_proxy 127.0.0.1:8080
     }
