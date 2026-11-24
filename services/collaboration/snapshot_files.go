@@ -34,8 +34,14 @@ func validSnapshotObject(object snapshotObject) bool {
 		if len(parts) == 4 && parts[1] == "incoming" {
 			return uuidPattern.MatchString(parts[2]) && uuidPattern.MatchString(parts[3])
 		}
-		if len(parts) != 6 || parts[1] != "versions" || !uuidPattern.MatchString(parts[2]) ||
+		if len(parts) < 6 || parts[1] != "versions" || !uuidPattern.MatchString(parts[2]) ||
 			!uuidPattern.MatchString(parts[3]) || !uuidPattern.MatchString(parts[4]) {
+			return false
+		}
+		if len(parts) == 8 {
+			return parts[5] == "peaks.json" && parts[6] == "channels" && parts[7] == object.SHA256
+		}
+		if len(parts) != 6 {
 			return false
 		}
 		switch parts[5] {

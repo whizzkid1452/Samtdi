@@ -6,7 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os/exec"
+	"path/filepath"
 	"testing"
 )
 
@@ -27,21 +30,23 @@ func TestRebuildWebWaveformsKeepsReadyVersionAndPlayback(t *testing.T) {
 		t.Fatal(err)
 	}
 	blobs, writes := testObjectStore(t)
-	store := func(data []byte) webArtifact {
+	store := func(filename string, data []byte) webArtifact {
 		t.Helper()
 		digest := sha256.Sum256(data)
 		hash := hex.EncodeToString(digest[:])
-		artifact := webArtifact{key: "review-media/" + hash, size: int64(len(data)), digest: hash}
+		prefix := "web/versions/" + team.project + "/" + team.version + "/92e975f7-496c-412b-9cfe-6033a93184e2/"
+		artifact := webArtifact{key: prefix + filename, size: int64(len(data)), digest: hash}
 		if err := blobs.Put(ctx, artifact.key, BlobMetadata{Size: artifact.size, SHA256: hash}, bytes.NewReader(data)); err != nil {
 			t.Fatal(err)
 		}
 		return artifact
 	}
-	playback := store(audio)
-	legacy := store([]byte(`{"duration_ms":1000,"peaks":[0.5]}`))
+	original := store("source.wav", audio)
+	playback := store("playback.wav", audio)
+	legacy := store("peaks.json", []byte(`{"duration_ms":1000,"peaks":[0.5]}`))
 	_, err = pool.Exec(ctx, `UPDATE web_media_versions SET duration_ms=1000,playback_key=$2,playback_bytes=$3,playback_hash=$4,
- peaks_key=$5,peaks_bytes=$6,peaks_hash=$7 WHERE id=$1`, team.version, playback.key, playback.size, playback.digest,
-		legacy.key, legacy.size, legacy.digest)
+ peaks_key=$5,peaks_bytes=$6,peaks_hash=$7,original_key=$8,original_bytes=$9,original_hash=$10 WHERE id=$1`, team.version, playback.key, playback.size, playback.digest,
+		legacy.key, legacy.size, legacy.digest, original.key, original.size, original.digest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +56,7 @@ func TestRebuildWebWaveformsKeepsReadyVersionAndPlayback(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if writes() != 3 {
+	if writes() != 4 {
 		t.Fatalf("expected one new waveform upload, got %d total uploads", writes())
 	}
 
@@ -76,4 +81,70 @@ func TestRebuildWebWaveformsKeepsReadyVersionAndPlayback(t *testing.T) {
 	if err := json.Unmarshal(encoded, &waveform); err != nil || len(waveform.ChannelPeaks) != 2 {
 		t.Fatalf("expected two stored channels, got %d: %v", len(waveform.ChannelPeaks), err)
 	}
+
+	t.Run("restore_and_play", func(t *testing.T) {
+		source := webRenderSource{SnapshotID: original.digest, AudioSHA256: original.digest}
+		if _, err := pool.Exec(t.Context(), "UPDATE web_uploads SET render_source=$2 WHERE id=$1", team.version, source); err != nil {
+			t.Fatal(err)
+		}
+
+		root := filepath.Join(t.TempDir(), "snapshot")
+		if err := (snapshotState{pool: pool, blobs: blobs}).snapshot(t.Context(), root); err != nil {
+			t.Fatal(err)
+		}
+		targetPool := integrationPool(t)
+		targetBlobs, _ := testObjectStore(t)
+		if err := (snapshotState{pool: targetPool, blobs: targetBlobs}).restore(t.Context(), root); err != nil {
+			t.Fatal(err)
+		}
+
+		listener := httptest.NewUnstartedServer(nil)
+		provider, _ := testProvider(t)
+		restored, err := NewServer(t.Context(), targetPool, Config{
+			Origin: "http://" + listener.Listener.Addr().String(), Issuer: provider.URL,
+			ClientID: "test-client", ClientSecret: "test-secret", AllowLoopbackHTTP: true,
+		})
+		if err != nil {
+			listener.Close()
+			t.Fatal(err)
+		}
+		restored.blobs = targetBlobs
+		listener.Config.Handler = restored
+		listener.Start()
+		t.Cleanup(listener.Close)
+		url := listener.URL + "/v1/projects/" + team.project + "/versions/" + team.version
+		response(t, listener.Client(), "GET", url, team.tokens["reviewer"], "", nil, 401, nil)
+		token, err := createSession(t.Context(), targetPool, team.ids["reviewer"], "native")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var version webVersion
+		response(t, listener.Client(), "GET", url, token, "", nil, 200, &version)
+		if version.Source == nil || version.Source.SnapshotID != source.SnapshotID {
+			t.Fatalf("render source missing after restore: %+v", version.Source)
+		}
+		var restoredWaveform webWaveform
+		response(t, listener.Client(), "GET", url+"/files/peaks", token, "", nil, 200, &restoredWaveform)
+		if len(restoredWaveform.ChannelPeaks) != 2 {
+			t.Fatalf("expected two restored channels, got %d", len(restoredWaveform.ChannelPeaks))
+		}
+
+		request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url+"/files/playback", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Authorization", "Bearer "+token)
+		request.Header.Set("Range", "bytes=0-11")
+		play, err := listener.Client().Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer play.Body.Close()
+
+		prefix, err := io.ReadAll(play.Body)
+		if err != nil || play.StatusCode != http.StatusPartialContent || !bytes.Equal(prefix, audio[:12]) {
+			t.Fatalf("restored WAV range: HTTP %d, %q, %v", play.StatusCode, prefix, err)
+		}
+	})
 }
