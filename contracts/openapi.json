@@ -102,6 +102,52 @@
             }
           }
         }
+      },
+      "patch": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 40
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Login required"
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/projects": {
@@ -2521,7 +2567,8 @@
         "required": [
           "account_id",
           "email",
-          "kind"
+          "kind",
+          "name"
         ],
         "properties": {
           "account_id": {
@@ -2531,6 +2578,9 @@
             "type": "string"
           },
           "kind": {
+            "type": "string"
+          },
+          "name": {
             "type": "string"
           }
         }
@@ -2671,7 +2721,8 @@
           "email",
           "body",
           "deleted",
-          "revision"
+          "revision",
+          "name"
         ],
         "properties": {
           "id": {
@@ -2691,6 +2742,9 @@
           },
           "revision": {
             "type": "integer"
+          },
+          "name": {
+            "type": "string"
           }
         }
       },
@@ -2706,7 +2760,8 @@
           "resolved",
           "revision",
           "start_ms",
-          "replies"
+          "replies",
+          "name"
         ],
         "properties": {
           "id": {
@@ -2744,6 +2799,9 @@
             "items": {
               "$ref": "#/components/schemas/Message"
             }
+          },
+          "name": {
+            "type": "string"
           }
         }
       },
@@ -2910,7 +2968,9 @@
           "subject_id",
           "actor",
           "detail",
-          "created_at"
+          "created_at",
+          "actor_id",
+          "actor_name"
         ],
         "properties": {
           "id": {
@@ -2929,6 +2989,12 @@
             "type": "object"
           },
           "created_at": {
+            "type": "string"
+          },
+          "actor_id": {
+            "type": "string"
+          },
+          "actor_name": {
             "type": "string"
           }
         }
@@ -3008,7 +3074,11 @@
           "subject_id",
           "version_id",
           "note_id",
-          "created_at"
+          "created_at",
+          "actor_id",
+          "actor_name",
+          "actor_email",
+          "title"
         ],
         "properties": {
           "id": {
@@ -3036,6 +3106,18 @@
             "type": "string"
           },
           "read_at": {
+            "type": "string"
+          },
+          "actor_id": {
+            "type": "string"
+          },
+          "actor_name": {
+            "type": "string"
+          },
+          "actor_email": {
+            "type": "string"
+          },
+          "title": {
             "type": "string"
           }
         }
@@ -3074,7 +3156,8 @@
         "required": [
           "account_id",
           "email",
-          "role"
+          "role",
+          "name"
         ],
         "properties": {
           "account_id": {
@@ -3086,6 +3169,9 @@
           },
           "role": {
             "$ref": "#/components/schemas/Role"
+          },
+          "name": {
+            "type": "string"
           }
         }
       },

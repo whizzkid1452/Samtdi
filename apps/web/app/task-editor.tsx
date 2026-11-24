@@ -3,6 +3,7 @@
 import { Button, Checkbox, NativeSelect, Select, TextInput, Textarea } from "@mantine/core";
 import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, describeError } from "../lib/api";
+import { displayName } from "../lib/people";
 import type { components } from "../lib/api-types";
 import { AppModal } from "./app-modal";
 import { ConfirmAction, type Confirmation } from "./confirm-action";
@@ -166,7 +167,7 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
             onChange={(event) => { setDescription(event.currentTarget.value); setDirty(true); }} />
           <div className="form-grid">
             <Select label="담당자" searchable clearable placeholder="미할당" value={assignee || null}
-              data={members.filter(({ role }) => role !== "reviewer").map(({ account_id, email }) => ({ value: account_id, label: email }))}
+              data={members.filter(({ role }) => role !== "reviewer").map((member) => ({ value: member.account_id, label: displayName(member) }))}
               comboboxProps={{ withinPortal: false }}
               onChange={(value) => { setAssignee(value ?? ""); setDirty(true); }} />
             <TextInput label="마감일" type="date" value={due}

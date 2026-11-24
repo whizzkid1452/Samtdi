@@ -81,8 +81,8 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 			return "", errInvitationRequired
 		}
 
-		err = tx.QueryRow(ctx, `INSERT INTO accounts (issuer, subject, email, operator) VALUES ($1, $2, $3, $4)
-  RETURNING id::text`, who.Issuer, who.Subject, who.Email, bootstrap).Scan(&accountID)
+		err = tx.QueryRow(ctx, `INSERT INTO accounts (issuer, subject, email, operator, display_name) VALUES ($1, $2, $3, $4, NULLIF($5, ''))
+  RETURNING id::text`, who.Issuer, who.Subject, who.Email, bootstrap, who.Name).Scan(&accountID)
 	} else if err == nil {
 		_, err = tx.Exec(ctx, `UPDATE accounts SET email = $2 WHERE id = $1 AND email <> $2`, accountID, who.Email)
 	}

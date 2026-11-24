@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, describeError } from "../lib/api";
+import { displayName } from "../lib/people";
 import type { components } from "../lib/api-types";
 import { projectHref, taskHref, versionLink } from "../lib/routes";
 import { TaskEditor, statuses, statusLabel, type Status, type Task, type TaskChange, type TaskNote } from "./task-editor";
@@ -156,7 +157,7 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
     const content = <>
       <Link href={link} className="resource-title">{task.title}</Link>
       {!board && <TaskStatusBadge status={task.status} />}
-      <span className="muted">{assignee?.email ?? "미할당"}</span>
+      <span className="muted">{assignee ? displayName(assignee) : "미할당"}</span>
       <span className={late ? "error" : "muted"}>{task.due_on || "마감 없음"}{late ? " · 지연" : ""}</span>
       <span className="muted">피드백 {task.notes.length}</span>
       {canWrite && <ActionMenu label="더 보기" accessibleName={task.title + " 관리"}>{(trigger) => <>
@@ -342,7 +343,7 @@ export function TaskDetail({ project, taskId }: { project: Project; taskId: stri
         </div>
         <dl className="task-metadata">
           <dt>상태</dt><dd><div className="row wrap"><TaskStatusBadge status={task.status} />{task.archived && <Badge variant="light" color="gray" tt="none">보관됨</Badge>}</div></dd>
-          <dt>담당자</dt><dd>{assignee?.email ?? "미할당"}</dd>
+          <dt>담당자</dt><dd>{assignee ? displayName(assignee) : "미할당"}</dd>
           <dt>마감일</dt><dd>{task.due_on || "마감 없음"}</dd>
         </dl>
       </div>

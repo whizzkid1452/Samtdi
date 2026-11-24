@@ -187,7 +187,48 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated session */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Session"];
+                    };
+                };
+                /** @description Login required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Request rejected */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/v1/projects": {
@@ -2176,6 +2217,7 @@ export interface components {
             account_id: string;
             email: string;
             kind: string;
+            name: string;
         };
         Project: {
             id: string;
@@ -2222,6 +2264,7 @@ export interface components {
             body: string;
             deleted: boolean;
             revision: number;
+            name: string;
         };
         Note: {
             id: string;
@@ -2235,6 +2278,7 @@ export interface components {
             start_ms: number;
             end_ms?: number;
             replies: components["schemas"]["Message"][];
+            name: string;
         };
         Created: {
             id: string;
@@ -2281,6 +2325,8 @@ export interface components {
             actor: string;
             detail: Record<string, never>;
             created_at: string;
+            actor_id: string;
+            actor_name: string;
         };
         DashboardTask: {
             id: string;
@@ -2308,6 +2354,10 @@ export interface components {
             note_id: string;
             created_at: string;
             read_at?: string;
+            actor_id: string;
+            actor_name: string;
+            actor_email: string;
+            title: string;
         };
         Inbox: {
             items: components["schemas"]["Notification"][];
@@ -2321,6 +2371,7 @@ export interface components {
             account_id: string;
             email: string;
             role: components["schemas"]["Role"];
+            name: string;
         };
         Invitation: {
             /** Format: uuid */

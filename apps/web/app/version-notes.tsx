@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, ApiError, describeError } from "../lib/api";
+import { displayName } from "../lib/people";
 import type { components } from "../lib/api-types";
 import { versionHref } from "../lib/routes";
 import { timecode } from "../lib/timecode";
@@ -213,7 +214,7 @@ export function VersionNotes({ feedback, url, projectId, itemId, versionId, acco
         <button type="button" aria-expanded={selected?.id === note.id} onClick={() => selected?.id === note.id ? feedback.select(undefined) : open(note)}>
           <span className="feedback-meta">
             <span className="feedback-time">{noteLabel(note)}</span>
-            <span className="muted">{note.email}</span>
+            <span className="muted">{displayName(note)}</span>
           </span>
           <span className="feedback-summary">{note.deleted ? "삭제된 피드백" : note.body}</span>
           <span className="feedback-meta">
@@ -268,7 +269,7 @@ function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, acco
       <strong className="feedback-time">{noteLabel(note)}</strong>
       <Button type="button" variant="default" onClick={() => feedback.select(undefined)}>대화 닫기</Button>
     </div>
-    <p className="muted">{note.email}</p>
+    <p className="muted">{displayName(note)}</p>
     <p className="message-body">{note.deleted ? "삭제된 피드백" : note.body}</p>
     <div className="row wrap">
       <Link href={link}>피드백 링크</Link>
@@ -284,7 +285,7 @@ function FeedbackThread({ note, url, projectId, itemId, versionId, canEdit, acco
     {editor(note, target)}
     <ul className="clean-list replies">
       {note.replies.map((entry) => <li key={entry.id}>
-        <span className="muted">{entry.email}</span>
+        <span className="muted">{displayName(entry)}</span>
         <p className="message-body">{entry.deleted ? "삭제된 답글" : entry.body}</p>
         {editor(entry, target + "/replies/" + entry.id)}
       </li>)}

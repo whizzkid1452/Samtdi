@@ -210,6 +210,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /v1/native/authorize", s.beginLogin)
 	s.mux.HandleFunc("POST /v1/native/token", s.exchangeNativeCode)
 	s.mux.HandleFunc("GET /v1/me", s.withSession(s.me))
+	s.mux.HandleFunc("PATCH /v1/me", s.withSession(s.changeMe))
 	s.mux.HandleFunc("POST /v1/auth/logout", s.withSession(s.logout))
 	s.mux.HandleFunc("GET /v1/projects", s.withSession(s.listProjects))
 	s.mux.HandleFunc("POST /v1/projects", s.withSession(s.createProject))
