@@ -184,6 +184,7 @@ export function ProjectScreen({ projectId, tab, itemId, versionId, taskId }: { p
   const query = useSearchParams();
   const project = projects.find(({ id }) => id === projectId);
   const at = query.get("at");
+  const [boardRevision, setBoardRevision] = useState(0);
 
   if (!project) return <main className="main-content">
     <h1>프로젝트를 열 수 없습니다</h1>
@@ -213,8 +214,12 @@ export function ProjectScreen({ projectId, tab, itemId, versionId, taskId }: { p
         <MediaDetail key={projectId + ":" + itemId + ":" + (versionId ?? "")} project={project} itemId={itemId} versionId={versionId}
           accountId={session.account_id} initialNote={query.get("note") ?? undefined} initialAt={at === null ? undefined : Number(at)} /> :
         <MediaLibrary key={projectId + ":" + query.toString()} project={project} />)}
-      {tab === "tasks" && (taskId ? <TaskDetail key={projectId + ":" + taskId} project={project} taskId={taskId} /> :
-        <TaskBoard key={projectId + ":" + query.toString()} project={project} initialNote={query.get("task_note") ?? undefined} />)}
+      {tab === "tasks" && <>
+        <TaskBoard key={projectId + ":" + query.toString() + ":" + boardRevision} project={project}
+          initialNote={taskId ? undefined : query.get("task_note") ?? undefined} />
+        {taskId && <TaskDetail key={projectId + ":" + taskId} project={project} taskId={taskId}
+          changed={() => setBoardRevision((value) => value + 1)} />}
+      </>}
       {tab === "activity" && <ProjectActivity key={projectId} projectId={projectId} />}
       {tab === "settings" && <ProjectSettings key={projectId} project={project} />}
     </main>

@@ -1,12 +1,12 @@
 "use client";
 
-import { Badge, Button, Checkbox, Menu, NativeSelect, Select, TextInput } from "@mantine/core";
+import { Avatar, Badge, Button, Checkbox, Drawer, Menu, NativeSelect, Select, TextInput } from "@mantine/core";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, describeError } from "../lib/api";
 import { todayInSeoul } from "../lib/task-dates";
-import { displayName } from "../lib/people";
+import { displayName, initials } from "../lib/people";
 import type { components } from "../lib/api-types";
 import { projectHref, taskHref, versionHref, versionLink } from "../lib/routes";
 import { TaskEditor, statuses, statusLabel, type Status, type Task, type TaskChange, type TaskNote } from "./task-editor";
@@ -90,10 +90,12 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
   if (!apiFilters.has("archived")) apiFilters.set("archived", "false");
   const queryString = apiFilters.toString();
 
-  const moveTask = useCallback(({ task, status, position }: TaskMove, returnFocusTo?: HTMLButtonElement | null) => {
+  const moveTask = useCallback(({ task, status, position, assigneeId }: TaskMove, returnFocusTo?: HTMLButtonElement | null) => {
     if (!canWrite || task.archived || moveLockRef.current) return;
-    if (task.status !== status && (status === "review" || status === "done")) {
-      setSelection({ task, change: { status, position }, returnFocusTo });
+    const needsReview = status === "review" && task.status !== status;
+    const needsConfirmation = status === "done" && task.notes.some((note) => !note.resolved && !note.deleted);
+    if (needsReview || needsConfirmation) {
+      setSelection({ task, change: { status, position, assignee_id: assigneeId }, returnFocusTo });
       return;
     }
 
@@ -105,9 +107,10 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
       method: "PUT",
       body: JSON.stringify({
         title: task.title, description: task.description, status, position,
-        assignee_id: task.assignee_id, due_on: task.due_on, start_on: task.start_on, result_version_id: task.result_version_id,
+        assignee_id: assigneeId ?? task.assignee_id, due_on: task.due_on, start_on: task.start_on, result_version_id: task.result_version_id,
         review_text: task.review_text, archived: task.archived, revision: task.revision,
-        note_ids: task.notes.map(({ id }) => id), confirm_notes: [],
+        note_ids: task.notes.map(({ id }) => id),
+        confirm_notes: [],
       }),
     }).then(() => {
       setMoveNotice(task.title + " · " + statusLabel(status) + "으로 이동했습니다.");
@@ -195,7 +198,7 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
     }
   }
 
-  function taskCard(task: Task, previous?: Task) {
+  function taskCard(task: Task, previous?: Task, next?: Task) {
     const link = taskHref(project.id, task.id) + detailQuery;
     const assignee = members.find(({ account_id }) => account_id === task.assignee_id);
     const late = task.due_on && task.status !== "done" && task.due_on < todayInSeoul();
@@ -203,7 +206,10 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
     const content = <>
       <Link href={link} className="resource-title">{task.title}</Link>
       {!board && <TaskStatusBadge status={task.status} />}
-      <span className="muted">{assignee ? displayName(assignee) : "미할당"}</span>
+      <span className="row muted">
+        {assignee && <Avatar size={22} color="samtdi">{initials(assignee)}</Avatar>}
+        {assignee ? displayName(assignee) : "미할당"}
+      </span>
       <span className={late ? "error" : "muted"}>{task.due_on || "마감 없음"}{late ? " · 지연" : ""}</span>
       {task.source && <Link className="task-source-link" href={versionHref({
         projectId: project.id, itemId: task.source.item_id, versionId: task.source.version_id,
@@ -216,6 +222,13 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
             위로 이동
           </Menu.Item>
         )}
+        {!task.archived && next && (
+          <Menu.Item disabled={moving} onClick={() => moveTask({ task, status: task.status, position: next.position + 1 })}>
+            아래로 이동
+          </Menu.Item>
+        )}
+        {!task.archived && groupByAssignee && <Menu.Item disabled={moving}
+          onClick={() => setSelection({ task, returnFocusTo: trigger.current })}>담당자 변경</Menu.Item>}
         {!task.archived && statuses.filter(([value]) => value !== task.status).map(([value, label]) => (
           <Menu.Item key={value} disabled={moving} onClick={() => moveTask({ task, status: value }, trigger.current)}>
             {label}으로 이동
@@ -227,7 +240,9 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
       </>}</ActionMenu>}
     </>;
 
-    return board ? <DraggableTask projectId={project.id} task={task} enabled={canWrite && !moving && !task.archived} onMove={moveTask}>{content}</DraggableTask>
+    const targetAssignee = groupByAssignee && (!task.assignee_id || (assignee && assignee.role !== "reviewer")) ? task.assignee_id : undefined;
+    return board ? <DraggableTask projectId={project.id} task={task} enabled={canWrite && !moving && !task.archived}
+      onMove={moveTask} targetAssignee={targetAssignee}>{content}</DraggableTask>
       : <article className="task-list-row">{content}</article>;
   }
 
@@ -360,7 +375,7 @@ function QuickTask({ base, status, assignee, saved }: {
 
 function TaskRows({ path, render, groupLabel }: {
   path: string;
-  render: (task: Task, previous?: Task) => ReactNode;
+  render: (task: Task, previous?: Task, next?: Task) => ReactNode;
   groupLabel?: (assignee: string) => string;
 }) {
   const [rows, setRows] = useState<Task[]>();
@@ -411,7 +426,9 @@ function TaskRows({ path, render, groupLabel }: {
       <ul className="task-rows">
         {tasks.map((task, index) => {
           const previous = tasks[index - 1];
-          return <li key={task.id}>{render(task, previous?.status === task.status ? previous : undefined)}</li>;
+          const next = tasks[index + 1];
+          return <li key={task.id}>{render(task, previous?.status === task.status ? previous : undefined,
+            next?.status === task.status ? next : undefined)}</li>;
         })}
       </ul>
     </div>)}
@@ -419,7 +436,8 @@ function TaskRows({ path, render, groupLabel }: {
   </>;
 }
 
-export function TaskDetail({ project, taskId }: { project: Project; taskId: string }) {
+export function TaskDetail({ project, taskId, changed }: { project: Project; taskId: string; changed: () => void }) {
+  const router = useRouter();
   const base = "/v1/projects/" + project.id;
   const { members, error: memberError } = useMembers(base);
   const params = taskFilters(new URLSearchParams(useSearchParams()));
@@ -443,53 +461,59 @@ export function TaskDetail({ project, taskId }: { project: Project; taskId: stri
   const nextLabel = nextStatus ? ({ progress: "진행 시작", review: "검토 요청", done: "완료", todo: "다시 열기" } as const)[nextStatus] : undefined;
   const assignee = members.find(({ account_id }) => account_id === task?.assignee_id);
 
-  return <section aria-label="작업 상세">
-    <Link href={back}>작업 목록</Link>
-    {(error || memberError) && <InlineError message={error || memberError}
-      retry={() => { setError(""); setRevision((value) => value + 1); }} />}
-    {!task && !error && <LoadingRows label="작업을 불러오는 중" />}
-    {task && <>
-      <div className="row spread wrap section-header task-detail-title">
-        <h2 className="section-title">{task.title}</h2>
-        {canWrite && <div className="row wrap">
-          {!task.archived && nextStatus && <button className="primary" onClick={(event) => setSelection({ change: { status: nextStatus }, returnFocusTo: event.currentTarget })}>{nextLabel}</button>}
-          {!task.archived && <button onClick={(event) => setSelection({ returnFocusTo: event.currentTarget })}>작업 편집</button>}
-          <ActionMenu label="관리">{(trigger) => (
-            <Menu.Item onClick={() => setSelection({ change: { archived: !task.archived }, returnFocusTo: trigger.current })}>
-              {task.archived ? "작업 복원" : "작업 보관"}
-            </Menu.Item>
-          )}</ActionMenu>
-        </div>}
-      </div>
-      <div className="task-detail-grid">
-        <div>
-          {task.description && <p className="message-body">{task.description}</p>}
-          <h3>연결한 피드백</h3>
-          {task.notes.length === 0 && <p className="muted">연결된 피드백이 없습니다.</p>}
-          <ul className="resource-list">
-            {task.notes.map((note) => <li key={note.id}>
-              <Link href={versionLink(project.id, note.version_id, note.id, note.start_ms)}>{timecode(note.start_ms)} · {note.deleted ? "삭제된 피드백" : note.body}</Link>
-              {note.resolved && <Badge variant="light" color="teal" tt="none">해결됨</Badge>}
-            </li>)}
-          </ul>
-          {(task.result_version_id || task.review_text) && <section>
-            <h3>검토 결과</h3>
-            {task.result_version_id && <Link href={versionLink(project.id, task.result_version_id)}>결과 버전 열기</Link>}
-            {task.review_text && <p className="message-body">{task.review_text}</p>}
-          </section>}
+  return <Drawer opened onClose={() => router.push(back)} title="작업 상세" position="right"
+    size="min(100vw, 34rem)" trapFocus={!selection} closeOnEscape={!selection} closeOnClickOutside={!selection}
+    classNames={{ body: "task-detail-drawer" }}
+    closeButtonProps={{ "aria-label": "작업 상세 닫기" }}>
+    <section aria-label="작업 상세">
+      <Link href={back}>작업 목록</Link>
+      {(error || memberError) && <InlineError message={error || memberError}
+        retry={() => { setError(""); setRevision((value) => value + 1); }} />}
+      {!task && !error && <LoadingRows label="작업을 불러오는 중" />}
+      {task && <>
+        <div className="row spread wrap section-header task-detail-title">
+          <h2 className="section-title">{task.title}</h2>
+          {canWrite && <div className="row wrap">
+            {!task.archived && nextStatus && <button className="primary" onClick={(event) => setSelection({ change: { status: nextStatus }, returnFocusTo: event.currentTarget })}>{nextLabel}</button>}
+            {!task.archived && <button onClick={(event) => setSelection({ returnFocusTo: event.currentTarget })}>작업 편집</button>}
+            <ActionMenu label="관리">{(trigger) => (
+              <Menu.Item onClick={() => setSelection({ change: { archived: !task.archived }, returnFocusTo: trigger.current })}>
+                {task.archived ? "작업 복원" : "작업 보관"}
+              </Menu.Item>
+            )}</ActionMenu>
+          </div>}
         </div>
-        <dl className="task-metadata">
-          <dt>상태</dt><dd><div className="row wrap"><TaskStatusBadge status={task.status} />{task.archived && <Badge variant="light" color="gray" tt="none">보관됨</Badge>}</div></dd>
-          <dt>담당자</dt><dd>{assignee ? displayName(assignee) : "미할당"}</dd>
-          <dt>시작일</dt><dd>{task.start_on || "시작일 없음"}</dd>
-          <dt>마감일</dt><dd>{task.due_on || "마감 없음"}</dd>
-        </dl>
-      </div>
-      {selection && canWrite && <TaskEditor base={base} members={members} task={task} change={selection.change}
-        returnFocusTo={selection.returnFocusTo} close={() => setSelection(undefined)} saved={() => {
-          setSelection(undefined);
-          setRevision((value) => value + 1);
-        }} />}
-    </>}
-  </section>;
+        <div className="task-detail-grid">
+          <div>
+            {task.description && <p className="message-body">{task.description}</p>}
+            <h3>연결한 피드백</h3>
+            {task.notes.length === 0 && <p className="muted">연결된 피드백이 없습니다.</p>}
+            <ul className="resource-list">
+              {task.notes.map((note) => <li key={note.id}>
+                <Link href={versionLink(project.id, note.version_id, note.id, note.start_ms)}>{timecode(note.start_ms)} · {note.deleted ? "삭제된 피드백" : note.body}</Link>
+                {note.resolved && <Badge variant="light" color="teal" tt="none">해결됨</Badge>}
+              </li>)}
+            </ul>
+            {(task.result_version_id || task.review_text) && <section>
+              <h3>검토 결과</h3>
+              {task.result_version_id && <Link href={versionLink(project.id, task.result_version_id)}>결과 버전 열기</Link>}
+              {task.review_text && <p className="message-body">{task.review_text}</p>}
+            </section>}
+          </div>
+          <dl className="task-metadata">
+            <dt>상태</dt><dd><div className="row wrap"><TaskStatusBadge status={task.status} />{task.archived && <Badge variant="light" color="gray" tt="none">보관됨</Badge>}</div></dd>
+            <dt>담당자</dt><dd>{assignee ? displayName(assignee) : "미할당"}</dd>
+            <dt>시작일</dt><dd>{task.start_on || "시작일 없음"}</dd>
+            <dt>마감일</dt><dd>{task.due_on || "마감 없음"}</dd>
+          </dl>
+        </div>
+        {selection && canWrite && <TaskEditor base={base} members={members} task={task} change={selection.change}
+          returnFocusTo={selection.returnFocusTo} close={() => setSelection(undefined)} saved={() => {
+            setSelection(undefined);
+            setRevision((value) => value + 1);
+            changed();
+          }} />}
+      </>}
+    </section>
+  </Drawer>;
 }
