@@ -244,11 +244,13 @@ function ProjectSettings({ project }: { project: Project }) {
     }
   }
 
-  return <>
+  return <div className="project-settings-layout">
     <ProjectMembers project={project} />
+    <div className="project-settings-management">
     <ProjectWorkspaceLink key={project.id + ":" + project.workspace_id} project={project} />
-    <section className="panel" aria-label="다운로드">
-      <h2>다운로드</h2>
+    <section className="panel" aria-label="협업 데이터 반출">
+      <h2>협업 데이터 반출</h2>
+      <p className="muted">프로젝트의 피드백과 작업 기록을 내려받을 수 있습니다.</p>
       <div className="row wrap">
         <Button component="a" variant="default" href={"/v1/projects/" + project.id + "/export/json"}>JSON 다운로드</Button>
         <Button component="a" variant="default" href={"/v1/projects/" + project.id + "/export/csv"}>CSV 다운로드</Button>
@@ -258,7 +260,7 @@ function ProjectSettings({ project }: { project: Project }) {
       <h2>프로젝트 보관</h2>
       {error && <InlineError message={error} />}
       {message && <p role="status">{message}</p>}
-      <button disabled={busy} onClick={(event) => {
+      <Button variant={project.archived_at ? "default" : "outline"} color={project.archived_at ? "gray" : "red"} loading={busy} onClick={(event) => {
         const archived = !project.archived_at;
         const label = archived ? "보관" : "복원";
         setConfirmation({
@@ -268,8 +270,9 @@ function ProjectSettings({ project }: { project: Project }) {
           trigger: event.currentTarget,
           run: () => changeArchive(archived),
         });
-      }}>{project.archived_at ? "프로젝트 복원" : "프로젝트 보관"}</button>
+      }}>{project.archived_at ? "프로젝트 복원" : "프로젝트 보관"}</Button>
       {confirmation && <ConfirmAction confirmation={confirmation} actionError={error} close={() => setConfirmation(undefined)} />}
     </section>}
-  </>;
+    </div>
+  </div>;
 }
