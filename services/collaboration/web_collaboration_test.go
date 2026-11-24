@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // webTeam is a project with an owner, an editor and a reviewer who call the web API with native bearer tokens.
@@ -221,4 +222,58 @@ func TestWebNoteCreatesTask(t *testing.T) {
 	if len(inbox.Items) != 1 || inbox.Items[0].SubjectID != task.ID || inbox.Items[0].Action != "task.created" {
 		t.Fatalf("only the assigned task notifies its assignee: %+v", inbox.Items)
 	}
+}
+
+func TestWebTaskSchedule(t *testing.T) {
+	team := newWebTeam(t)
+	team.call("owner", "POST", "./tasks", map[string]any{"title": "거꾸로", "status": "todo", "start_on": "2026-11-20", "due_on": "2026-11-10"}, 400, nil)
+	team.call("owner", "POST", "./tasks", map[string]any{"title": "잘못된 날짜", "status": "todo", "start_on": "11월 20일"}, 400, nil)
+
+	span := team.task("owner", map[string]any{"title": "구간", "start_on": "2026-11-10", "due_on": "2026-11-14"})
+	team.task("owner", map[string]any{"title": "마감만", "due_on": "2026-11-20"})
+	team.task("owner", map[string]any{"title": "나중", "start_on": "2026-12-01", "due_on": "2026-12-03"})
+	team.task("owner", map[string]any{"title": "날짜 없음"})
+	titles := func(query string) string {
+		var rows []webTask
+		team.call("reviewer", "GET", "./tasks?"+query, nil, 200, &rows)
+		names := make([]string, 0, len(rows))
+		for _, row := range rows {
+			names = append(names, row.Title)
+		}
+		return strings.Join(names, ",")
+	}
+	if got := titles("from=2026-11-12&to=2026-11-20"); got != "구간,마감만" {
+		t.Fatalf("overlapping tasks = %q", got)
+	}
+	if got := titles("from=2026-11-15&to=2026-11-19"); got != "" {
+		t.Fatalf("tasks outside the range were returned: %q", got)
+	}
+	if got := titles("scheduled=false"); got != "날짜 없음" {
+		t.Fatalf("unscheduled tasks = %q", got)
+	}
+	team.call("reviewer", "GET", "./tasks?from=2026-11-20&to=2026-11-01", nil, 400, nil)
+	team.call("reviewer", "GET", "./tasks?from=2026-01-01&to=2027-06-01", nil, 400, nil)
+	team.call("reviewer", "GET", "./tasks?scheduled=maybe", nil, 400, nil)
+
+	var task webTask
+	team.call("owner", "GET", "./tasks/"+span, nil, 200, &task)
+	if task.StartOn != "2026-11-10" || task.DueOn != "2026-11-14" {
+		t.Fatalf("schedule = %s ~ %s", task.StartOn, task.DueOn)
+	}
+	team.call("editor", "PUT", "./tasks/"+span, map[string]any{"title": task.Title, "status": task.Status, "start_on": "2026-11-15", "due_on": "2026-11-14",
+		"revision": task.Revision}, 400, nil)
+	team.call("editor", "PUT", "./tasks/"+span, map[string]any{"title": task.Title, "status": task.Status, "start_on": "2026-11-12", "due_on": "",
+		"revision": task.Revision}, 200, nil)
+	team.call("owner", "GET", "./tasks/"+span, nil, 200, &task)
+	if task.StartOn != "2026-11-12" || task.DueOn != "" {
+		t.Fatalf("a start-only schedule was not saved: %s ~ %s", task.StartOn, task.DueOn)
+	}
+
+	today := time.Now().In(time.FixedZone("KST", 9*3600)).Format(time.DateOnly)
+	var versions []webScheduleVersion
+	team.call("reviewer", "GET", "./versions?from="+today+"&to="+today, nil, 200, &versions)
+	if len(versions) != 1 || versions[0].ID != team.version || versions[0].ItemTitle != "메인 믹스" {
+		t.Fatalf("versions uploaded today = %+v", versions)
+	}
+	team.call("reviewer", "GET", "./versions?from="+today, nil, 400, nil)
 }

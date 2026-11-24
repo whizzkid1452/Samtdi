@@ -28,7 +28,7 @@ export function statusLabel(status: string) {
 }
 
 type TaskDraft = {
-  title: string; description: string; assignee: string; due: string; status: Status;
+  title: string; description: string; assignee: string; due: string; start?: string; status: Status;
   review: string; resultId: string; notes: TaskNote[]; revision: number;
 };
 
@@ -62,6 +62,7 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
   const [title, setTitle] = useState(restored?.title ?? task?.title ?? seedNote?.body.slice(0, 160) ?? "");
   const [description, setDescription] = useState(restored?.description ?? task?.description ?? "");
   const [assignee, setAssignee] = useState(restored?.assignee ?? change?.assignee_id ?? task?.assignee_id ?? "");
+  const [start, setStart] = useState(restored?.start ?? task?.start_on ?? "");
   const [due, setDue] = useState(restored?.due ?? task?.due_on ?? "");
   const [status, setStatus] = useState<Status>(restored?.status ?? change?.status ?? task?.status ?? "todo");
   const [review, setReview] = useState(restored?.review ?? task?.review_text ?? "");
@@ -82,18 +83,23 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
   useEffect(() => {
     if (!dirty) return;
     const revision = hasConflict && !hasReadLatest ? (restored?.revision ?? task?.revision ?? 0) : (latest?.revision ?? 0);
-    storeTaskDraft(key, { title, description, assignee, due, status, review, resultId, notes, revision });
-  }, [assignee, description, dirty, due, hasConflict, hasReadLatest, key, latest, notes, restored, resultId, review, status, task, title]);
+    storeTaskDraft(key, { title, description, assignee, due, start, status, review, resultId, notes, revision });
+  }, [assignee, description, dirty, due, hasConflict, hasReadLatest, key, latest, notes, restored, resultId, review, start, status, task, title]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (start && due && start > due) {
+      setError("시작일은 마감일보다 늦을 수 없습니다.");
+      return;
+    }
+
     setBusy(true);
     setError("");
     try {
       const result = await api<{ id: string }>(base + "/tasks" + (task ? "/" + task.id : ""), {
         method: task ? "PUT" : "POST",
         body: JSON.stringify({
-          title, description, assignee_id: assignee, due_on: due, status, review_text: review, result_version_id: resultId,
+          title, description, assignee_id: assignee, due_on: due, start_on: start, status, review_text: review, result_version_id: resultId,
           position: change?.position, archived, revision: latest?.revision ?? 0, note_ids: notes.map(({ id }) => id),
           confirm_notes: status === "done" && confirm ? unresolved.map(({ id, revision }) => ({ id, revision })) : [],
         }),
@@ -170,7 +176,9 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
               data={members.filter(({ role }) => role !== "reviewer").map((member) => ({ value: member.account_id, label: displayName(member) }))}
               comboboxProps={{ withinPortal: false }}
               onChange={(value) => { setAssignee(value ?? ""); setDirty(true); }} />
-            <TextInput label="마감일" type="date" value={due}
+            <TextInput label="시작일" type="date" value={start} max={due || undefined}
+              onChange={(event) => { setStart(event.currentTarget.value); setDirty(true); }} />
+            <TextInput label="마감일" type="date" value={due} min={start || undefined}
               onChange={(event) => { setDue(event.currentTarget.value); setDirty(true); }} />
             {task && <NativeSelect label="상태" value={status} data={statuses.map(([value, label]) => ({ value, label }))}
               onChange={(event) => { setConfirm(false); setStatus(event.currentTarget.value as Status); setDirty(true); }} />}
