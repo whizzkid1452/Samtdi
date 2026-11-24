@@ -308,6 +308,12 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
           {version.state === "ready" && item.latest_ready_id && item.latest_ready_id !== version.id &&
             <Link href={versionHref({ projectId: project.id, itemId, versionId: item.latest_ready_id })}>최신 재생 가능 버전 열기</Link>}
         </div>
+        {version.source && <div className="render-source">
+          <strong>어엿비에서 게시</strong>
+          <span>편집 스냅샷 <code title={version.source.snapshot_id}>{version.source.snapshot_id.slice(0, 12)}</code></span>
+          {version.source.commit_oid && <span>커밋 <code>{version.source.commit_oid.slice(0, 12)}</code></span>}
+          {version.source.review_id && <a href={"/review/" + project.id + "/" + version.source.review_id}>원본 커밋 리뷰</a>}
+        </div>}
         {version.description && <p className="review-description muted">{version.description}</p>}
         {item.latest_ready_id && version.state === "ready" && item.latest_ready_id !== version.id &&
           <p className="muted review-description">이전 버전 검토 중</p>}

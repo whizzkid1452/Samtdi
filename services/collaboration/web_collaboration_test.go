@@ -10,6 +10,7 @@ import (
 
 // webTeam is a project with an owner, an editor and a reviewer who call the web API with native bearer tokens.
 type webTeam struct {
+	server  *Server
 	t       *testing.T
 	client  *http.Client
 	url     string
@@ -35,7 +36,7 @@ func newWebTeam(t *testing.T) *webTeam {
 	listener.Start()
 	t.Cleanup(listener.Close)
 
-	team := &webTeam{t: t, client: newBrowser(t), url: origin, ids: map[string]string{}, tokens: map[string]string{}}
+	team := &webTeam{server: handler, t: t, client: newBrowser(t), url: origin, ids: map[string]string{}, tokens: map[string]string{}}
 	roles := map[string]Role{}
 	for name, role := range map[string]Role{"owner": Owner, "editor": Editor, "reviewer": Reviewer} {
 		id, token := seedNative(t, pool, name)
@@ -342,4 +343,31 @@ func TestWebDashboardOverview(t *testing.T) {
 		dashboard.Tasks[0].Source == nil || dashboard.Tasks[0].Assignee == nil || dashboard.Tasks[0].Assignee.Email != "editor@example.test" {
 		t.Fatalf("dashboard task = %+v", dashboard.Tasks)
 	}
+}
+
+func TestRenderPublishRequestKeepsUploadIdentity(t *testing.T) {
+	team := newWebTeam(t)
+	team.server.blobs, _ = testObjectStore(t)
+
+	var version webVersion
+	team.call("owner", "GET", "./versions/"+team.version, nil, 200, &version)
+	path := "./media/" + version.ItemID + "/uploads"
+	requestID := "92e975f7-496c-412b-9cfe-6033a93184e2"
+	source := webRenderSource{SnapshotID: strings.Repeat("a", 64), AudioSHA256: strings.Repeat("b", 64)}
+	payload := map[string]any{"filename": "render.wav", "bytes": 200, "request_id": requestID, "source": source}
+
+	team.call("reviewer", "POST", path, payload, 403, nil)
+	for range 2 {
+		var upload struct {
+			ID  string `json:"id"`
+			URL string `json:"url"`
+		}
+		team.call("editor", "POST", path, payload, 201, &upload)
+		if upload.ID != requestID || upload.URL == "" {
+			t.Fatalf("unexpected upload session: %s", upload.ID)
+		}
+	}
+
+	payload["bytes"] = 201
+	team.call("editor", "POST", path, payload, 409, nil)
 }

@@ -30,12 +30,13 @@ const (
 )
 
 type webMediaJob struct {
-	version string
-	project string
-	kind    string
-	size    int64
-	lease   string
-	attempt int
+	version        string
+	project        string
+	kind           string
+	size           int64
+	lease          string
+	attempt        int
+	expectedSHA256 string
 }
 
 type webArtifact struct {
@@ -117,8 +118,8 @@ func (w webMediaWorker) claim(ctx context.Context) (webMediaJob, error) {
  ), started AS (
  UPDATE web_media_versions v SET state='processing',failure=NULL FROM leased l WHERE v.id=l.version_id RETURNING v.id,v.project_id
  )
- SELECT v.id::text,v.project_id::text,u.kind,u.bytes,l.lease_id::text,l.attempts
- FROM started v JOIN leased l ON l.version_id=v.id JOIN web_uploads u ON u.id=v.id`).Scan(&job.version, &job.project, &job.kind, &job.size, &job.lease, &job.attempt)
+ SELECT v.id::text,v.project_id::text,u.kind,u.bytes,l.lease_id::text,l.attempts,COALESCE(u.render_source->>'audio_sha256','')
+ FROM started v JOIN leased l ON l.version_id=v.id JOIN web_uploads u ON u.id=v.id`).Scan(&job.version, &job.project, &job.kind, &job.size, &job.lease, &job.attempt, &job.expectedSHA256)
 	return job, err
 }
 
@@ -169,12 +170,13 @@ func (w webMediaWorker) prepare(ctx context.Context, job webMediaJob) (int64, [3
 	if err != nil {
 		return 0, assets, err
 	}
-	written, copyErr := io.Copy(file, io.LimitReader(body, job.size+1))
+	digest := sha256.New()
+	written, copyErr := io.Copy(io.MultiWriter(file, digest), io.LimitReader(body, job.size+1))
 	closeErr := file.Close()
 	if copyErr != nil || closeErr != nil {
 		return 0, assets, errors.Join(copyErr, closeErr)
 	}
-	if written != job.size {
+	if written != job.size || job.expectedSHA256 != "" && hex.EncodeToString(digest.Sum(nil)) != job.expectedSHA256 {
 		return 0, assets, errInvalidMedia
 	}
 

@@ -916,6 +916,13 @@
                   },
                   "description": {
                     "type": "string"
+                  },
+                  "request_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "source": {
+                    "$ref": "#/components/schemas/RenderSource"
                   }
                 }
               }
@@ -3243,6 +3250,9 @@
           },
           "created_at": {
             "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/RenderSource"
           }
         }
       },
@@ -3272,6 +3282,10 @@
                 "type": "string"
               }
             }
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid"
           }
         }
       },
@@ -4325,6 +4339,32 @@
           "role",
           "return_to"
         ]
+      },
+      "RenderSource": {
+        "type": "object",
+        "required": [
+          "snapshot_id",
+          "audio_sha256"
+        ],
+        "properties": {
+          "snapshot_id": {
+            "type": "string"
+          },
+          "audio_sha256": {
+            "type": "string"
+          },
+          "commit_oid": {
+            "type": "string"
+          },
+          "review_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "settings": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
       }
     }
   }
