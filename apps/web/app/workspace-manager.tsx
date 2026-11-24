@@ -7,6 +7,7 @@ import type { components } from "../lib/api-types";
 import { AppModal } from "./app-modal";
 import { ConfirmAction, type Confirmation } from "./confirm-action";
 import { useWorkspace, type Project, type TeamWorkspace } from "./workspace";
+import { WorkspaceInvitations } from "./workspace-invitations";
 import { InlineError } from "./request-states";
 
 type TeamMember = components["schemas"]["WorkspaceMember"];
@@ -146,6 +147,7 @@ function WorkspaceMembers({ team, close }: { team: TeamWorkspace; close: () => v
         </li>;
       })}</ul>
       {more && <button disabled={busy || loadedPage !== page} onClick={() => setPage((value) => value + 1)}>멤버 더 보기</button>}
+      <WorkspaceInvitations workspaceId={team.id} />
     </AppModal>
     {confirmation && <ConfirmAction confirmation={confirmation} actionError={error} close={() => setConfirmation(undefined)} />}
   </>;

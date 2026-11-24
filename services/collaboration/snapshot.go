@@ -28,12 +28,15 @@ var version2SnapshotTables = append(append([]string(nil), legacySnapshotTables..
 
 var snapshotTables = append([]string{"accounts", "account_identities", "workspaces"}, version2SnapshotTables[1:]...)
 
-func tablesForSnapshot(version int) []string {
-	if version == 1 {
+func tablesForSnapshot(manifest snapshotManifest) []string {
+	if manifest.Version == 1 {
 		return legacySnapshotTables
 	}
-	if version == 2 {
+	if manifest.Version == 2 {
 		return version2SnapshotTables
+	}
+	if slices.Contains(manifest.Schema, "019_workspace_invitations.sql") {
+		return append(slices.Clone(snapshotTables), "workspace_invitations")
 	}
 	return snapshotTables
 }
@@ -159,7 +162,7 @@ func (state snapshotState) snapshot(ctx context.Context, folder string) error {
 		projectIDs = nil
 	}
 
-	for _, table := range snapshotTables {
+	for _, table := range tablesForSnapshot(manifest) {
 		file, err := writeSnapshotFile(root, filepath.Join("db", table+".copy"), func(output io.Writer) error {
 			_, err := tx.Conn().PgConn().CopyTo(ctx, output, "COPY "+table+" TO STDOUT (FORMAT binary)")
 			return err
@@ -310,7 +313,7 @@ func (state snapshotState) restore(ctx context.Context, folder string) error {
 	if _, err := tx.Exec(ctx, "ALTER TABLE web_activity DISABLE TRIGGER web_activity_notification"); err != nil {
 		return err
 	}
-	for index, table := range tablesForSnapshot(manifest.Version) {
+	for index, table := range tablesForSnapshot(manifest) {
 		file, err := os.Open(filepath.Join(root, manifest.Tables[index].Path))
 		if err != nil {
 			return err
@@ -353,6 +356,10 @@ func (state snapshotState) restore(ctx context.Context, folder string) error {
 	}
 	if _, err := tx.Exec(ctx, `UPDATE review_media_versions SET state = CASE WHEN attempts >= 3 THEN 'failed' ELSE 'queued' END,
  lease_id = NULL, lease_until = NULL WHERE state = 'running'`); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(ctx, "UPDATE workspace_invitations SET revoked_at=now() WHERE accepted_by IS NULL AND revoked_at IS NULL"); err != nil {
 		return err
 	}
 

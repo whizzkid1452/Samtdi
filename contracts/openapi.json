@@ -2917,6 +2917,98 @@
           }
         }
       }
+    },
+    "/v1/workspaces/{workspace}/invitations": {
+      "parameters": [
+        {
+          "name": "workspace",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Recent team invitations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkspaceInvitation"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created team invitation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceInvitation"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace}/invitations/{invite}": {
+      "parameters": [
+        {
+          "name": "workspace",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "invite",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "responses": {
+          "204": {
+            "description": "Team invitation revoked"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4050,6 +4142,43 @@
         ],
         "properties": {
           "public_signup": {
+            "type": "boolean"
+          }
+        }
+      },
+      "WorkspaceInvitation": {
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "expires_at",
+          "accepted",
+          "revoked",
+          "expired"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "accepted": {
+            "type": "boolean"
+          },
+          "revoked": {
+            "type": "boolean"
+          },
+          "accept_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "expired": {
             "type": "boolean"
           }
         }
