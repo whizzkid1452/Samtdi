@@ -3,7 +3,16 @@
 import { useEffect, useState } from "react";
 
 type Anchor = { start_ms: number; end_ms?: number };
-export type FeedbackDraft = { anchor: Anchor; body: string };
+export type DraftTask = { assignee_id: string; due_on: string };
+/** A feedback being written; `task` is present when it should also become a to-do. */
+export type FeedbackDraft = { anchor: Anchor; body: string; task?: DraftTask };
+
+function readDraftTask(value: object): DraftTask | undefined {
+  if (!("task" in value) || !value.task || typeof value.task !== "object") return undefined;
+  const task = value.task as Record<string, unknown>;
+  if (typeof task.assignee_id !== "string" || typeof task.due_on !== "string") return undefined;
+  return { assignee_id: task.assignee_id, due_on: /^\d{4}-\d{2}-\d{2}$/.test(task.due_on) ? task.due_on : "" };
+}
 
 const unsavedDrafts = new Map<string, unknown>();
 
@@ -27,12 +36,13 @@ export function readFeedbackDraft({ key, duration }: { key: string; duration: nu
     !("anchor" in value) || !value.anchor || typeof value.anchor !== "object") return null;
 
   const { anchor, body } = value;
+  const task = readDraftTask(value);
   const start = "start_ms" in anchor ? anchor.start_ms : undefined;
   const end = "end_ms" in anchor ? anchor.end_ms : undefined;
   if (typeof start !== "number" || !Number.isInteger(start) || start < 0 || start > duration) return null;
-  if (end === undefined) return { anchor: { start_ms: start }, body };
+  if (end === undefined) return { anchor: { start_ms: start }, body, ...(task && { task }) };
   if (typeof end !== "number" || !Number.isInteger(end) || end <= start || end > duration) return null;
-  return { anchor: { start_ms: start, end_ms: end }, body };
+  return { anchor: { start_ms: start, end_ms: end }, body, ...(task && { task }) };
 }
 
 export function readReplyDraft(key: string): string | null {

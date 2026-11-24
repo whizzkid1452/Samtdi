@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, typ
 import WaveSurfer from "wavesurfer.js";
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.esm.js";
 import { createPlaybackClock } from "../lib/playback-clock";
+import { initials } from "../lib/people";
 import { timecode } from "../lib/timecode";
 import { useReviewRegions } from "./use-review-regions";
 import { noteLabel, type Note } from "./version-notes";
@@ -216,7 +217,7 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
               } else {
                 setOpenMarker(openMarker === first.id ? undefined : first.id);
               }
-            }}>{group.length}</button>;
+            }}>{group.length === 1 ? initials(first) : group.length}</button>;
           if (group.length === 1) return marker;
 
           return (

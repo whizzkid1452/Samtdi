@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, ApiError, describeError } from "../lib/api";
+import type { DraftTask } from "./feedback-drafts";
+import { TaskStatusBadge } from "./task-status-badge";
 import { displayName } from "../lib/people";
 import type { components } from "../lib/api-types";
 import { versionHref } from "../lib/routes";
@@ -155,8 +157,8 @@ export function useVersionNotes({ url, linkedNote }: { url: string; linkedNote?:
         pageRequest.current = null;
       }
     }),
-    create: (anchor: { start_ms: number; end_ms?: number }, body: string) => run(async () => {
-      const created = await api<{ id: string }>(url, { method: "POST", body: JSON.stringify({ ...anchor, body }) });
+    create: (anchor: { start_ms: number; end_ms?: number }, body: string, task?: DraftTask) => run(async () => {
+      const created = await api<{ id: string }>(url, { method: "POST", body: JSON.stringify({ ...anchor, body, task }) });
       await refreshNote(created.id);
       setRefresh((value) => value + 1);
       select(created.id);
@@ -217,6 +219,9 @@ export function VersionNotes({ feedback, url, projectId, itemId, versionId, acco
             <span className="muted">{displayName(note)}</span>
           </span>
           <span className="feedback-summary">{note.deleted ? "삭제된 피드백" : note.body}</span>
+          {note.tasks.length > 0 && <span className="row wrap">
+            {note.tasks.map((task) => <span className="row" key={task.id}><TaskStatusBadge status={task.status} />{task.title}</span>)}
+          </span>}
           <span className="feedback-meta">
             {note.resolved && <Badge color="teal" variant="light" tt="none">해결됨</Badge>}
             {note.replies.some(({ deleted }) => !deleted) && <span className="muted">답글 {note.replies.filter(({ deleted }) => !deleted).length}</span>}
