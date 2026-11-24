@@ -11,7 +11,7 @@ import { useReviewRegions } from "./use-review-regions";
 import { noteLabel, type Note } from "./version-notes";
 
 type WaveformGesture = { pointerId: number; rangeStart?: number };
-type WaveformInstance = { peaks: number[]; regions: ReturnType<typeof RegionsPlugin.create> };
+type WaveformInstance = { peaks: number[][]; regions: ReturnType<typeof RegionsPlugin.create> };
 
 function groupMarkers(notes: Note[], duration: number) {
   const groups: Note[][] = [];
@@ -26,7 +26,7 @@ function groupMarkers(notes: Note[], duration: number) {
 export function ReviewWaveform({ audio, duration, peaks, position, range, setRange, seek, notes, selected, previewEnd, openNote, onError, togglePlayback }: {
   audio: RefObject<HTMLAudioElement | null>;
   duration: number;
-  peaks: number[];
+  peaks: number[][];
   position: number;
   range?: [number, number];
   setRange: (range: [number, number]) => void;
@@ -56,11 +56,15 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
     const wavesurfer = WaveSurfer.create({
       container: target,
       media: player,
-      peaks: [peaks],
+      peaks,
+      splitChannels: peaks.length === 2 ? [
+        { waveColor: "#d8e4bd", progressColor: "#efffbd" },
+        { waveColor: "#a6bf75", progressColor: "#dbf79c" },
+      ] : undefined,
       duration: duration / 1000,
       height: "auto",
-      waveColor: "#8b99a6",
-      progressColor: "#1a7138",
+      waveColor: "#d8e4bd",
+      progressColor: "#dbf79c",
       cursorWidth: 0,
       interact: false,
       plugins: [regions],
@@ -184,6 +188,10 @@ export function ReviewWaveform({ audio, duration, peaks, position, range, setRan
 
 
   return <>
+      <div className="row spread waveform-heading">
+        <strong>파형</strong>
+        {peaks.length === 2 && <span>스테레오 · L / R</span>}
+      </div>
       <div className="waveform-frame">
         <div ref={waveform} className={"waveform" + (range ? " selecting" : "")}
           onPointerDown={(event) => {

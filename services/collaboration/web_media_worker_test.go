@@ -50,3 +50,21 @@ func TestExpiredWebMediaLeaseCannotPublish(t *testing.T) {
 		t.Fatalf("stale worker changed media state: %s, %v", state, err)
 	}
 }
+
+func TestWebWaveformPreservesStereoChannels(t *testing.T) {
+	// The first frame peaks only on the left, and the second only on the right.
+	raw := []byte{0x00, 0x80, 0, 0, 0, 0, 0x00, 0x40}
+	mixed, channels, err := encodeWebPeaks(raw, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(channels) != 2 || len(channels[0]) != 2 || len(channels[1]) != 2 ||
+		channels[0][0] != 1 || channels[0][1] != 0 ||
+		channels[1][0] != 0 || channels[1][1] != 0.5 ||
+		mixed[0] != 0.5 || mixed[1] != 0.25 {
+		t.Fatalf("unexpected waveform: mixed %v, channels %v", mixed, channels)
+	}
+	if _, _, err := encodeWebPeaks(raw[:6], 2); !errors.Is(err, errInvalidMedia) {
+		t.Fatalf("incomplete stereo frame = %v", err)
+	}
+}

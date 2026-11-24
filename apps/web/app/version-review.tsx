@@ -3,6 +3,7 @@
 import { Button, Slider } from "@mantine/core";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, describeError } from "../lib/api";
+import type { components } from "../lib/api-types";
 import { timecode } from "../lib/timecode";
 import { ReviewRangeInput } from "./review-range-input";
 import { ReviewWaveform } from "./review-waveform";
@@ -24,7 +25,7 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
   const audio = useRef<HTMLAudioElement>(null);
   const previewEnd = useRef<number | null>(null);
   const composerTrigger = useRef<HTMLButtonElement>(null);
-  const [peaks, setPeaks] = useState<number[]>([]);
+  const [peaks, setPeaks] = useState<number[][]>([]);
   const [position, setPosition] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [metadataReady, setMetadataReady] = useState(false);
@@ -46,8 +47,8 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
   useEffect(() => {
     const request = new AbortController();
 
-    api<{ peaks: number[] }>(path + "/files/peaks", { signal: request.signal }).then((data) => {
-      if (!request.signal.aborted) setPeaks(data.peaks);
+    api<components["schemas"]["WaveformPeaks"]>(path + "/files/peaks", { signal: request.signal }).then((data) => {
+      if (!request.signal.aborted) setPeaks(data.channel_peaks ?? [data.peaks]);
     }).catch((cause) => {
       if (!request.signal.aborted) setError(describeError(cause));
     });
