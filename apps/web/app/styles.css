@@ -396,3 +396,8 @@ label { font-size: .9rem; color: var(--muted); }
   .workspace-shell .mobile-navigation-trigger { display: inline-flex; }
   .login { grid-template-columns: minmax(0, 1fr); }
 }
+
+.media-library .filter-bar { padding-block: .85rem; border-block-start: 1px solid #dedfd5; }
+.media-library .media-table { background: #fffefa; border-color: #dedfd5; }
+.media-library .media-table thead { background: #eeefe7; }
+.media-library .media-table tbody tr { min-height: 3rem; }
