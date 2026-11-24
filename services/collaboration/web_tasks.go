@@ -15,6 +15,7 @@ type webTaskNote struct {
 	ID        string `json:"id"`
 	VersionID string `json:"version_id"`
 	StartMS   int64  `json:"start_ms"`
+	EndMS     *int64 `json:"end_ms,omitempty"`
 	Body      string `json:"body"`
 	Resolved  bool   `json:"resolved"`
 	Deleted   bool   `json:"deleted"`
@@ -22,26 +23,44 @@ type webTaskNote struct {
 }
 
 type webTask struct {
-	ID              string        `json:"id"`
-	Title           string        `json:"title"`
-	Description     string        `json:"description"`
-	Status          string        `json:"status"`
-	AssigneeID      string        `json:"assignee_id"`
-	DueOn           string        `json:"due_on"`
-	ResultVersionID string        `json:"result_version_id"`
-	ReviewText      string        `json:"review_text"`
-	Position        int64         `json:"position"`
-	Archived        bool          `json:"archived"`
-	Revision        int           `json:"revision"`
-	Notes           []webTaskNote `json:"notes"`
+	ID              string         `json:"id"`
+	Title           string         `json:"title"`
+	Description     string         `json:"description"`
+	Status          string         `json:"status"`
+	AssigneeID      string         `json:"assignee_id"`
+	DueOn           string         `json:"due_on"`
+	ResultVersionID string         `json:"result_version_id"`
+	ReviewText      string         `json:"review_text"`
+	Position        int64          `json:"position"`
+	Archived        bool           `json:"archived"`
+	Revision        int            `json:"revision"`
+	CreatedAt       time.Time      `json:"created_at"`
+	Notes           []webTaskNote  `json:"notes"`
+	Source          *webTaskSource `json:"source"`
 }
 
-const webTaskNoteJSON = `jsonb_build_object('id',n.id,'version_id',n.version_id,'start_ms',n.start_ms,
- 'body',CASE WHEN n.deleted THEN '' ELSE n.body END,'resolved',n.resolved,'deleted',n.deleted,'revision',n.revision)`
+// webTaskSource is the audio a task came from: its first linked feedback's media item, version and time range.
+type webTaskSource struct {
+	NoteID    string `json:"note_id"`
+	ItemID    string `json:"item_id"`
+	ItemTitle string `json:"item_title"`
+	VersionID string `json:"version_id"`
+	Filename  string `json:"filename"`
+	StartMS   int64  `json:"start_ms"`
+	EndMS     *int64 `json:"end_ms,omitempty"`
+}
+
+const webTaskNoteJSON = `jsonb_strip_nulls(jsonb_build_object('id',n.id,'version_id',n.version_id,'start_ms',n.start_ms,'end_ms',n.end_ms,
+ 'body',CASE WHEN n.deleted THEN '' ELSE n.body END,'resolved',n.resolved,'deleted',n.deleted,'revision',n.revision))`
+const webTaskSourceJSON = `(SELECT jsonb_strip_nulls(jsonb_build_object('note_id',n.id,'item_id',i.id,'item_title',i.title,'version_id',v.id,
+ 'filename',v.filename,'start_ms',n.start_ms,'end_ms',n.end_ms))
+ FROM web_task_notes l JOIN web_notes n ON n.id=l.note_id JOIN web_media_versions v ON v.id=n.version_id
+ JOIN web_media_items i ON i.id=v.item_id WHERE l.task_id=t.id AND NOT n.deleted ORDER BY n.created_at,n.id LIMIT 1)`
 const webTaskSelect = `SELECT t.id::text,t.title,t.description,t.status,COALESCE(t.assignee_id::text,''),
- COALESCE(t.due_on::text,''),COALESCE(t.result_version_id::text,''),t.review_text,t.position,t.archived,t.revision,
+ COALESCE(t.due_on::text,''),COALESCE(t.result_version_id::text,''),t.review_text,t.position,t.archived,t.revision,t.created_at,
  COALESCE((SELECT jsonb_agg(` + webTaskNoteJSON + ` ORDER BY n.created_at,n.id)
- FROM web_task_notes l JOIN web_notes n ON n.id=l.note_id WHERE l.task_id=t.id),'[]'::jsonb)
+ FROM web_task_notes l JOIN web_notes n ON n.id=l.note_id WHERE l.task_id=t.id),'[]'::jsonb),
+ ` + webTaskSourceJSON + `
  FROM web_tasks t`
 
 type webNoteConfirmation struct {
@@ -98,6 +117,7 @@ func (s *Server) webTaskRoutes() {
 	s.mux.HandleFunc("POST "+base+"/tasks", s.withSession(s.saveWebTask))
 	s.mux.HandleFunc("GET "+base+"/tasks/{task}", s.withSession(s.getWebTask))
 	s.mux.HandleFunc("GET "+base+"/task-counts", s.withSession(s.webTaskCounts))
+	s.mux.HandleFunc("GET "+base+"/task-summary", s.withSession(s.webTaskSummary))
 	s.mux.HandleFunc("PUT "+base+"/tasks/{task}", s.withSession(s.saveWebTask))
 	s.mux.HandleFunc("GET "+base+"/task-options", s.withSession(s.webTaskOptions))
 }
@@ -204,6 +224,42 @@ func (s *Server) webTaskCounts(w http.ResponseWriter, r *http.Request, session S
 		result[count.Status] = count.Count
 	}
 	writeJSON(w, 200, result)
+}
+
+type webAssigneeLoad struct {
+	AssigneeID string `json:"assignee_id"`
+	Open       int64  `json:"open"`
+	Late       int64  `json:"late"`
+}
+
+// webTaskSummary describes the open work behind the current task filters: who holds it and what is late.
+func (s *Server) webTaskSummary(w http.ResponseWriter, r *http.Request, session Session) {
+	if !s.webRead(w, r, session) {
+		return
+	}
+	args, valid := webTaskFilterArgs(r)
+	if !valid {
+		problem(w, 400, "invalid_task_filter")
+		return
+	}
+	const late = `t.status<>'done' AND t.due_on<(now() AT TIME ZONE 'Asia/Seoul')::date`
+	rows, err := s.pool.Query(r.Context(), `SELECT COALESCE(t.assignee_id::text,''),count(*) FILTER (WHERE t.status<>'done'),
+ count(*) FILTER (WHERE `+late+`) FROM web_tasks t`+webTaskFilter+` GROUP BY 1 ORDER BY 2 DESC,1`, args...)
+	if err != nil {
+		internal(w, "summarize_web_tasks", err)
+		return
+	}
+	loads, err := pgx.CollectRows(rows, pgx.RowToStructByPos[webAssigneeLoad])
+	if err != nil {
+		internal(w, "read_task_summary", err)
+		return
+	}
+	var open, overdue int64
+	for _, load := range loads {
+		open += load.Open
+		overdue += load.Late
+	}
+	writeJSON(w, 200, map[string]any{"open": open, "late": overdue, "assignees": loads})
 }
 
 func (s *Server) webTaskOptions(w http.ResponseWriter, r *http.Request, session Session) {
