@@ -1,10 +1,12 @@
 "use client";
 
 import { Button, Slider } from "@mantine/core";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useMediaQuery } from "@mantine/hooks";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
 import { timecode } from "../lib/timecode";
+import { AppModal } from "./app-modal";
 import { ReviewRangeInput } from "./review-range-input";
 import { ReviewWaveform } from "./review-waveform";
 import { FeedbackComposer } from "./feedback-composer";
@@ -14,9 +16,9 @@ import { useProjectMembers } from "./members";
 import type { MediaVersion } from "./media-library";
 import { InlineError } from "./request-states";
 
-export function VersionReview({ base, version, initialAt, initialNote, projectId, accountId, canEdit, writable }: {
+export function VersionReview({ base, version, initialAt, initialNote, projectId, accountId, canEdit, writable, history }: {
   base: string; version: MediaVersion; initialAt?: number; initialNote?: string;
-  projectId: string; accountId: string; canEdit: boolean; writable: boolean;
+  projectId: string; accountId: string; canEdit: boolean; writable: boolean; history?: ReactNode;
 }) {
   const path = base + "/versions/" + version.id;
   const notesURL = path + "/notes";
@@ -25,6 +27,7 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
   const audio = useRef<HTMLAudioElement>(null);
   const previewEnd = useRef<number | null>(null);
   const composerTrigger = useRef<HTMLButtonElement>(null);
+  const mobile = useMediaQuery("(max-width: 800px)");
   const [peaks, setPeaks] = useState<number[][]>([]);
   const [position, setPosition] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -150,7 +153,15 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
     }
   }
 
+  const composer = composerOpen && draft && <FeedbackComposer draft={draft} busy={feedback.busy} error={feedback.error || memberError}
+          save={save} close={closeComposer} discard={() => { updateDraft(null); closeComposer(); }}
+          changeBody={(body) => updateDraft({ ...draft, body })}
+          moveAnchor={() => updateDraft({ ...draft, anchor: { start_ms: currentPosition() } })}
+          assignees={canEdit && writable ? assignees : undefined}
+          changeTask={(task) => updateDraft(task ? { ...draft, task } : { anchor: draft.anchor, body: draft.body })} />;
+
   return <div className="review-grid">
+    <div className="review-media-column">
     <section className="player-panel" aria-label="음원 플레이어" onKeyDown={(event) => {
       if (event.key === "Escape" && !event.defaultPrevented && range) clearRange();
     }}>
@@ -211,6 +222,8 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
           onClick={() => compose(true)}>구간에 피드백</Button>}
       </div>}
     </section>
+    {history}
+    </div>
     <VersionNotes feedback={feedback} url={notesURL} projectId={projectId} itemId={version.item_id}
       versionId={version.id} accountId={accountId} canEdit={canEdit} writable={writable} seek={seek} playRange={playRange} pause={pausePlayback}
       replyActive={typeof editor === "object" && editor.replyTo === feedback.selected?.id}
@@ -223,12 +236,8 @@ export function VersionReview({ base, version, initialAt, initialNote, projectId
           {composerOpen ? "새 피드백" : draft?.body.trim() ? "피드백 계속 작성" : "이 위치에 피드백 남기기"}
         </Button>
         {storageError && <InlineError message={storageError} />}
-        {composerOpen && draft && <FeedbackComposer draft={draft} busy={feedback.busy} error={feedback.error || memberError}
-          save={save} close={closeComposer} discard={() => { updateDraft(null); closeComposer(); }}
-          changeBody={(body) => updateDraft({ ...draft, body })}
-          moveAnchor={() => updateDraft({ ...draft, anchor: { start_ms: currentPosition() } })}
-          assignees={canEdit && writable ? assignees : undefined}
-          changeTask={(task) => updateDraft(task ? { ...draft, task } : { anchor: draft.anchor, body: draft.body })} />}
+        {!mobile && composer}
+        {mobile && composer && <AppModal title="피드백 남기기" close={closeComposer} busy={feedback.busy}>{composer}</AppModal>}
       </div>} />
   </div>;
 }
