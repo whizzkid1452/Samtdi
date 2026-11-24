@@ -3083,6 +3083,35 @@
           }
         }
       }
+    },
+    "/v1/auth/invitations/{token}": {
+      "parameters": [
+        {
+          "name": "token",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Invitation preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationPreview"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invitation is unavailable"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3791,6 +3820,10 @@
           "expires_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "preview_url": {
+            "type": "string",
+            "format": "uri"
           }
         }
       },
@@ -3825,6 +3858,9 @@
             "type": "boolean"
           },
           "personal": {
+            "type": "boolean"
+          },
+          "guest": {
             "type": "boolean"
           }
         }
@@ -4256,6 +4292,39 @@
             "type": "boolean"
           }
         }
+      },
+      "InvitationPreview": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "project",
+              "workspace"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "editor",
+              "reviewer",
+              "member"
+            ]
+          },
+          "return_to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "kind",
+          "role",
+          "return_to"
+        ]
       }
     }
   }

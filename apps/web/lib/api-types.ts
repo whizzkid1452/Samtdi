@@ -2693,6 +2693,52 @@ export interface paths {
         };
         trace?: never;
     };
+    "/v1/auth/invitations/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Invitation preview */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvitationPreview"];
+                    };
+                };
+                /** @description Invitation is unavailable */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2877,6 +2923,8 @@ export interface components {
             accept_url: string;
             /** Format: date-time */
             expires_at: string;
+            /** Format: uri */
+            preview_url?: string;
         };
         TeamWorkspace: {
             /** Format: uuid */
@@ -2887,6 +2935,7 @@ export interface components {
             can_create: boolean;
             active: boolean;
             personal?: boolean;
+            guest?: boolean;
         };
         WorkspacesResponse: {
             enabled: boolean;
@@ -2999,6 +3048,14 @@ export interface components {
             /** Format: uri */
             accept_url?: string;
             expired: boolean;
+        };
+        InvitationPreview: {
+            title: string;
+            /** @enum {string} */
+            kind: "project" | "workspace";
+            /** @enum {string} */
+            role: "owner" | "editor" | "reviewer" | "member";
+            return_to: string;
         };
     };
     responses: never;

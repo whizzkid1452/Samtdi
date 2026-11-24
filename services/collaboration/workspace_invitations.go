@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -73,8 +72,7 @@ func (s *Server) createWorkspaceInvitation(w http.ResponseWriter, r *http.Reques
 	}
 
 	token := randomToken()
-	invite := workspaceInvitation{Email: email, AcceptURL: s.origin + "/v1/auth/login?" +
-		url.Values{"invite": {token}, "return_to": {"/projects?workspace=" + entry.ID}}.Encode()}
+	invite := workspaceInvitation{Email: email, AcceptURL: s.origin + "/invite/" + token}
 	err = s.pool.QueryRow(r.Context(), `INSERT INTO workspace_invitations(workspace_id,token_hash,email,expires_at)
  VALUES($1,$2,$3,now()+interval '7 days') RETURNING id::text,expires_at`, entry.ID, tokenHash(token), email).
 		Scan(&invite.ID, &invite.ExpiresAt)

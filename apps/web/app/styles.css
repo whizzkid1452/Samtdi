@@ -430,3 +430,7 @@ label { font-size: .9rem; color: var(--muted); }
 .project-settings-management { display: grid; gap: 1rem; min-width: 0; }
 .workspace-navigation .clean-list > li { padding: 0; border: 0; }
 @media (max-width: 950px) { .project-settings-layout { grid-template-columns: minmax(0, 1fr); } }
+
+.invite-entry { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+.invite-entry .login-content { width: min(100%, 38rem); background: #fffefa; border: 1px solid #dedfd5; border-radius: 14px; padding: clamp(1rem, 4vw, 2.5rem); }
+.invite-entry h1 { margin-block: .75rem; overflow-wrap: anywhere; }
