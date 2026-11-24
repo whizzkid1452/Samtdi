@@ -4,8 +4,8 @@ Figma 원본의 `00 · 기능 목록`과 `01 · 제품 화면`을 열었다. 설
 
 | 판정 | 화면 수 | 근거 |
 | --- | ---: | --- |
-| 실행 확인 | 36 | 실제 UI나 API로 해당 상태를 확인 |
-| 코드 대조 | 142 | 해당 경로와 코드의 화면 상태를 대조. 개별 시나리오 실기 검증은 남아 있음 |
+| 실행 확인 | 41 | 실제 UI나 API로 해당 상태를 확인 |
+| 코드 대조 | 137 | 해당 경로와 코드의 화면 상태를 대조. 개별 시나리오 실기 검증은 남아 있음 |
 | 화면 차이 | 22 | 디자인 시안과 현재 UI 구성 또는 동작의 차이를 표에 기록 |
 | 조건부 | 10 | 외부 인증 설정, 커밋 데이터 또는 별도 실행이 필요 |
 | 보류 | 13 | 결제·구독과 사용량 제어 |
@@ -21,7 +21,7 @@ Chrome은 1320 × 900과 390 × 844에서 실행했다. PostgreSQL과 VersityGW�
 | [프로젝트 초대 수락](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=20-2) | 코드 대조 | project-screen.tsx · workspace.tsx |
 | [만료된 초대](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=20-2) | 코드 대조 | project-screen.tsx · workspace.tsx |
 | [세션 조회 오류](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=20-2) | 코드 대조 | project-screen.tsx · workspace.tsx |
-| [모바일 로그인](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=20-2) | 화면 차이 | Chrome에서 링크·레이아웃을 확인. 공통 로그인 CSS의 한 열 레이아웃을 사용한다. |
+| [모바일 로그인](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=20-2) | 화면 차이 | Chrome 390px 뷰포트와 가로 넘침 없음 확인. 공통 로그인 CSS의 한 열 레이아웃을 사용한다. |
 | [프로젝트 홈](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=92-128) | 실행 확인 | Chrome에서 링크·레이아웃을 확인. |
 | [프로젝트 만들기](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=20-2) | 코드 대조 | project-screen.tsx · workspace.tsx |
 
@@ -102,7 +102,7 @@ Chrome은 1320 × 900과 390 × 844에서 실행했다. PostgreSQL과 VersityGW�
 | [작업 검색 결과 없음](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=31-2) | 코드 대조 | task-board.tsx · task-drag.tsx |
 | [작업 조회 오류](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=31-2) | 코드 대조 | task-board.tsx · task-drag.tsx |
 | [보관한 작업](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=31-2) | 코드 대조 | task-board.tsx · task-drag.tsx |
-| [검토자 작업 보드](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=31-2) | 코드 대조 | task-board.tsx · task-drag.tsx |
+| [검토자 작업 보드](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=31-2) | 실행 확인 | Chrome에서 검토자의 보드 쓰기 제어 숨김. |
 
 ## 작업 상세와 편집
 
@@ -184,7 +184,7 @@ Chrome은 1320 × 900과 390 × 844에서 실행했다. PostgreSQL과 VersityGW�
 | --- | --- | --- |
 | [음원 리뷰](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=92-1208) | 실행 확인 | WAV 재생·메타데이터 확인. |
 | [음원 재생 중](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=16-2) | 실행 확인 | WAV 재생·메타데이터 확인. |
-| [파형 구간 지정](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=16-2) | 코드 대조 | version-review.tsx · review-waveform.tsx |
+| [파형 구간 지정](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=16-2) | 실행 확인 | Chrome에서 방향키 탐색과 구간 버튼 확인. |
 | [선택 구간 듣기](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=16-2) | 코드 대조 | version-review.tsx · review-waveform.tsx |
 | [겹친 피드백 마커](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=16-2) | 코드 대조 | version-review.tsx · review-waveform.tsx |
 | [버전 기록](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=16-2) | 실행 확인 | Chrome에서 링크·레이아웃을 확인. |
@@ -270,7 +270,7 @@ Chrome은 1320 × 900과 390 × 844에서 실행했다. PostgreSQL과 VersityGW�
 | Figma 화면 | 판정 | 구현·검증 근거 |
 | --- | --- | --- |
 | [파형 드래그 탐색](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=128-15318) | 코드 대조 | version-review.tsx · version-notes.tsx · review-waveform.tsx |
-| [키보드 탐색 · 포커스와 조작 안내](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=128-15912) | 코드 대조 | version-review.tsx · version-notes.tsx · review-waveform.tsx |
+| [키보드 탐색 · 포커스와 조작 안내](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=128-15912) | 실행 확인 | Chrome에서 방향키 탐색과 구간 버튼 확인. |
 | [검토자 · 다른 사람의 피드백](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=128-12451) | 화면 차이 | 리스트와 대화는 공유하고, 관리 버튼의 표시 권한이 바뀐다. |
 | [검토자 · 내 피드백 다시 열기](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=128-13020) | 코드 대조 | version-review.tsx · version-notes.tsx · review-waveform.tsx |
 | [검토자 · 내 피드백 해결](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=128-13593) | 코드 대조 | version-review.tsx · version-notes.tsx · review-waveform.tsx |
@@ -303,8 +303,8 @@ Chrome은 1320 × 900과 390 × 844에서 실행했다. PostgreSQL과 VersityGW�
 | [조절한 마감일 저장 완료](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=128-3405) | 코드 대조 | task-timeline.tsx · workspace-activity.tsx |
 | [일정 저장 실패 · 원래 날짜 복구](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=128-3617) | 코드 대조 | task-timeline.tsx · workspace-activity.tsx |
 | [마감순 그룹 5개 · 지연과 다음 주 이후](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=128-3941) | 코드 대조 | task-timeline.tsx · workspace-activity.tsx |
-| [100개 초과 작업 · 첫 페이지와 필터](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=128-4127) | 코드 대조 | task-timeline.tsx · workspace-activity.tsx |
-| [100개 초과 작업 · 마지막 페이지](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=128-4306) | 코드 대조 | task-timeline.tsx · workspace-activity.tsx |
+| [100개 초과 작업 · 첫 페이지와 필터](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=128-4127) | 실행 확인 | Chrome에서 작업 100개와 다음 페이지 2개 확인. |
+| [100개 초과 작업 · 마지막 페이지](https://www.figma.com/design/FjzyBt184yHOLeJ02Mt6Xr?node-id=128-4306) | 실행 확인 | Chrome에서 작업 100개와 다음 페이지 2개 확인. |
 
 ## 결제·구독
 
