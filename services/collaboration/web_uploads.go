@@ -313,6 +313,14 @@ func (s *Server) startWebUpload(w http.ResponseWriter, r *http.Request, session 
 			return map[string]any{"id": id, "url": "", "headers": map[string][]string{}, "expires_at": expires, "version_id": id}, nil
 		}
 		remaining := time.Until(expires).Truncate(time.Second)
+		if remaining <= 0 && input.RequestID != "" {
+			err := tx.QueryRow(ctx, `UPDATE web_uploads SET expires_at=clock_timestamp()+make_interval(secs => $2),cleaned_at=NULL
+ WHERE id=$1 AND completion_key IS NULL RETURNING expires_at`, id, webUploadWindow.Seconds()).Scan(&expires)
+			if err != nil {
+				return nil, err
+			}
+			remaining = time.Until(expires).Truncate(time.Second)
+		}
 		if remaining <= 0 {
 			return nil, webProblem{410, "upload_session_expired"}
 		}

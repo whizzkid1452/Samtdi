@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"math"
@@ -440,13 +439,31 @@ func (w webMediaWorker) cleanup(ctx context.Context) error {
 		return err
 	}
 	for _, upload := range uploads {
-		key := webTemporaryKey(upload.Project, upload.ID)
-		if _, err = w.store.client.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: &w.store.bucket, Key: &key}); err != nil {
+		if err := w.cleanExpiredUpload(ctx, upload.Project, upload.ID); err != nil {
 			return err
-		}
-		if _, err = w.pool.Exec(ctx, "UPDATE web_uploads SET cleaned_at=now() WHERE id=$1", upload.ID); err != nil {
-			return fmt.Errorf("mark upload cleaned: %w", err)
 		}
 	}
 	return nil
+}
+
+func (w webMediaWorker) cleanExpiredUpload(ctx context.Context, project, upload string) error {
+	tx, err := w.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// Hold the upload row until deletion so a retried publish cannot renew an object being deleted.
+	result, err := tx.Exec(ctx, `UPDATE web_uploads u SET cleaned_at=now() WHERE u.id=$1 AND u.cleaned_at IS NULL
+ AND u.expires_at+interval '1 day'<now()
+ AND NOT EXISTS (SELECT 1 FROM web_media_jobs j WHERE j.version_id=u.id AND j.finished_at IS NULL)`, upload)
+	if err != nil || result.RowsAffected() == 0 {
+		return err
+	}
+
+	key := webTemporaryKey(project, upload)
+	if _, err := w.store.client.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: &w.store.bucket, Key: &key}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }

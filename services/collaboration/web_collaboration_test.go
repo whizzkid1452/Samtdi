@@ -1,8 +1,14 @@
 package collaboration
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -348,26 +354,103 @@ func TestWebDashboardOverview(t *testing.T) {
 func TestRenderPublishRequestKeepsUploadIdentity(t *testing.T) {
 	team := newWebTeam(t)
 	team.server.blobs, _ = testObjectStore(t)
+	ctx := t.Context()
+
+	ffmpeg, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("FFmpeg is required to verify render publishing")
+	}
+	ffprobe, err := exec.LookPath("ffprobe")
+	if err != nil {
+		t.Skip("FFprobe is required to verify render publishing")
+	}
+	render := filepath.Join(t.TempDir(), "render.wav")
+	if output, err := exec.CommandContext(ctx, ffmpeg, "-nostdin", "-v", "error", "-f", "lavfi", "-i",
+		"sine=frequency=330:duration=0.5", "-c:a", "pcm_s16le", render).CombinedOutput(); err != nil {
+		t.Fatalf("create WAV: %v: %s", err, output)
+	}
+	audio, err := os.ReadFile(render)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(audio)
 
 	var version webVersion
 	team.call("owner", "GET", "./versions/"+team.version, nil, 200, &version)
 	path := "./media/" + version.ItemID + "/uploads"
 	requestID := "92e975f7-496c-412b-9cfe-6033a93184e2"
-	source := webRenderSource{SnapshotID: strings.Repeat("a", 64), AudioSHA256: strings.Repeat("b", 64)}
-	payload := map[string]any{"filename": "render.wav", "bytes": 200, "request_id": requestID, "source": source}
+	source := webRenderSource{SnapshotID: strings.Repeat("a", 64), AudioSHA256: hex.EncodeToString(digest[:])}
+	payload := map[string]any{"filename": "render.wav", "bytes": len(audio), "request_id": requestID, "source": source}
 
 	team.call("reviewer", "POST", path, payload, 403, nil)
-	for range 2 {
-		var upload struct {
-			ID  string `json:"id"`
-			URL string `json:"url"`
-		}
-		team.call("editor", "POST", path, payload, 201, &upload)
-		if upload.ID != requestID || upload.URL == "" {
-			t.Fatalf("unexpected upload session: %s", upload.ID)
-		}
+
+	type publishResponse struct {
+		ID        string    `json:"id"`
+		URL       string    `json:"url"`
+		ExpiresAt time.Time `json:"expires_at"`
+		VersionID string    `json:"version_id"`
+	}
+	var first, renewed publishResponse
+	team.call("editor", "POST", path, payload, 201, &first)
+	if first.ID != requestID || first.URL == "" {
+		t.Fatalf("unexpected upload session: %s", first.ID)
+	}
+	if _, err := team.server.pool.Exec(ctx, "UPDATE web_uploads SET expires_at=now()-interval '1 minute',cleaned_at=now() WHERE id=$1", requestID); err != nil {
+		t.Fatal(err)
+	}
+	team.call("editor", "POST", path, payload, 201, &renewed)
+	if renewed.ID != requestID || renewed.URL == "" || !renewed.ExpiresAt.After(time.Now()) {
+		t.Fatalf("expired upload did not renew: %s", renewed.ID)
 	}
 
-	payload["bytes"] = 201
+	worker := webMediaWorker{pool: team.server.pool, store: team.server.blobs.(*s3Store), ffmpeg: ffmpeg, ffprobe: ffprobe}
+	metadata := BlobMetadata{Size: int64(len(audio)), SHA256: source.AudioSHA256}
+	if err := worker.store.Put(ctx, webTemporaryKey(team.project, requestID), metadata, bytes.NewReader(audio)); err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.cleanExpiredUpload(ctx, team.project, requestID); err != nil {
+		t.Fatal(err)
+	}
+	var cleaned bool
+	if err := team.server.pool.QueryRow(ctx, "SELECT cleaned_at IS NOT NULL FROM web_uploads WHERE id=$1", requestID).Scan(&cleaned); err != nil || cleaned {
+		t.Fatalf("cleanup reached a renewed upload: cleaned=%t, %v", cleaned, err)
+	}
+
+	completeURL := team.url + "/v1/projects/" + team.project + "/uploads/" + requestID + "/complete"
+	request, err := http.NewRequestWithContext(ctx, "POST", completeURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer "+team.tokens["editor"])
+	request.Header.Set("Idempotency-Key", requestID)
+	complete, err := team.client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	complete.Body.Close()
+	if complete.StatusCode != 202 {
+		t.Fatalf("upload completion returned HTTP %d", complete.StatusCode)
+	}
+	job, err := worker.claim(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	worker.runJob(ctx, job)
+
+	var repeated publishResponse
+	team.call("editor", "POST", path, payload, 201, &repeated)
+	if repeated.VersionID != requestID || repeated.URL != "" {
+		t.Fatalf("published version identity changed: %s", repeated.VersionID)
+	}
+	team.call("reviewer", "GET", "./versions/"+requestID, nil, 200, &version)
+	if version.State != "ready" || version.Source == nil || version.Source.AudioSHA256 != source.AudioSHA256 {
+		failure := ""
+		if version.Failure != nil {
+			failure = *version.Failure
+		}
+		t.Fatalf("published version did not keep the render source: state=%s, failure=%s", version.State, failure)
+	}
+
+	payload["bytes"] = len(audio) + 1
 	team.call("editor", "POST", path, payload, 409, nil)
 }
