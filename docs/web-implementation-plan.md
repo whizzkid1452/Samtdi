@@ -10,6 +10,22 @@
 
 MVP 이후 화면별 변경 범위와 사용자 흐름은 [웹 UI 수정 플랜](web-ui-redesign-plan.md)에 정리한다.
 
+## 구현 상태 · 2026-11-24
+
+사맛디 원격 main은 `42ff575`다. [기능 스펙 55개](https://app.notion.com/p/41c73b56612a8145a0eaff7c804ea8ea)는 **main 구현 38개, PR 구현·미병합 14개, 유료화 보류 3개**다.
+
+| 범위 | 상태 | 근거 |
+| --- | --- | --- |
+| 인증·공통 UI | Logto OSS와 계정 이관, Pragmatic drag and drop, Mantine 통합을 main에 반영 | [#36](https://github.com/whizzkid1452/Samtdi/pull/36) · [#39](https://github.com/whizzkid1452/Samtdi/pull/39) · [#46](https://github.com/whizzkid1452/Samtdi/pull/46) |
+| 협업 기능 | 표시 이름, 보드 빠른 생성, 피드백과 작업 동시 저장, 타임라인, 내 작업을 기존 PR에서 리뷰 중 | [#29](https://github.com/whizzkid1452/Samtdi/pull/29)~[#34](https://github.com/whizzkid1452/Samtdi/pull/34) |
+| 디자인·접근·복원 | 프로젝트 홈, 업로드와 리뷰, L/R 파형, 알림, 가입·개인 작업실, 팀과 게스트 초대, 커밋 리뷰 연결, 복원을 Draft PR로 분리 | [#47](https://github.com/whizzkid1452/Samtdi/pull/47)~[#56](https://github.com/whizzkid1452/Samtdi/pull/56) · [#58](https://github.com/whizzkid1452/Samtdi/pull/58) |
+| 어엿비 게시 | macOS의 새 음원·수정본 게시와 재시도 시 버전 중복 방지를 구현. 웹 서버와 데스크톱 모두 Draft PR | [사맛디 #57](https://github.com/whizzkid1452/Samtdi/pull/57) · [어엿비 #165](https://github.com/whizzkid1452/Ayotbi/pull/165) |
+| 유료화 | 요금제·결제, 사용량 한도, 구독 관리를 보류 | [분리 계획과 구조도](https://app.notion.com/p/41673b56612a814884cdef5a60bd96d8) |
+
+- 격리 Chrome에서 재생 → 피드백 → 작업 → 일정 → 내 작업, 작업 102개 페이지 이동, 알림 일괄 읽음과 게스트 초대 철회를 확인했다. 웹 lint·단위 테스트·빌드와 Go 웹 검사도 통과했다. [통합 검증 PR](https://github.com/whizzkid1452/Samtdi/pull/58)
+- Figma 화면·상태 223개를 대조했다. 실행 확인 41개, 코드 대조 137개, 화면 차이 22개, 조건부 10개, 유료화 보류 13개다. [Figma 화면별 대조](figma-screen-audit.md)
+- 격리 OAuth 세션을 주입한 macOS QA 빌드에서 7초 스테레오 WAV를 새 음원과 수정본으로 각각 게시했다. 같은 렌더 재게시에서 버전 수가 유지됐고, 웹에서 원본 SHA-256과 L/R 파형, 재생을 확인했다. 원본 빌드의 키체인 재검증과 운영 Logto 인증 메일 발송 확인이 남아 있다. [게시 검증](https://github.com/whizzkid1452/Ayotbi/pull/165)
+
 ## 1. 확정한 결정과 현재 상태
 
 ### 제품·저장소 결정
