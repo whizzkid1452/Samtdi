@@ -1,17 +1,22 @@
 "use client";
 
-import { Button, NativeSelect } from "@mantine/core";
+import { Badge, Button, NativeSelect } from "@mantine/core";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
-import { itemHref, projectHref, taskHref, versionLink } from "../lib/routes";
+import { displayName } from "../lib/people";
+import { itemHref, projectHref, taskHref, versionHref, versionLink } from "../lib/routes";
+import { addDays, shortDate, todayInSeoul } from "../lib/task-dates";
+import { spanLabel, taskSpan, weekStart } from "./task-timeline";
 import { statusLabel } from "./task-editor";
 import { TaskStatusBadge } from "./task-status-badge";
 import { EmptyState, InlineError, LoadingRows } from "./request-states";
 
 type Dashboard = components["schemas"]["Dashboard"];
+type DashboardTask = Dashboard["tasks"][number];
+type DashboardOverview = components["schemas"]["DashboardOverview"];
 type Activity = components["schemas"]["Activity"];
 
 const filters = [
@@ -35,7 +40,10 @@ export function DashboardPanel() {
 
   return <main className="main-content">
     <h1 className="section-header">내 작업</h1>
-    <DashboardTasks key={filter} filter={filter} />
+    <div className="work-dashboard">
+      <DashboardTasks key={filter} filter={filter} />
+      <WaitingForReview />
+    </div>
   </main>;
 }
 
@@ -87,16 +95,123 @@ function DashboardTasks({ filter }: { filter: typeof filters[number][0] }) {
     {error && <InlineError message={error} retry={() => { setError(""); setAttempt((value) => value + 1); }} />}
     {!dashboard && !error && <LoadingRows label="작업을 불러오는 중" />}
     {dashboard?.tasks.length === 0 && <EmptyState message="이 조건에 해당하는 작업이 없습니다." />}
-    <ul className="resource-list">
-      {dashboard?.tasks.map((task) => <li className="row spread wrap" key={task.id}>
-        <div><Link className="resource-title" href={taskHref(task.project_id, task.id)}>{task.title}</Link>
-          <div className="muted">{task.project_title}</div></div>
-        <div className="row wrap"><TaskStatusBadge status={task.status} />
-          {task.due_on && <time dateTime={task.due_on}>{task.due_on}</time>}</div>
-      </li>)}
-    </ul>
+    {dashboard && <TaskDueGroups tasks={dashboard.tasks} />}
+    {filter === "assigned" && dashboard && <MySchedule tasks={dashboard.tasks}
+      hasMore={Boolean(dashboard.next_cursor)} />}
     {dashboard?.next_cursor && <Button variant="default" loading={loadingMore} onClick={() => void loadMore()}>작업 더 보기</Button>}
   </section>;
+}
+
+function TaskDueGroups({ tasks }: { tasks: DashboardTask[] }) {
+  const today = todayInSeoul();
+  const nextWeek = addDays(weekStart(today), 7);
+  const groups: [string, DashboardTask[]][] = [
+    ["지연", []], ["오늘", []], ["이번 주", []], ["다음 주 이후", []], ["날짜 없음", []],
+  ];
+
+  for (const task of tasks) {
+    const due = task.due_on;
+    const group = !due ? 4 : due < today ? 0 : due === today ? 1 : due < nextWeek ? 2 : 3;
+    groups[group][1].push(task);
+  }
+
+  return <div className="work-groups">
+    {groups.map(([label, rows]) => <section aria-label={label} key={label}>
+      <h2>{label} <Badge variant="light">{rows.length}</Badge></h2>
+      {rows.length === 0 ? <p className="muted">작업 없음</p> : <ul className="resource-list">
+        {rows.map((task) => <li className="row spread wrap" key={task.id}>
+          <div><Link className="resource-title" href={taskHref(task.project_id, task.id)}>{task.title}</Link>
+            <div className="muted">{task.project_title}{task.assignee && " · " + displayName(task.assignee)}</div></div>
+          <div className="row wrap"><TaskStatusBadge status={task.status} />
+            {task.due_on && <time dateTime={task.due_on}>{shortDate(task.due_on)}</time>}</div>
+        </li>)}
+      </ul>}
+    </section>)}
+  </div>;
+}
+
+function MySchedule({ tasks, hasMore }: { tasks: DashboardTask[]; hasMore: boolean }) {
+  const today = todayInSeoul();
+  const firstWeek = weekStart(today);
+  const weeks = [["이번 주", firstWeek], ["다음 주", addDays(firstWeek, 7)]];
+
+  return <section className="work-schedule" aria-label="내 2주 일정">
+    <h2>내 2주 일정</h2>
+    {hasMore && <p className="muted">불러온 작업의 일정입니다. 작업 더 보기에서 나머지를 확인하세요.</p>}
+    {weeks.map(([label, start]) => {
+      const end = addDays(start, 6);
+      const rows = tasks.filter((task) => {
+        const span = taskSpan(task, today);
+        return span && span.start <= end && span.end >= start;
+      });
+
+      return <section key={start} aria-label={label + " 일정"}>
+        <h3>{label} · {shortDate(start)}–{shortDate(end)}</h3>
+        {rows.length === 0 ? <p className="muted">일정 없음</p> : <ul className="resource-list">
+          {rows.map((task) => <li key={task.id} className="row spread wrap">
+            <Link href={taskHref(task.project_id, task.id)}>{task.title}</Link>
+            <span className="muted">{task.project_title} · {spanLabel(task)}</span>
+          </li>)}
+        </ul>}
+      </section>;
+    })}
+  </section>;
+}
+
+function WaitingForReview() {
+  const [overview, setOverview] = useState<DashboardOverview>();
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let request: AbortController;
+    function refresh() {
+      request?.abort();
+      request = new AbortController();
+      const { signal } = request;
+      api<DashboardOverview>("/v1/dashboard/overview", { signal }).then((result) => {
+        if (signal.aborted) return;
+        setOverview(result);
+        setError("");
+      }).catch((cause) => {
+        if (signal.aborted) return;
+        setOverview(undefined);
+        setError(describeError(cause));
+      });
+    }
+
+    refresh();
+    window.addEventListener("focus", refresh);
+    return () => { window.removeEventListener("focus", refresh); request.abort(); };
+  }, [attempt]);
+
+  if (error) return <InlineError message={error} retry={() => setAttempt((value) => value + 1)} />;
+  if (!overview) return <LoadingRows label="최근 피드백과 음원을 불러오는 중" />;
+
+  return <aside className="work-overview">
+    <section aria-label="내 음원에 온 피드백">
+      <h2>내 음원에 온 피드백</h2>
+      {overview.feedback.length === 0 ? <EmptyState message="최근 미해결 피드백이 없습니다." /> : <ul className="resource-list">
+        {overview.feedback.map((note) => <li key={note.id}>
+          <Link className="resource-title" href={versionHref({
+            projectId: note.project_id, itemId: note.item_id, versionId: note.version_id, noteId: note.id, at: note.start_ms,
+          })}>{note.body}</Link>
+          <div className="muted">{note.project_title} · {note.item_title} · {displayName({ name: note.author_name, email: note.author_email })}</div>
+        </li>)}
+      </ul>}
+    </section>
+    <section aria-label="최근 재생 가능 음원">
+      <h2>최근 재생 가능 음원</h2>
+      {overview.versions.length === 0 ? <EmptyState message="재생 가능한 음원이 없습니다." /> : <ul className="resource-list">
+        {overview.versions.map((version) => <li key={version.id}>
+          <Link className="resource-title" href={versionHref({
+            projectId: version.project_id, itemId: version.item_id, versionId: version.id,
+          })}>{version.filename}</Link>
+          <div className="muted">{version.project_title} · {version.item_title}</div>
+        </li>)}
+      </ul>}
+    </section>
+  </aside>;
 }
 
 function activityHref(projectId: string, entry: Activity) {

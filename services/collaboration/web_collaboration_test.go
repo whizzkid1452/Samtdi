@@ -277,3 +277,58 @@ func TestWebTaskSchedule(t *testing.T) {
 	}
 	team.call("reviewer", "GET", "./versions?from="+today, nil, 400, nil)
 }
+
+func TestWebDashboardOverview(t *testing.T) {
+	team := newWebTeam(t)
+	notes := "./versions/" + team.version + "/notes"
+	var waiting, resolved, own map[string]string
+	team.call("reviewer", "POST", notes, map[string]any{"start_ms": 1000, "end_ms": 2000, "body": "보컬이 커요"}, 201, &waiting)
+	team.call("editor", "POST", notes, map[string]any{"start_ms": 3000, "body": "해결된 의견"}, 201, &resolved)
+	team.call("owner", "POST", notes, map[string]any{"start_ms": 4000, "body": "내 메모"}, 201, &own)
+	team.call("owner", "PATCH", notes+"/"+resolved["id"], map[string]any{"revision": 1, "resolved": true}, 204, nil)
+	team.task("owner", map[string]any{"title": "보컬 낮추기", "assignee_id": team.ids["editor"], "start_on": "2026-11-10", "due_on": "2026-11-20",
+		"note_ids": []string{waiting["id"]}})
+
+	var overview struct {
+		Feedback []struct {
+			ID        string `json:"id"`
+			ItemTitle string `json:"item_title"`
+			AuthorID  string `json:"author_id"`
+			EndMS     *int64 `json:"end_ms"`
+		} `json:"feedback"`
+		Versions []struct {
+			ID         string `json:"id"`
+			UploaderID string `json:"uploader_id"`
+			OpenNotes  int    `json:"open_notes"`
+		} `json:"versions"`
+	}
+	team.call("owner", "GET", "/v1/dashboard/overview", nil, 200, &overview)
+	if len(overview.Feedback) != 1 || overview.Feedback[0].ID != waiting["id"] || overview.Feedback[0].ItemTitle != "메인 믹스" ||
+		overview.Feedback[0].AuthorID != team.ids["reviewer"] || overview.Feedback[0].EndMS == nil {
+		t.Fatalf("only others' open feedback on my upload is waiting: %+v", overview.Feedback)
+	}
+	if len(overview.Versions) != 1 || overview.Versions[0].ID != team.version || overview.Versions[0].UploaderID != team.ids["owner"] || overview.Versions[0].OpenNotes != 2 {
+		t.Fatalf("recent versions = %+v", overview.Versions)
+	}
+	team.call("editor", "GET", "/v1/dashboard/overview", nil, 200, &overview)
+	if len(overview.Feedback) != 0 || len(overview.Versions) != 1 {
+		t.Fatalf("feedback belongs to the uploader only: %+v", overview)
+	}
+
+	var dashboard struct {
+		Tasks []struct {
+			Title     string         `json:"title"`
+			StartOn   string         `json:"start_on"`
+			NoteCount int            `json:"note_count"`
+			Source    *webTaskSource `json:"source"`
+			Assignee  *struct {
+				Email string `json:"email"`
+			} `json:"assignee"`
+		} `json:"tasks"`
+	}
+	team.call("editor", "GET", "/v1/dashboard?filter=assigned", nil, 200, &dashboard)
+	if len(dashboard.Tasks) != 1 || dashboard.Tasks[0].StartOn != "2026-11-10" || dashboard.Tasks[0].NoteCount != 1 ||
+		dashboard.Tasks[0].Source == nil || dashboard.Tasks[0].Assignee == nil || dashboard.Tasks[0].Assignee.Email != "editor@example.test" {
+		t.Fatalf("dashboard task = %+v", dashboard.Tasks)
+	}
+}
