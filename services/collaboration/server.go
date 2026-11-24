@@ -24,6 +24,7 @@ type Config struct {
 	ClientID              string
 	ClientSecret          string
 	BootstrapEmail        string
+	PublicSignup          bool
 	AllowLoopbackHTTP     bool
 	ProjectToolPath       string
 	ReceiveHookExecutable string
@@ -105,6 +106,9 @@ func NewServer(ctx context.Context, pool *pgxpool.Pool, config Config) (*Server,
 	server.logto, err = newLogtoClient(config, client)
 	if err != nil {
 		return nil, err
+	}
+	if config.PublicSignup && server.logto == nil {
+		return nil, errors.New("public signup requires Logto")
 	}
 	if config.ProjectToolPath != "" {
 		server.projectTool, err = NewProjectTool(config.ProjectToolPath)
@@ -205,6 +209,8 @@ func (s *Server) routes() {
 
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+	s.mux.HandleFunc("GET /v1/auth/options", s.webAuthOptions)
+	s.mux.HandleFunc("GET /v1/auth/signup", s.beginLogin)
 	s.mux.HandleFunc("GET /v1/auth/login", s.beginLogin)
 	s.mux.HandleFunc("GET /v1/auth/callback", s.completeLogin)
 	s.mux.HandleFunc("GET /v1/native/authorize", s.beginLogin)

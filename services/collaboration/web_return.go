@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var projectReturnPath = regexp.MustCompile(`^/projects/[a-fA-F0-9-]+(?:/(?:media(?:/[a-fA-F0-9-]+(?:/versions/[a-fA-F0-9-]+)?)?|tasks(?:/[a-fA-F0-9-]+)?|activity|settings))?$`)
@@ -63,7 +64,14 @@ func safeWebReturnValue(key, value string) bool {
 	case "at":
 		return len(value) <= 10 && value != "" && strings.Trim(value, "0123456789") == ""
 	case "view":
-		return value == "list" || value == "board"
+		return value == "list" || value == "board" || value == "timeline"
+	case "zoom":
+		return value == "month"
+	case "group":
+		return value == "assignee"
+	case "start":
+		_, err := time.Parse(time.DateOnly, value)
+		return err == nil
 	case "filter":
 		return value == "assigned" || value == "review" || value == "due" || value == "late"
 	case "feedback":

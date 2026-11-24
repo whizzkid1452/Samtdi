@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -280,17 +281,18 @@ func (state snapshotState) restore(ctx context.Context, folder string) error {
 	if err != nil {
 		return err
 	}
-	expected := schema
-	if manifest.Version == 1 {
-		if len(schema) < 6 {
+	requiredMigrations := len(manifest.Schema)
+	switch manifest.Version {
+	case 1:
+		requiredMigrations = 6
+	case 2:
+		requiredMigrations = 14
+	case 3:
+		if requiredMigrations < 15 {
 			return errors.New("incomplete collaboration schema")
 		}
-		expected = schema[:6]
 	}
-	if manifest.Version == 2 {
-		expected = schema[:14]
-	}
-	if !reflect.DeepEqual(expected, manifest.Schema) {
+	if len(schema) < requiredMigrations || !reflect.DeepEqual(schema[:requiredMigrations], manifest.Schema) {
 		return errors.New("snapshot schema does not match")
 	}
 	if state.git == nil && len(manifest.Repositories) != 0 {
@@ -313,13 +315,7 @@ func (state snapshotState) restore(ctx context.Context, folder string) error {
 		if err != nil {
 			return err
 		}
-		destination := table
-		if manifest.Version == 1 && table == "projects" {
-			destination += " (id,title,created_at,song_id)"
-		}
-		if manifest.Version == 2 && table == "projects" {
-			destination += " (id,title,created_at,song_id,archived_at)"
-		}
+		destination := snapshotCopyTable(table, manifest)
 		_, err = tx.Conn().PgConn().CopyFrom(ctx, file, "COPY "+destination+" FROM STDIN (FORMAT binary)")
 		if err := errors.Join(err, file.Close()); err != nil {
 			return err
@@ -364,6 +360,31 @@ func (state snapshotState) restore(ctx context.Context, folder string) error {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func snapshotCopyTable(table string, manifest snapshotManifest) string {
+	switch table {
+	case "projects":
+		if manifest.Version == 1 {
+			return table + " (id,title,created_at,song_id)"
+		}
+		if manifest.Version == 2 {
+			return table + " (id,title,created_at,song_id,archived_at)"
+		}
+	case "accounts":
+		if !slices.Contains(manifest.Schema, "016_account_names.sql") {
+			return table + " (id,issuer,subject,email,operator)"
+		}
+	case "web_tasks":
+		if !slices.Contains(manifest.Schema, "017_web_task_schedule.sql") {
+			return table + " (id,project_id,title,description,status,assignee_id,due_on,result_version_id,review_text,position,archived,revision,created_at)"
+		}
+	case "workspaces":
+		if !slices.Contains(manifest.Schema, "018_personal_workspaces.sql") {
+			return table + " (id,requested_name,organization_id,created_by,active,created_at)"
+		}
+	}
+	return table
 }
 
 func (state snapshotState) restoreRepositories(ctx context.Context, root string, repositories []snapshotRepository, projectIDs []string) error {

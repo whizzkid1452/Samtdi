@@ -45,6 +45,7 @@ export function Workspace({ children }: { children: ReactNode }) {
   const [teamsEnabled, setTeamsEnabled] = useState(false);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const [publicSignup, setPublicSignup] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [accountOpened, setAccountOpened] = useState(false);
@@ -65,8 +66,15 @@ export function Workspace({ children }: { children: ReactNode }) {
         setSession(account);
       } catch (cause) {
         if (request.signal.aborted) return;
-        if (cause instanceof ApiError && cause.status === 401) setSession(null);
-        else setError(describeError(cause));
+        if (cause instanceof ApiError && cause.status === 401) {
+          setSession(null);
+          try {
+            const options = await api<components["schemas"]["WebAuthOptions"]>("/v1/auth/options", { signal: request.signal });
+            if (!request.signal.aborted) setPublicSignup(options.public_signup);
+          } catch (error) {
+            if (!request.signal.aborted) setError(describeError(error));
+          }
+        } else setError(describeError(cause));
       }
     }
 
@@ -108,13 +116,16 @@ export function Workspace({ children }: { children: ReactNode }) {
       <div className="login-content">
         <p className="brand"><BrandMark />사맛디</p>
         <h1>음악을 함께 완성하는 공간</h1>
-        <p className="muted">초대받은 프로젝트에 로그인해 작업을 이어가세요.</p>
+        <p className="muted">{publicSignup ? "이메일을 인증하고 내 작업실에서 음악을 함께 검토하세요." :
+          "초대받은 프로젝트에 로그인해 작업을 이어가세요."}</p>
         {session === null ? <Button component="a" className="login-action" href={login} onClick={(event) => {
           if (window.location.hash) event.currentTarget.href = "/v1/auth/login?" + new URLSearchParams({ return_to: target + window.location.hash });
         }}>로그인</Button> : error ? <>
           <p role="alert">{error}</p>
           <button onClick={() => { setError(""); setAttempt((value) => value + 1); }}>다시 시도</button>
         </> : <p role="status">로그인 상태 확인 중</p>}
+        {session === null && error && <p role="alert">{error}</p>}
+        {session === null && publicSignup && <p><a href="/v1/auth/signup?return_to=%2Fprojects">사맛디 계정 만들기</a></p>}
       </div>
       <div className="login-art" aria-hidden="true"><BrandMark /></div>
     </main>;

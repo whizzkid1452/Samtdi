@@ -14,7 +14,7 @@ var (
 	errIdentityEmailConflict = errors.New("email already registered")
 )
 
-func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []byte) (string, error) {
+func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []byte, publicSignup bool) (string, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -64,7 +64,7 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 			}
 		}
 		organizationMember := false
-		if s.logto != nil && projectID == "" {
+		if s.logto != nil && projectID == "" && !publicSignup {
 			organizations, err := s.logto.organizations(ctx, who.Subject)
 			if err != nil {
 				return "", err
@@ -77,7 +77,7 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 				return "", err
 			}
 		}
-		if !bootstrap && projectID == "" && !organizationMember {
+		if !bootstrap && projectID == "" && !organizationMember && !publicSignup {
 			return "", errInvitationRequired
 		}
 
@@ -97,6 +97,13 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 	if _, err := tx.Exec(ctx, `INSERT INTO account_identities(issuer,subject,account_id) VALUES($1,$2,$3)
  ON CONFLICT(issuer,subject) DO NOTHING`, who.Issuer, who.Subject, accountID); err != nil {
 		return "", err
+	}
+
+	if publicSignup {
+		if _, err := tx.Exec(ctx, `INSERT INTO workspaces(id,requested_name,created_by,active,personal)
+ VALUES(gen_random_uuid(),'내 작업실',$1,true,true) ON CONFLICT (created_by) WHERE personal DO NOTHING`, accountID); err != nil {
+			return "", err
+		}
 	}
 
 	if projectID != "" {

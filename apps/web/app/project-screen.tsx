@@ -32,7 +32,7 @@ export function ProjectIndex() {
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const visible = projects.filter((project) => (!selectedWorkspace || (selectedWorkspace === "shared" ? !project.workspace_id : project.workspace_id === selectedWorkspace)) && Boolean(project.archived_at) === showArchived && project.title.toLowerCase().includes(search.trim().toLowerCase()))
+  const visible = projects.filter((project) => (!selectedWorkspace || (selectedWorkspace === "shared" ? !teams.some(({ id }) => id === project.workspace_id) : project.workspace_id === selectedWorkspace)) && Boolean(project.archived_at) === showArchived && project.title.toLowerCase().includes(search.trim().toLowerCase()))
     .sort((left, right) => (right.updated_at ?? "").localeCompare(left.updated_at ?? ""));
 
   function showProjects(archived: boolean) {

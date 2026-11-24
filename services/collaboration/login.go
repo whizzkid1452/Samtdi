@@ -61,10 +61,20 @@ type loginAttempt struct {
 	WebReturn  string
 }
 
+func (s *Server) webAuthOptions(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]bool{"public_signup": s.config.PublicSignup})
+}
+
 func (s *Server) beginLogin(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
+	signup := r.URL.Path == "/v1/auth/signup"
+	if signup && !s.config.PublicSignup {
+		problem(w, http.StatusNotFound, "resource_not_found")
+		return
+	}
+
 	attempt := loginAttempt{Nonce: randomToken(), Verifier: oauth2.GenerateVerifier()}
-	if r.URL.Path == "/v1/auth/login" {
+	if signup || r.URL.Path == "/v1/auth/login" {
 		attempt.WebReturn = query.Get("return_to")
 		if attempt.WebReturn != "" && !safeWebReturn(attempt.WebReturn) {
 			problem(w, http.StatusBadRequest, "invalid_return_path")
@@ -107,7 +117,11 @@ func (s *Server) beginLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, s.cookie(loginCookie, browser, 10*time.Minute))
-	target := s.oauth.AuthCodeURL(state, oidc.Nonce(attempt.Nonce), oauth2.S256ChallengeOption(attempt.Verifier))
+	options := []oauth2.AuthCodeOption{oidc.Nonce(attempt.Nonce), oauth2.S256ChallengeOption(attempt.Verifier)}
+	if signup {
+		options = append(options, oauth2.SetAuthURLParam("first_screen", "register"))
+	}
+	target := s.oauth.AuthCodeURL(state, options...)
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
@@ -147,7 +161,7 @@ func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accountID, err := s.admitAccount(ctx, identity, attempt.InviteHash)
+	accountID, err := s.admitAccount(ctx, identity, attempt.InviteHash, s.config.PublicSignup && attempt.Redirect == "")
 	if errors.Is(err, errInvitationRequired) {
 		problem(w, http.StatusForbidden, "invitation_required")
 		return

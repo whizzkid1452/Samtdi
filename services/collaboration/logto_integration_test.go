@@ -161,13 +161,13 @@ func TestOperatorIdentityLinkPreservesAccountAndRejectsEmailOnlyMerge(t *testing
 		Endpoint: identityAPI.URL, ClientID: "machine", ClientSecret: "test-secret", Resource: "https://default.logto.app/api"}}
 	handler := &Server{pool: pool}
 	identity := identity{Issuer: settings.Issuer, Subject: "new-subject", Email: "existing@example.test"}
-	if _, err := handler.admitAccount(t.Context(), identity, nil); !errors.Is(err, errInvitationRequired) {
+	if _, err := handler.admitAccount(t.Context(), identity, nil, false); !errors.Is(err, errInvitationRequired) {
 		t.Fatalf("email-only login must not link accounts: %v", err)
 	}
 	if err := LinkLogtoIdentity(t.Context(), pool, settings, account, "new-subject"); err != nil {
 		t.Fatal(err)
 	}
-	linked, err := handler.admitAccount(t.Context(), identity, nil)
+	linked, err := handler.admitAccount(t.Context(), identity, nil, false)
 	if err != nil || linked != account {
 		t.Fatalf("existing account lost after link: %s %v", linked, err)
 	}
@@ -218,15 +218,8 @@ func TestIdentityWorkspaceSnapshotsAndLegacyFormats(t *testing.T) {
 				}
 				manifest := snapshotManifest{Version: version, CreatedAt: time.Now().UTC(), Schema: schema[:limit]}
 				for _, table := range tablesForSnapshot(version) {
-					columns := ""
-					if table == "projects" {
-						columns = " (id,title,created_at,song_id,archived_at)"
-						if version == 1 {
-							columns = " (id,title,created_at,song_id)"
-						}
-					}
 					file, err := writeSnapshotFile(root, filepath.Join("db", table+".copy"), func(output io.Writer) error {
-						_, err := tx.Conn().PgConn().CopyTo(t.Context(), output, "COPY "+table+columns+" TO STDOUT (FORMAT binary)")
+						_, err := tx.Conn().PgConn().CopyTo(t.Context(), output, "COPY "+snapshotCopyTable(table, manifest)+" TO STDOUT (FORMAT binary)")
 						return err
 					})
 					if err != nil {
@@ -263,5 +256,29 @@ func TestIdentityWorkspaceSnapshotsAndLegacyFormats(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPublicSignupCreatesOnePersonalWorkspace(t *testing.T) {
+	pool := integrationPool(t)
+	s := &Server{pool: pool}
+	who := identity{Issuer: "test", Subject: "public", Email: "public@example.test"}
+
+	if _, err := s.admitAccount(t.Context(), who, nil, false); !errors.Is(err, errInvitationRequired) {
+		t.Fatalf("invite-only admission = %v", err)
+	}
+	account, err := s.admitAccount(t.Context(), who, nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repeated, err := s.admitAccount(t.Context(), who, nil, true)
+	if err != nil || repeated != account {
+		t.Fatalf("repeated admission created a second account: %s %v", repeated, err)
+	}
+
+	var workspaces int
+	err = pool.QueryRow(t.Context(), "SELECT count(*) FROM workspaces WHERE created_by=$1 AND personal AND active", account).Scan(&workspaces)
+	if err != nil || workspaces != 1 {
+		t.Fatalf("personal workspaces = %d %v", workspaces, err)
 	}
 }
