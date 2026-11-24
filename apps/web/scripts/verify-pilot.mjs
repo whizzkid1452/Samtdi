@@ -183,6 +183,21 @@ async function verifyMovingPlayhead(page) {
 
 async function verifyFeedbackPagination({ owner, first, note }) {
   const url = first.path + "/notes";
+  async function collect(sort) {
+    const notes = [];
+    for (let cursor = ""; ;) {
+      const query = new URLSearchParams({ sort });
+      if (cursor) query.set("after", cursor);
+      const response = await owner.request.get(url + "?" + query);
+      assert.equal(response.status(), 200);
+      const page = await response.json();
+      notes.push(...page);
+      if (page.length < 100) return notes;
+      cursor = page.at(-1).id;
+    }
+  }
+
+  const existing = (await collect("recent")).length;
   for (let index = 0; index < 205; index++) {
     const response = await owner.request.post(url, {
       headers, data: { start_ms: index % 2, body: "페이지 검증 " + index },
@@ -195,18 +210,8 @@ async function verifyFeedbackPagination({ owner, first, note }) {
   assert.ok(!legacy.some(({ id }) => id === note.id));
 
   for (const sort of ["time", "recent"]) {
-    const notes = [];
-    for (let cursor = ""; ;) {
-      const query = new URLSearchParams({ sort });
-      if (cursor) query.set("after", cursor);
-      const response = await owner.request.get(url + "?" + query);
-      assert.equal(response.status(), 200);
-      const page = await response.json();
-      notes.push(...page);
-      if (page.length < 100) break;
-      cursor = page.at(-1).id;
-    }
-    assert.equal(notes.length, 206);
+    const notes = await collect(sort);
+    assert.equal(notes.length, existing + 205);
     assert.equal(new Set(notes.map(({ id }) => id)).size, notes.length);
     if (sort === "time") {
       const sorted = [...notes].sort((left, right) => left.start_ms - right.start_ms || left.id.localeCompare(right.id));
@@ -226,6 +231,57 @@ async function verifyFeedbackPagination({ owner, first, note }) {
   await owner.locator(".feedback-list > li").filter({ hasText: note.body }).waitFor();
   await owner.getByLabel("정렬").selectOption("time");
   await owner.waitForURL((url) => url.searchParams.get("sort") === "time");
+}
+
+async function verifyFeedbackTaskFlow({ owner, editor, first, base, projectURL }) {
+  const ownerSession = await (await owner.request.get(origin + "/v1/me")).json();
+  const message = "엔딩 리버브 조정 " + projectURL.split("/").at(-1).slice(0, 8);
+  await button(editor, "이 위치에 피드백 남기기").click();
+  const composer = editor.getByRole("form", { name: "피드백 남기기" });
+  await composer.getByLabel("피드백 내용").fill(message);
+  await composer.getByLabel("할 일로 만들기").check();
+  await composer.getByRole("combobox", { name: "담당자" }).click();
+  const ownerName = ownerSession.name || ownerSession.email.split("@")[0];
+  await composer.getByRole("option", { name: ownerName, exact: true }).click();
+  const saved = editor.waitForResponse((response) => response.url().endsWith("/notes") && response.request().method() === "POST");
+  await button(composer, "피드백 저장").click();
+  const created = await (await saved).json();
+  assert.ok(created.task_id, "Feedback must create its linked task");
+  const taskPath = base + "/tasks/" + created.task_id;
+  const task = await (await owner.request.get(taskPath)).json();
+  assert.equal(task.title, message);
+  assert.equal(task.assignee_id, ownerSession.account_id);
+  assert.equal(task.source.note_id, created.id);
+  assert.equal(task.source.version_id, first.id);
+  await editor.locator(".feedback-list").getByRole("button").filter({ hasText: message }).filter({ hasText: "할 일" }).first().waitFor();
+
+  await owner.goto(projectURL + "/tasks");
+  const card = owner.locator("article.task-card").filter({ has: link(owner, message) });
+  await card.locator("a.task-source-link").waitFor();
+  await button(card, message + " 관리").click();
+  const moved = owner.waitForResponse((response) => response.url() === taskPath && response.request().method() === "PUT");
+  await button(owner, "진행 중으로 이동").click();
+  assert.equal((await moved).status(), 200);
+  await owner.getByRole("region", { name: "진행 중", exact: true }).getByRole("link", { name: message, exact: true }).waitFor();
+
+  await owner.goto(projectURL + "/tasks?view=timeline");
+  const chip = owner.getByRole("group", { name: "날짜 없는 작업" }).getByRole("link", { name: message });
+  const today = owner.locator(".timeline-day.today");
+  const body = owner.locator(".timeline-body");
+  const column = await today.boundingBox();
+  const area = await body.boundingBox();
+  assert.ok(column && area, "Timeline and today column are visible");
+  const scheduled = owner.waitForResponse((response) => response.url() === taskPath && response.request().method() === "PUT");
+  await chip.dragTo(body, { targetPosition: { x: column.x - area.x + column.width / 2, y: 30 } });
+  assert.equal((await scheduled).status(), 200);
+  const dated = await (await owner.request.get(taskPath)).json();
+  assert.ok(dated.start_on && dated.start_on === dated.due_on, "Dropping on the timeline schedules one day");
+  await owner.getByRole("img", { name: new RegExp("^" + message) }).waitFor();
+
+  await owner.goto(origin + "/work");
+  await owner.getByRole("region", { name: "오늘" }).getByRole("link", { name: message }).waitFor();
+  await owner.getByRole("region", { name: "내 음원에 온 피드백" }).getByText(message).waitFor();
+  return created.task_id;
 }
 
 try {
@@ -292,6 +348,9 @@ try {
   assert.equal(await editor.getByLabel("피드백 내용").inputValue(), "새로고침 뒤 초안 확인");
   await button(editor, "초안 버리기").click();
   console.log("Project, WAV, invitation, playback and anchored feedback passed");
+
+  await verifyFeedbackTaskFlow({ owner, editor, first, base, projectURL });
+  console.log("Feedback to task, board move, timeline scheduling and dashboard passed");
 
   const signedOut = await desktop.newPage();
   await signedOut.goto(feedbackURL);
