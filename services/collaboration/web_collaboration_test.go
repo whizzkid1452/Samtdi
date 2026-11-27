@@ -170,3 +170,55 @@ func TestWebTaskSourceAndSummary(t *testing.T) {
 		t.Fatalf("a deleted note must not stay the task source: %+v", task.Source)
 	}
 }
+
+func TestWebNoteCreatesTask(t *testing.T) {
+	team := newWebTeam(t)
+	notes := "./versions/" + team.version + "/notes"
+	count := func() int {
+		var rows []webNote
+		team.call("owner", "GET", notes, nil, 200, &rows)
+		return len(rows)
+	}
+
+	team.call("reviewer", "POST", notes, map[string]any{"start_ms": 500, "body": "검토자 의견", "task": map[string]string{}}, 403, nil)
+	team.call("owner", "POST", notes, map[string]any{"start_ms": 500, "body": "잘못된 담당", "task": map[string]string{"assignee_id": team.ids["reviewer"]}}, 400, nil)
+	team.call("owner", "POST", notes, map[string]any{"start_ms": 500, "body": "잘못된 날짜", "task": map[string]string{"due_on": "11월"}}, 400, nil)
+	if count() != 0 {
+		t.Fatal("rejected task requests left notes behind")
+	}
+
+	long := strings.Repeat("가", 170)
+	var created map[string]string
+	team.call("editor", "POST", notes, map[string]any{"start_ms": 2000, "end_ms": 4000, "body": "  " + long + "\n둘째 줄",
+		"task": map[string]string{"assignee_id": team.ids["owner"], "due_on": "2026-11-21"}}, 201, &created)
+	if created["id"] == "" || created["task_id"] == "" {
+		t.Fatalf("created = %v", created)
+	}
+	var task webTask
+	team.call("owner", "GET", "./tasks/"+created["task_id"], nil, 200, &task)
+	if title := []rune(task.Title); len(title) != 160 || title[159] != '…' || task.Status != "todo" ||
+		task.AssigneeID != team.ids["owner"] || task.DueOn != "2026-11-21" || task.Source == nil || task.Source.NoteID != created["id"] {
+		t.Fatalf("task from note = %+v", task)
+	}
+
+	team.call("editor", "POST", notes, map[string]any{"start_ms": 3000, "body": "다음 할 일", "task": map[string]string{"title": "  직접 정한 제목 "}}, 201, &created)
+	var second webTask
+	team.call("owner", "GET", "./tasks/"+created["task_id"], nil, 200, &second)
+	if second.Title != "직접 정한 제목" || second.AssigneeID != "" || second.Position <= task.Position {
+		t.Fatalf("second task = %+v, first position %d", second, task.Position)
+	}
+
+	var note webNote
+	team.call("reviewer", "GET", notes+"/"+created["id"], nil, 200, &note)
+	if len(note.Tasks) != 1 || note.Tasks[0].ID != second.ID || note.Tasks[0].Status != "todo" {
+		t.Fatalf("note tasks = %+v", note.Tasks)
+	}
+
+	var inbox struct {
+		Items []webNotification `json:"items"`
+	}
+	team.call("owner", "GET", "/v1/notifications", nil, 200, &inbox)
+	if len(inbox.Items) != 1 || inbox.Items[0].SubjectID != task.ID || inbox.Items[0].Action != "task.created" {
+		t.Fatalf("only the assigned task notifies its assignee: %+v", inbox.Items)
+	}
+}

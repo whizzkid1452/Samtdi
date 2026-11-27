@@ -1,14 +1,18 @@
 "use client";
 
-import { Button, Textarea } from "@mantine/core";
+import { Button, Checkbox, Select, TextInput, Textarea } from "@mantine/core";
 import { useEffect, useRef, type FormEvent } from "react";
+import { displayName } from "../lib/people";
+import type { Member } from "./workspace";
 import { noteLabel } from "./version-notes";
-import type { FeedbackDraft } from "./feedback-drafts";
+import type { DraftTask, FeedbackDraft } from "./feedback-drafts";
 import { submitFeedbackShortcut } from "./feedback-shortcut";
 import { InlineError } from "./request-states";
 
-export function FeedbackComposer({ draft, busy, error, save, close, discard, changeBody, moveAnchor }: {
+export function FeedbackComposer({ draft, busy, error, save, close, discard, changeBody, moveAnchor, assignees, changeTask }: {
   draft: FeedbackDraft;
+  assignees?: Member[];
+  changeTask: (task: DraftTask | undefined) => void;
   busy: boolean;
   error: string;
   save: (event: FormEvent<HTMLFormElement>) => void;
@@ -18,6 +22,7 @@ export function FeedbackComposer({ draft, busy, error, save, close, discard, cha
   moveAnchor: () => void;
 }) {
   const input = useRef<HTMLTextAreaElement>(null);
+  const task = draft.task;
   useEffect(() => { input.current?.focus(); }, []);
 
   return <form className="notes-form" aria-label="피드백 남기기" onSubmit={save} onKeyDown={(event) => {
@@ -32,6 +37,18 @@ export function FeedbackComposer({ draft, busy, error, save, close, discard, cha
     </div>
     <Textarea ref={input} w="100%" aria-label="피드백 내용" placeholder="이 부분에서 들은 내용을 남겨 주세요" maxLength={4000} readOnly={busy}
       value={draft.body} onChange={(event) => changeBody(event.target.value)} onKeyDown={submitFeedbackShortcut} required />
+    {assignees && <fieldset className="feedback-task-fields">
+      <legend>연결된 작업</legend>
+      <Checkbox label="할 일로 만들기" checked={!!task} disabled={busy}
+        onChange={(event) => changeTask(event.currentTarget.checked ? { assignee_id: "", due_on: "" } : undefined)} />
+      {task && <div className="row wrap">
+        <Select label="담당자" searchable clearable disabled={busy} placeholder="미할당" value={task.assignee_id || null}
+          data={assignees.map((member) => ({ value: member.account_id, label: displayName(member) }))}
+          onChange={(assignee) => changeTask({ ...task, assignee_id: assignee ?? "" })} />
+        <TextInput label="마감일" type="date" disabled={busy} value={task.due_on}
+          onChange={(event) => changeTask({ ...task, due_on: event.currentTarget.value })} />
+      </div>}
+    </fieldset>}
     {error && <InlineError message={error} />}
     <div className="row wrap">
       <Button type="submit" loading={busy} disabled={!draft.body.trim()}>피드백 저장</Button>
