@@ -178,12 +178,21 @@ func TestOperatorIdentityLinkPreservesAccountAndRejectsEmailOnlyMerge(t *testing
 }
 
 func TestIdentityWorkspaceSnapshotsAndLegacyFormats(t *testing.T) {
-	for _, version := range []int{1, 2, 3} {
-		t.Run(string(rune('0'+version)), func(t *testing.T) {
+	for _, format := range []struct {
+		name    string
+		version int
+		limit   int
+	}{
+		{name: "v1", version: 1, limit: 6},
+		{name: "v2", version: 2, limit: 14},
+		{name: "v3_before_public_signup", version: 3, limit: 15},
+		{name: "v3_current", version: 3},
+	} {
+		t.Run(format.name, func(t *testing.T) {
 			pool := integrationPool(t)
 			account, _ := seedNative(t, pool, "snapshot-owner")
 			project := seedProject(t, pool, map[string]Role{account: Owner})
-			if version == 3 {
+			if format.version == 3 {
 				_, err := pool.Exec(t.Context(), `WITH linked AS (INSERT INTO account_identities VALUES('new-issuer','new-subject',$1) RETURNING account_id)
  INSERT INTO workspaces(id,requested_name,organization_id,created_by,active) SELECT '55aabddc-fc4a-43f2-a29f-e2c4534222ff','Team','org-a',account_id,true FROM linked`, account)
 				if err != nil {
@@ -195,7 +204,7 @@ func TestIdentityWorkspaceSnapshotsAndLegacyFormats(t *testing.T) {
 			}
 			blobs, _ := testObjectStore(t)
 			root := filepath.Join(t.TempDir(), "snapshot")
-			if version == 3 {
+			if format.limit == 0 {
 				if err := (snapshotState{pool: pool, blobs: blobs}).snapshot(t.Context(), root); err != nil {
 					t.Fatal(err)
 				}
@@ -212,11 +221,7 @@ func TestIdentityWorkspaceSnapshotsAndLegacyFormats(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				limit := 14
-				if version == 1 {
-					limit = 6
-				}
-				manifest := snapshotManifest{Version: version, CreatedAt: time.Now().UTC(), Schema: schema[:limit]}
+				manifest := snapshotManifest{Version: format.version, CreatedAt: time.Now().UTC(), Schema: schema[:format.limit]}
 				for _, table := range tablesForSnapshot(manifest) {
 					file, err := writeSnapshotFile(root, filepath.Join("db", table+".copy"), func(output io.Writer) error {
 						_, err := tx.Conn().PgConn().CopyTo(t.Context(), output, "COPY "+snapshotCopyTable(table, manifest)+" TO STDOUT (FORMAT binary)")
@@ -246,7 +251,7 @@ func TestIdentityWorkspaceSnapshotsAndLegacyFormats(t *testing.T) {
 			if err := restored.QueryRow(t.Context(), "SELECT id::text FROM projects").Scan(&id); err != nil || id != project {
 				t.Fatalf("project did not survive restore: %v", err)
 			}
-			if version == 3 {
+			if format.version == 3 {
 				var count int
 				if err := restored.QueryRow(t.Context(), "SELECT count(*) FROM account_identities WHERE account_id=$1", account).Scan(&count); err != nil || count != 1 {
 					t.Fatalf("identity did not survive restore: %v", err)

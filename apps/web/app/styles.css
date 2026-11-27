@@ -436,3 +436,11 @@ label { font-size: .9rem; color: var(--muted); }
 .invite-entry h1 { margin-block: .75rem; overflow-wrap: anywhere; }
 
 .render-source { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem .8rem; padding: .65rem .85rem; margin-top: .75rem; border-radius: 8px; background: #edf4d7; }
+
+.board .lane { background: #eeefe7; border: 1px solid #dedfd5; border-radius: 10px; }
+.board .lane[data-status="progress"] { background: #e7ece0; }
+.board .lane[data-status="review"] { background: #f1ecde; }
+.board .lane[data-status="done"] { background: #e8ede2; }
+.board .task-card { background: #fffefa; border-color: #dedfd5; }
+.task-detail-drawer > .panel { border: 0; margin: 0; padding: 0; }
+.task-detail-drawer .task-detail-grid { grid-template-columns: minmax(0, 1fr); }

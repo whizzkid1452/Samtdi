@@ -10,14 +10,14 @@ const taskDragKey = Symbol("samtdi-task");
 
 type TaskDragData = Record<string, unknown> & { [taskDragKey]: true; projectId: string; task: Task };
 
-export type TaskMove = { task: Task; status: Status; position?: number };
+export type TaskMove = { task: Task; status: Status; position?: number; assigneeId?: string };
 
 function isTaskDragData(data: Record<string | symbol, unknown>): data is TaskDragData {
   return data[taskDragKey] === true;
 }
 
-export function DraggableTask({ projectId, task, enabled, onMove, children }: {
-  projectId: string; task: Task; enabled: boolean; onMove: (move: TaskMove) => void; children: ReactNode;
+export function DraggableTask({ projectId, task, enabled, onMove, children, targetAssignee }: {
+  projectId: string; task: Task; enabled: boolean; targetAssignee?: string; onMove: (move: TaskMove) => void; children: ReactNode;
 }) {
   const elementRef = useRef<HTMLElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -44,11 +44,14 @@ export function DraggableTask({ projectId, task, enabled, onMove, children }: {
           setEdge(null);
           if (location.current.dropTargets[0]?.element !== element || !isTaskDragData(source.data)) return;
 
-          onMove({ task: source.data.task, status: task.status, position: task.position + (extractClosestEdge(self.data) === "bottom" ? 1 : 0) });
+          onMove({
+            task: source.data.task, status: task.status, assigneeId: targetAssignee,
+            position: task.position + (extractClosestEdge(self.data) === "bottom" ? 1 : 0),
+          });
         },
       }),
     );
-  }, [enabled, onMove, projectId, task]);
+  }, [enabled, onMove, projectId, targetAssignee, task]);
 
   return <article ref={elementRef} className={"task-card" + (dragging ? " task-dragging" : "")} data-drop-edge={edge ?? undefined}>
     {children}
@@ -79,5 +82,5 @@ export function TaskLane({ projectId, status, label, enabled, onMove, children }
     });
   }, [enabled, onMove, projectId, status]);
 
-  return <section ref={elementRef} className={"lane" + (over ? " lane-drop-active" : "")} aria-label={label}>{children}</section>;
+  return <section ref={elementRef} className={"lane" + (over ? " lane-drop-active" : "")} aria-label={label} data-status={status}>{children}</section>;
 }
