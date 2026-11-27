@@ -76,8 +76,8 @@ func (s *Server) listProjects(w http.ResponseWriter, r *http.Request, session Se
 	rows, err := s.pool.Query(r.Context(), `SELECT p.id::text AS id, p.title, m.role, p.archived_at, COALESCE(recent.created_at,p.created_at) AS updated_at,COALESCE(p.workspace_id::text,'') AS workspace_id FROM projects p
  JOIN memberships m ON m.project_id=p.id
  LEFT JOIN LATERAL (SELECT created_at FROM web_activity WHERE project_id=p.id ORDER BY id DESC LIMIT 1) recent ON true
- WHERE m.account_id=$1 AND (p.workspace_id IS NULL OR EXISTS(SELECT 1 FROM workspaces w WHERE w.id=p.workspace_id AND w.active AND (w.personal OR w.organization_id=ANY($2::text[]))))
- ORDER BY p.created_at,p.id`, session.AccountID, session.organizationIDs())
+ WHERE m.account_id=$1 AND (p.workspace_id IS NULL OR EXISTS(SELECT 1 FROM workspaces w WHERE w.id=p.workspace_id AND w.active AND (w.personal OR w.organization_id=ANY($2::text[]) OR ($3 AND w.organization_id IS NULL AND EXISTS (SELECT 1 FROM workspace_members wm WHERE wm.workspace_id=w.id AND wm.account_id=$1)))))
+ ORDER BY p.created_at,p.id`, session.AccountID, session.organizationIDs(), s.nativeWorkspaces())
 	if err != nil {
 		internal(w, "list_projects", err)
 		return
@@ -113,8 +113,7 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request, session S
 			writeWebError(w, "read_project_workspace", err)
 			return
 		}
-		organization := session.organizations[entry.OrganizationID]
-		if !entry.Personal && !organization.canCreateProject() {
+		if !entry.CanCreate {
 			problem(w, 403, "workspace_member_required")
 			return
 		}

@@ -48,7 +48,14 @@ export default function ConsentPage() {
         const { data, error } = await client.auth.getSession();
         if (error) throw error;
         if (!alive) return;
-        if (!data.session) { setPhase("login"); return; }
+        if (!data.session) {
+          if (sessionStorage.getItem("samtdi:signup-intent") === "1") {
+            sessionStorage.removeItem("samtdi:signup-intent");
+            setSignup(true);
+          }
+          setPhase("login");
+          return;
+        }
         const result = await client.auth.oauth.getAuthorizationDetails(id);
         if (result.error) throw result.error;
         if (!alive) return;
@@ -95,8 +102,13 @@ export default function ConsentPage() {
       }
       setPassword("");
       setRefresh(value => value + 1);
-    } catch {
-      setMessage(signup ? "가입을 완료할 수 없습니다. 이메일이나 비밀번호 조건을 확인해 주세요." :
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? error.code : "";
+      if (signup && (code === "email_address_not_authorized" || code === "over_email_send_rate_limit")) {
+        setMessage("가입 확인 이메일을 지금 보낼 수 없습니다. 잠시 후 다시 시도해 주세요.");
+      } else if (signup && code === "weak_password") {
+        setMessage("비밀번호가 보안 조건을 충족하지 않습니다. 더 길고 복잡한 비밀번호로 다시 시도해 주세요.");
+      } else setMessage(signup ? "가입을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요." :
         "로그인에 실패했습니다. 인증된 이메일과 비밀번호를 확인해 주세요.");
     } finally { setPending(false); }
   }

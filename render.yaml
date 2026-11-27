@@ -10,6 +10,8 @@ services:
     dockerContext: .
     healthCheckPath: /readyz
     envVars:
+      - key: SAMTDI_PUBLIC_SIGNUP
+        value: "true"
       - key: AYOTBI_DATABASE_URL
         sync: false
       - key: AYOTBI_ORIGIN

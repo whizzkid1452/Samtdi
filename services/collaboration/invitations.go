@@ -138,7 +138,7 @@ func (s *Server) webInvitationPreview(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		preview.Kind = "project"
 		preview.ReturnTo = "/projects/" + projectID + "/media"
-	} else if errors.Is(err, pgx.ErrNoRows) && s.logto != nil {
+	} else if errors.Is(err, pgx.ErrNoRows) && s.workspacesEnabled() {
 		var workspaceID string
 		err = s.pool.QueryRow(r.Context(), `SELECT w.id::text,w.requested_name
  FROM workspace_invitations i JOIN workspaces w ON w.id=i.workspace_id WHERE i.token_hash=$1 AND i.expires_at>now()

@@ -8,6 +8,10 @@ import (
 )
 
 func (s *Server) workspaceMemberRole(w http.ResponseWriter, r *http.Request, session Session) {
+	if s.logto == nil {
+		problem(w, 404, "resource_not_found")
+		return
+	}
 	ctx := r.Context()
 	entry, err := s.readWorkspace(ctx, r.PathValue("workspace"), session, true)
 	if err != nil {

@@ -7,7 +7,7 @@
 - Render: 저장소 루트 `render.yaml`, main 브랜치 자동 배포, Singapore, Free, `/readyz`.
 - Vercel: 기존 `apps/web` Next.js 프로젝트의 Production Branch를 main으로 유지한다. 협업 서버 준비가 완료될 때까지 `SAMTDI_LOCAL_MODE=1`을 유지한다.
 - PostgreSQL: Supabase Free 전용 프로젝트의 session pooler를 사용할 수 있다(IPv4). 사맛디 전용 DB 역할과 비노출 스키마를 만든다. 데이터 API에 이 스키마를 노출하지 않고 anon/authenticated 권한을 부여하지 않는다. `AYOTBI_DATABASE_URL`은 SSL 연결, `search_path=samtdi`, 제한된 풀 크기(예: `pool_max_conns=3`)를 적용한다. 마이그레이션과 유지보수에 PostgreSQL 세션 수준 advisory lock이 사용되므로 transaction pooler는 사용하지 않는다.
-- OIDC: 검증된 이메일을 ID token에 포함하는 운영 공급자를 연결한다(예: Cognito Lite Authorization Code + PKCE, confidential client, openid/email scope). 콜백 URL은 실제 웹 출처의 `/v1/auth/callback`이다. 초기 운영자는 실제 인증된 `AYOTBI_BOOTSTRAP_EMAIL`을 지정하고 다른 계정은 프로젝트 초대를 통해 가입한다. Logto 전용 조직 기능은 Logto 설정을 생략한 경우 비활성화된다.
+- OIDC: 검증된 이메일을 ID token에 포함하는 운영 공급자를 연결한다(예: Cognito Lite Authorization Code + PKCE, confidential client, openid/email scope). 콜백 URL은 실제 웹 출처의 `/v1/auth/callback`이다. 초기 운영자는 실제 인증된 `AYOTBI_BOOTSTRAP_EMAIL`을 지정한다. 공개 웹 모드(`SAMTDI_PUBLIC_SIGNUP=true`)에서는 확인된 이메일이면 초대 없이 가입하고 개인 작업실을 받는다. 팀 참여는 팀 소유자가 발급한 이메일 지정 일회용 코드 또는 동일한 토큰을 담은 링크로만 가능하다. 프로젝트 역할은 팀 멤버십과 별도로 관리한다. Logto 전용 조직 기능은 Logto 설정을 생략한 경우 비활성화된다.
 - 객체 저장소: 비공개 AWS S3 버킷을 사용한다. 실제 웹 출처만 업로드 PUT 요청의 CORS에 허용한다. 별도 자격은 전용 버킷과 필요한 작업으로 한정하고 Render의 환경 변수로 주입한다. 기존 코드의 SHA-256 체크섬·메타데이터·Range 계약을 충족하는지 확인되지 않은 S3 호환 스토리지로 임의 변경하지 않는다. AWS S3는 계정의 적용 가능한 무료 한도 및 실제 저장·전송량에 따라 소액 요금이 발생할 수 있다.
 
 ## 연결
@@ -34,3 +34,9 @@ Render Free는 유휴 시 절전되고 첫 요청이 늦어질 수 있으며, �
 - 무료 저장소 구성에서는 원본 및 변환 산출물 각각 45 MB 제한. PCM 44.1kHz 16-bit stereo는 약 4분 15초 이하이며, 초과 파일은 자르지 않고 실패 처리한다. Supabase 전체 저장 및 전송 무료 한도를 모니터링한다.
 - 기본 SMTP는 외부 수신자 가입에 제한이 있을 수 있다. 운영 SMTP/OAuth 제공자 설정 및 실제 이메일 인증과 2계정 초대 흐름은 배포 전에 검증한다.
 - 실제 S3 presigned PUT, metadata, Range GET, worker 처리, OAuth callback, DB 권한 검증은 필수이며, 통과 전까지 기존 Vercel 프리뷰를 유지한다.
+
+### 공개 가입 배포 전 확인
+
+- Supabase Auth에서 이메일 가입과 이메일 확인을 유지한다. 기본 SMTP는 프로젝트 팀 주소만 수신 가능하므로 일반 공개 전에 [맞춤 SMTP](https://supabase.com/docs/guides/auth/auth-smtp)를 구성한다. 도메인 발신 인증과 운영 콜백 URL을 확인하고, 가입 및 이메일 확인을 끄거나 미확인 이메일을 허용하는 방식으로 우회하지 않는다.
+- Render의 `SAMTDI_PUBLIC_SIGNUP=true` 적용 후 `/readyz`가 200이고 Vercel 운영 사이트의 `/v1/auth/options`가 `public_signup: true`를 반환하는지 확인한다. 기존 서비스에서 Blueprint 변경이 자동으로 동기화되지 않으면 승인된 배포 절차로 해당 설정을 적용한다.
+- Supabase 프로젝트 팀에 속하지 않는 별도 이메일 두 개로 확인 메일 수신, 로그인, 개인 작업실 생성을 검증한다. 초대 전 팀이 보이지 않고, 소유자가 발급한 코드는 지정 계정만 한 번 사용할 수 있는지 확인한다. 팀 가입 후에도 프로젝트 권한은 별도로 확인한다.

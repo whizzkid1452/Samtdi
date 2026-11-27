@@ -26,7 +26,7 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 		return "", err
 	}
 
-	var projectID, invitedOrganization string
+	var projectID, invitedOrganization, invitedNativeWorkspace string
 	var role Role
 	if inviteHash != nil && s.logto != nil {
 		invitedOrganization, err = readInvitedWorkspace(ctx, tx, inviteHash, who.Email)
@@ -35,7 +35,13 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 		}
 	}
 
-	if inviteHash != nil && invitedOrganization == "" {
+	if inviteHash != nil && s.nativeWorkspaces() {
+		invitedNativeWorkspace, err = readNativeWorkspaceInvitation(ctx, tx, inviteHash, who.Email)
+		if err != nil {
+			return "", err
+		}
+	}
+	if inviteHash != nil && invitedOrganization == "" && invitedNativeWorkspace == "" {
 		err := tx.QueryRow(ctx, `SELECT project_id::text FROM invitations WHERE token_hash=$1`, inviteHash).Scan(&projectID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", errInvitationRejected
@@ -71,7 +77,7 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 			}
 		}
 		organizationMember := false
-		if s.logto != nil && projectID == "" && invitedOrganization == "" && !publicSignup {
+		if s.logto != nil && projectID == "" && invitedOrganization == "" && invitedNativeWorkspace == "" && !publicSignup {
 			organizations, err := s.logto.organizations(ctx, who.Subject)
 			if err != nil {
 				return "", err
@@ -84,7 +90,7 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 				return "", err
 			}
 		}
-		if !bootstrap && projectID == "" && !organizationMember && invitedOrganization == "" && !publicSignup {
+		if !bootstrap && projectID == "" && !organizationMember && invitedOrganization == "" && invitedNativeWorkspace == "" && !publicSignup {
 			return "", errInvitationRequired
 		}
 
@@ -125,7 +131,25 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 		}
 	}
 
+	if invitedNativeWorkspace != "" {
+		if err := acceptNativeWorkspaceInvitation(ctx, tx, inviteHash, invitedNativeWorkspace, accountID); err != nil {
+			return "", err
+		}
+	}
 	if projectID != "" {
+		if s.nativeWorkspaces() {
+			var allowed bool
+			err := tx.QueryRow(ctx, `SELECT p.workspace_id IS NULL OR w.personal OR (w.active AND w.organization_id IS NULL AND EXISTS
+ (SELECT 1 FROM workspace_members wm WHERE wm.workspace_id=w.id AND wm.account_id=$2))
+ FROM projects p LEFT JOIN workspaces w ON w.id=p.workspace_id WHERE p.id=$1`, projectID, accountID).Scan(&allowed)
+			if err != nil {
+				return "", err
+			}
+			if !allowed {
+				return "", errInvitationRejected
+			}
+		}
+
 		if s.logto != nil {
 			var organization string
 			if err := tx.QueryRow(ctx, `SELECT COALESCE(w.organization_id,'') FROM projects p

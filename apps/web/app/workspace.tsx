@@ -28,6 +28,7 @@ const WorkspaceContext = createContext<{
   refreshProjects: () => Promise<void>;
   teams: TeamWorkspace[];
   teamsEnabled: boolean;
+  joinByCode: boolean;
   refreshTeams: () => Promise<void>;
 } | null>(null);
 
@@ -46,6 +47,7 @@ export function Workspace({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [teams, setTeams] = useState<TeamWorkspace[]>([]);
   const [teamsEnabled, setTeamsEnabled] = useState(false);
+  const [joinByCode, setJoinByCode] = useState(false);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [publicSignup, setPublicSignup] = useState(false);
@@ -68,6 +70,7 @@ export function Workspace({ children }: { children: ReactNode }) {
         setProjects(visible);
         setTeams(spaces.workspaces);
         setTeamsEnabled(spaces.enabled);
+        setJoinByCode(spaces.join_by_code === true);
         setSession(account);
       } catch (cause) {
         if (request.signal.aborted) return;
@@ -95,6 +98,7 @@ export function Workspace({ children }: { children: ReactNode }) {
     const spaces = await api<WorkspacesResponse>("/v1/workspaces");
     setTeams(spaces.workspaces);
     setTeamsEnabled(spaces.enabled);
+    setJoinByCode(spaces.join_by_code === true);
     await refreshProjects();
   }
 
@@ -124,7 +128,7 @@ export function Workspace({ children }: { children: ReactNode }) {
       <div className="login-content">
         <p><Link href="/projects" className="brand" aria-label="사맛디 홈"><BrandMark /><BrandWordmark /></Link></p>
         <h1>음악을 함께 완성하는 공간</h1>
-        <p className="muted">{publicSignup ? "이메일을 인증하고 내 작업실에서 음악을 함께 검토하세요." :
+        <p className="muted">{publicSignup ? "누구나 가입해 내 작업실을 쓸 수 있어요. 팀에 참여하려면 초대 코드가 필요해요." :
           "초대받은 프로젝트에 로그인해 작업을 이어가세요."}</p>
         {session === null ? <Button component="a" className="login-action" href={login} onClick={(event) => {
           if (window.location.hash) event.currentTarget.href = "/v1/auth/login?" + new URLSearchParams({ return_to: target + window.location.hash });
@@ -133,7 +137,7 @@ export function Workspace({ children }: { children: ReactNode }) {
           <button onClick={() => { setError(""); setAttempt((value) => value + 1); }}>다시 시도</button>
         </> : <p role="status">로그인 상태 확인 중</p>}
         {session === null && error && <p role="alert">{error}</p>}
-        {session === null && publicSignup && <p><a href="/v1/auth/signup?return_to=%2Fprojects">사맛디 계정 만들기</a></p>}
+        {session === null && publicSignup && <p><a href="/v1/auth/signup?return_to=%2Fprojects" onClick={() => { sessionStorage.setItem("samtdi:signup-intent", "1"); }}>사맛디 계정 만들기</a></p>}
       </div>
       <div className="login-art" aria-hidden="true"><BrandMark /></div>
     </main>;
@@ -150,7 +154,7 @@ export function Workspace({ children }: { children: ReactNode }) {
 
   const navigation = { pathname, projectId: project?.id, projects, workspace, selectWorkspace };
 
-  return <WorkspaceContext.Provider value={{ session, projects, refreshProjects, teams, teamsEnabled, refreshTeams }}>
+  return <WorkspaceContext.Provider value={{ session, projects, refreshProjects, teams, teamsEnabled, joinByCode, refreshTeams }}>
     <UploadProvider key={session.account_id} accountId={session.account_id}>
     <div className="workspace-shell">
       <aside className="workspace-sidebar">
