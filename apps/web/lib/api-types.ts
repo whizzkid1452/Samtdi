@@ -921,6 +921,9 @@ export interface paths {
                         filename: string;
                         bytes: number;
                         description?: string;
+                        /** Format: uuid */
+                        request_id?: string;
+                        source?: components["schemas"]["RenderSource"];
                     };
                 };
             };
@@ -2780,6 +2783,7 @@ export interface components {
             duration_ms?: number;
             failure?: string;
             created_at: string;
+            source?: components["schemas"]["RenderSource"];
         };
         UploadSession: {
             id: string;
@@ -2788,6 +2792,8 @@ export interface components {
             headers: {
                 [key: string]: string[];
             };
+            /** Format: uuid */
+            version_id?: string;
         };
         Message: {
             id: string;
@@ -3056,6 +3062,16 @@ export interface components {
             /** @enum {string} */
             role: "owner" | "editor" | "reviewer" | "member";
             return_to: string;
+        };
+        RenderSource: {
+            snapshot_id: string;
+            audio_sha256: string;
+            commit_oid?: string;
+            /** Format: uuid */
+            review_id?: string;
+            settings?: {
+                [key: string]: unknown;
+            };
         };
     };
     responses: never;

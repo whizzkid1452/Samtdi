@@ -2,9 +2,11 @@ package collaboration
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -27,22 +29,34 @@ type webMediaItem struct {
 	LatestReadyID string      `json:"latest_ready_id,omitempty"`
 }
 
-type webVersion struct {
-	ID          string    `json:"id"`
-	ItemID      string    `json:"item_id"`
-	Filename    string    `json:"filename"`
-	Description string    `json:"description"`
-	State       string    `json:"state"`
-	DurationMS  *int64    `json:"duration_ms,omitempty"`
-	Failure     *string   `json:"failure,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
+type webRenderSource struct {
+	SnapshotID  string          `json:"snapshot_id"`
+	AudioSHA256 string          `json:"audio_sha256"`
+	CommitOID   string          `json:"commit_oid,omitempty"`
+	ReviewID    string          `json:"review_id,omitempty"`
+	Settings    json.RawMessage `json:"settings,omitempty"`
 }
 
-const webVersionColumns = "id::text, item_id::text, filename, description, state, duration_ms, failure, created_at"
+var renderDigest = regexp.MustCompile(`^[0-9a-f]{64}$`)
+var renderCommit = regexp.MustCompile(`^[0-9a-f]{40}$`)
+
+type webVersion struct {
+	ID          string           `json:"id"`
+	ItemID      string           `json:"item_id"`
+	Filename    string           `json:"filename"`
+	Description string           `json:"description"`
+	State       string           `json:"state"`
+	DurationMS  *int64           `json:"duration_ms,omitempty"`
+	Failure     *string          `json:"failure,omitempty"`
+	CreatedAt   time.Time        `json:"created_at"`
+	Source      *webRenderSource `json:"source,omitempty"`
+}
+
+const webVersionColumns = "id::text, item_id::text, filename, description, state, duration_ms, failure, created_at, (SELECT u.render_source FROM web_uploads u WHERE u.id=web_media_versions.id) AS render_source"
 
 func scanWebVersion(row pgx.Row) (webVersion, error) {
 	var v webVersion
-	err := row.Scan(&v.ID, &v.ItemID, &v.Filename, &v.Description, &v.State, &v.DurationMS, &v.Failure, &v.CreatedAt)
+	err := row.Scan(&v.ID, &v.ItemID, &v.Filename, &v.Description, &v.State, &v.DurationMS, &v.Failure, &v.CreatedAt, &v.Source)
 	return v, err
 }
 
@@ -230,9 +244,11 @@ func (s *Server) startWebUpload(w http.ResponseWriter, r *http.Request, session 
 		return
 	}
 	var input struct {
-		Filename    string `json:"filename"`
-		Bytes       int64  `json:"bytes"`
-		Description string `json:"description"`
+		Filename    string           `json:"filename"`
+		Bytes       int64            `json:"bytes"`
+		Description string           `json:"description"`
+		RequestID   string           `json:"request_id"`
+		Source      *webRenderSource `json:"source"`
 	}
 	if !readJSON(w, r, &input) {
 		return
@@ -246,20 +262,74 @@ func (s *Server) startWebUpload(w http.ResponseWriter, r *http.Request, session 
 		problem(w, http.StatusBadRequest, "invalid_upload")
 		return
 	}
+	source := input.Source
+	if input.RequestID != "" && !uuidPattern.MatchString(input.RequestID) ||
+		source != nil && (kind != "wav" || input.RequestID == "" ||
+			!renderDigest.MatchString(source.SnapshotID) || !renderDigest.MatchString(source.AudioSHA256) ||
+			source.CommitOID != "" && !renderCommit.MatchString(source.CommitOID) ||
+			source.ReviewID != "" && !uuidPattern.MatchString(source.ReviewID) ||
+			len(source.Settings) > 16*1024) {
+		problem(w, http.StatusBadRequest, "invalid_render_source")
+		return
+	}
+
 	s.webWrite(w, r, session, Editor, false, http.StatusCreated, func(ctx context.Context, tx pgx.Tx, _ Role) (any, error) {
+		if source != nil && source.ReviewID != "" {
+			review, err := readReview(ctx, tx, project, source.ReviewID)
+			if err != nil {
+				return nil, err
+			}
+			if source.CommitOID == "" || source.CommitOID != review.BaseOID && source.CommitOID != review.HeadOID {
+				return nil, webProblem{400, "invalid_render_source"}
+			}
+		}
+
 		var id string
 		var expires time.Time
-		err := tx.QueryRow(ctx, `INSERT INTO web_uploads(project_id,item_id,actor_id,filename,description,bytes,kind)
- SELECT $1,id,$3,$4,$5,$6,$7 FROM web_media_items WHERE project_id=$1 AND id=$2 AND archived_at IS NULL
- RETURNING id::text,expires_at`, project, item, session.AccountID, input.Filename, input.Description, input.Bytes, kind).Scan(&id, &expires)
+		var completed bool
+		var sourceValue any
+		if source != nil {
+			sourceValue = source
+		}
+		err := tx.QueryRow(ctx, `INSERT INTO web_uploads(id,project_id,item_id,actor_id,filename,description,bytes,kind,render_source)
+ SELECT COALESCE(NULLIF($8,'')::uuid,gen_random_uuid()),$1,id,$3,$4,$5,$6,$7,$9::jsonb FROM web_media_items
+ WHERE project_id=$1 AND id=$2 AND archived_at IS NULL ON CONFLICT(id) DO NOTHING RETURNING id::text,expires_at`,
+			project, item, session.AccountID, input.Filename, input.Description, input.Bytes, kind, input.RequestID, sourceValue).Scan(&id, &expires)
+		if errors.Is(err, pgx.ErrNoRows) && input.RequestID != "" {
+			err = tx.QueryRow(ctx, `SELECT u.id::text,u.expires_at,u.completion_key IS NOT NULL
+ FROM web_uploads u JOIN web_media_items m ON m.id=u.item_id
+ WHERE u.id=$8 AND u.project_id=$1 AND u.item_id=$2 AND u.actor_id=$3 AND m.archived_at IS NULL
+ AND u.filename=$4 AND u.description=$5 AND u.bytes=$6 AND u.kind=$7 AND u.render_source IS NOT DISTINCT FROM $9::jsonb`,
+				project, item, session.AccountID, input.Filename, input.Description, input.Bytes, kind, input.RequestID, sourceValue).
+				Scan(&id, &expires, &completed)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, webProblem{409, "idempotency_conflict"}
+			}
+		}
 		if err != nil {
 			return nil, err
 		}
+		if completed {
+			return map[string]any{"id": id, "url": "", "headers": map[string][]string{}, "expires_at": expires, "version_id": id}, nil
+		}
+		remaining := time.Until(expires).Truncate(time.Second)
+		if remaining <= 0 && input.RequestID != "" {
+			err := tx.QueryRow(ctx, `UPDATE web_uploads SET expires_at=clock_timestamp()+make_interval(secs => $2),cleaned_at=NULL
+ WHERE id=$1 AND completion_key IS NULL RETURNING expires_at`, id, webUploadWindow.Seconds()).Scan(&expires)
+			if err != nil {
+				return nil, err
+			}
+			remaining = time.Until(expires).Truncate(time.Second)
+		}
+		if remaining <= 0 {
+			return nil, webProblem{410, "upload_session_expired"}
+		}
+
 		signing, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		request, err := s3.NewPresignClient(store.client).PresignPutObject(signing, &s3.PutObjectInput{
 			Bucket: &store.bucket, Key: aws.String(webTemporaryKey(project, id)), ContentLength: &input.Bytes,
-		}, s3.WithPresignExpires(webUploadWindow))
+		}, s3.WithPresignExpires(min(webUploadWindow, remaining)))
 		if err != nil {
 			return nil, err
 		}

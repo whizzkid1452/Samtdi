@@ -29,8 +29,10 @@ func testS3(t *testing.T) (*httptest.Server, func() int) {
 	files := make(map[string]storedTestBlob)
 	puts := 0
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := strings.TrimPrefix(r.URL.Path, "/test-bucket/")
+		isWeb := strings.HasPrefix(key, "web/")
 		if !strings.HasPrefix(r.Header.Get("Authorization"), "AWS4-HMAC-SHA256 ") ||
-			(!strings.HasPrefix(r.URL.Path, "/test-bucket/lfs/") && !strings.HasPrefix(r.URL.Path, "/test-bucket/review-media/")) {
+			(!strings.HasPrefix(key, "lfs/") && !strings.HasPrefix(key, "review-media/") && !isWeb) {
 			http.Error(w, "invalid S3 request", 403)
 			return
 		}
@@ -41,9 +43,12 @@ func testS3(t *testing.T) (*httptest.Server, func() int) {
 			body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 			digest := sha256.Sum256(body)
 			oid := hex.EncodeToString(digest[:])
+			validKey := strings.HasSuffix(key, "/"+oid)
+			if isWeb {
+				validKey = validSnapshotObject(snapshotObject{Key: key, SHA256: oid, Bytes: int64(len(body))})
+			}
 			if err != nil || r.Header.Get("X-Amz-Meta-Sha256") != oid ||
-				r.Header.Get("X-Amz-Checksum-Sha256") != base64.StdEncoding.EncodeToString(digest[:]) ||
-				!strings.HasSuffix(r.URL.Path, "/"+oid) {
+				r.Header.Get("X-Amz-Checksum-Sha256") != base64.StdEncoding.EncodeToString(digest[:]) || !validKey {
 				http.Error(w, "object integrity", 422)
 				return
 			}

@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"math"
@@ -30,12 +29,13 @@ const (
 )
 
 type webMediaJob struct {
-	version string
-	project string
-	kind    string
-	size    int64
-	lease   string
-	attempt int
+	version        string
+	project        string
+	kind           string
+	size           int64
+	lease          string
+	attempt        int
+	expectedSHA256 string
 }
 
 type webArtifact struct {
@@ -117,8 +117,8 @@ func (w webMediaWorker) claim(ctx context.Context) (webMediaJob, error) {
  ), started AS (
  UPDATE web_media_versions v SET state='processing',failure=NULL FROM leased l WHERE v.id=l.version_id RETURNING v.id,v.project_id
  )
- SELECT v.id::text,v.project_id::text,u.kind,u.bytes,l.lease_id::text,l.attempts
- FROM started v JOIN leased l ON l.version_id=v.id JOIN web_uploads u ON u.id=v.id`).Scan(&job.version, &job.project, &job.kind, &job.size, &job.lease, &job.attempt)
+ SELECT v.id::text,v.project_id::text,u.kind,u.bytes,l.lease_id::text,l.attempts,COALESCE(u.render_source->>'audio_sha256','')
+ FROM started v JOIN leased l ON l.version_id=v.id JOIN web_uploads u ON u.id=v.id`).Scan(&job.version, &job.project, &job.kind, &job.size, &job.lease, &job.attempt, &job.expectedSHA256)
 	return job, err
 }
 
@@ -169,12 +169,13 @@ func (w webMediaWorker) prepare(ctx context.Context, job webMediaJob) (int64, [3
 	if err != nil {
 		return 0, assets, err
 	}
-	written, copyErr := io.Copy(file, io.LimitReader(body, job.size+1))
+	digest := sha256.New()
+	written, copyErr := io.Copy(io.MultiWriter(file, digest), io.LimitReader(body, job.size+1))
 	closeErr := file.Close()
 	if copyErr != nil || closeErr != nil {
 		return 0, assets, errors.Join(copyErr, closeErr)
 	}
-	if written != job.size {
+	if written != job.size || job.expectedSHA256 != "" && hex.EncodeToString(digest.Sum(nil)) != job.expectedSHA256 {
 		return 0, assets, errInvalidMedia
 	}
 
@@ -438,13 +439,31 @@ func (w webMediaWorker) cleanup(ctx context.Context) error {
 		return err
 	}
 	for _, upload := range uploads {
-		key := webTemporaryKey(upload.Project, upload.ID)
-		if _, err = w.store.client.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: &w.store.bucket, Key: &key}); err != nil {
+		if err := w.cleanExpiredUpload(ctx, upload.Project, upload.ID); err != nil {
 			return err
-		}
-		if _, err = w.pool.Exec(ctx, "UPDATE web_uploads SET cleaned_at=now() WHERE id=$1", upload.ID); err != nil {
-			return fmt.Errorf("mark upload cleaned: %w", err)
 		}
 	}
 	return nil
+}
+
+func (w webMediaWorker) cleanExpiredUpload(ctx context.Context, project, upload string) error {
+	tx, err := w.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// Hold the upload row until deletion so a retried publish cannot renew an object being deleted.
+	result, err := tx.Exec(ctx, `UPDATE web_uploads u SET cleaned_at=now() WHERE u.id=$1 AND u.cleaned_at IS NULL
+ AND u.expires_at+interval '1 day'<now()
+ AND NOT EXISTS (SELECT 1 FROM web_media_jobs j WHERE j.version_id=u.id AND j.finished_at IS NULL)`, upload)
+	if err != nil || result.RowsAffected() == 0 {
+		return err
+	}
+
+	key := webTemporaryKey(project, upload)
+	if _, err := w.store.client.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: &w.store.bucket, Key: &key}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
