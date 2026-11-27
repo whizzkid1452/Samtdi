@@ -87,7 +87,7 @@ label { font-size: .9rem; color: var(--muted); }
   .top-links a { padding-inline: .45rem; }
   .project-title { align-items: flex-start; }
   .project-title select { max-width: 100%; }
-  button, .button, input, select { min-height: 44px; }
+  button, .button, input:not([type="checkbox"]):not([type="radio"]), select { min-height: 44px; }
 }
 .panel h2 { font-size: 1.15rem; margin: 0 0 .8rem; }
 .panel > .row, .panel > form { margin-block: .75rem; }
@@ -423,3 +423,10 @@ label { font-size: .9rem; color: var(--muted); }
 .notification-popover li { border-block-end: 1px solid var(--border); padding: .55rem .5rem; }
 .notification-popover li[data-unread] { background: #edf4d7; }
 .notification-popover li p { margin: .2rem 0 0; overflow-wrap: anywhere; }
+
+.project-settings-layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(270px, 1fr); gap: 1rem; align-items: start; }
+.project-settings-layout .panel { background: #fffefa; border-color: #dedfd5; margin: 0; border-radius: 12px; }
+.project-settings-layout .panel h2 { font-size: 1.15rem; }
+.project-settings-management { display: grid; gap: 1rem; min-width: 0; }
+.workspace-navigation .clean-list > li { padding: 0; border: 0; }
+@media (max-width: 950px) { .project-settings-layout { grid-template-columns: minmax(0, 1fr); } }
