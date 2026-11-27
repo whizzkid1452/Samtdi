@@ -1027,7 +1027,11 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["WaveformPeaks"];
+                        "audio/wav": string;
+                        "audio/mpeg": string;
+                    };
                 };
                 /** @description Authorized partial audio response */
                 206: {
@@ -2680,6 +2684,12 @@ export interface components {
         PersonName: {
             name: string;
             email: string;
+        };
+        WaveformPeaks: {
+            duration_ms: number;
+            peaks: number[];
+            /** @description One channel for mono and ordered left and right channels for stereo. Older versions can omit this property. */
+            channel_peaks?: number[][];
         };
     };
     responses: never;

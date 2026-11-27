@@ -178,7 +178,8 @@ func (w webMediaWorker) prepare(ctx context.Context, job webMediaJob) (int64, [3
 		return 0, assets, errInvalidMedia
 	}
 
-	if err := w.verifyInput(ctx, job.kind, original); err != nil {
+	channelCount, err := w.verifyInput(ctx, job.kind, original)
+	if err != nil {
 		return 0, assets, err
 	}
 	cmd := exec.CommandContext(ctx, w.ffmpeg, "-nostdin", "-v", "error", "-xerror", "-threads", "1",
@@ -195,12 +196,15 @@ func (w webMediaWorker) prepare(ctx context.Context, job webMediaJob) (int64, [3
 		return 0, assets, err
 	}
 	pcm, err := exec.CommandContext(ctx, w.ffmpeg, "-nostdin", "-v", "error", "-protocol_whitelist", "file,pipe",
-		"-f", "wav", "-i", playback, "-t", "1800", "-ac", "1", "-ar", "4000", "-f", "s16le", "pipe:1").Output()
+		"-f", "wav", "-i", playback, "-t", "1800", "-ac", strconv.Itoa(channelCount), "-ar", "4000", "-f", "s16le", "pipe:1").Output()
 	if err != nil {
 		return 0, assets, err
 	}
-	peaks := encodeWebPeaks(pcm)
-	encoded, err := json.Marshal(map[string]any{"duration_ms": duration, "peaks": peaks})
+	peaks, channelPeaks, err := encodeWebPeaks(pcm, channelCount)
+	if err != nil {
+		return 0, assets, err
+	}
+	encoded, err := json.Marshal(webWaveform{DurationMS: duration, Peaks: peaks, ChannelPeaks: channelPeaks})
 	if err != nil {
 		return 0, assets, err
 	}
@@ -219,14 +223,14 @@ func (w webMediaWorker) prepare(ctx context.Context, job webMediaJob) (int64, [3
 	return duration, assets, nil
 }
 
-func (w webMediaWorker) verifyInput(ctx context.Context, kind, path string) error {
+func (w webMediaWorker) verifyInput(ctx context.Context, kind, path string) (int, error) {
 	raw, err := exec.CommandContext(ctx, w.ffprobe, "-v", "error", "-protocol_whitelist", "file,pipe",
 		"-f", kind, "-select_streams", "a", "-show_entries", "stream=codec_name,channels", "-of", "json", path).Output()
 	if err != nil {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return 0, ctx.Err()
 		}
-		return errInvalidMedia
+		return 0, errInvalidMedia
 	}
 	var metadata struct {
 		Streams []struct {
@@ -235,19 +239,19 @@ func (w webMediaWorker) verifyInput(ctx context.Context, kind, path string) erro
 		} `json:"streams"`
 	}
 	if json.Unmarshal(raw, &metadata) != nil || len(metadata.Streams) != 1 {
-		return errInvalidMedia
+		return 0, errInvalidMedia
 	}
 	stream := metadata.Streams[0]
 	if stream.Channels < 1 || stream.Channels > 2 {
-		return errInvalidMedia
+		return 0, errInvalidMedia
 	}
 	if kind == "mp3" && stream.Codec == "mp3" {
-		return nil
+		return stream.Channels, nil
 	}
 	if kind == "wav" && (stream.Codec == "pcm_s16le" || stream.Codec == "pcm_s24le" || stream.Codec == "pcm_f32le") {
-		return nil
+		return stream.Channels, nil
 	}
-	return errInvalidMedia
+	return 0, errInvalidMedia
 }
 
 func (w webMediaWorker) playbackDuration(ctx context.Context, path string) (int64, error) {
@@ -262,22 +266,43 @@ func (w webMediaWorker) playbackDuration(ctx context.Context, path string) (int6
 	return max(1, int64(math.Round(seconds*1000))), nil
 }
 
-func encodeWebPeaks(raw []byte) []float64 {
-	samples := len(raw) / 2
-	if samples == 0 {
-		return []float64{}
+type webWaveform struct {
+	DurationMS   int64       `json:"duration_ms"`
+	Peaks        []float64   `json:"peaks"`
+	ChannelPeaks [][]float64 `json:"channel_peaks"`
+}
+
+func encodeWebPeaks(raw []byte, channels int) ([]float64, [][]float64, error) {
+	const sampleBytes = 2
+	if channels != 1 && channels != 2 {
+		return nil, nil, errInvalidMedia
 	}
-	count := min(samples, 1024)
-	peaks := make([]float64, count)
-	for i := 0; i < samples; i++ {
-		value := int(int16(binary.LittleEndian.Uint16(raw[2*i : 2*i+2])))
-		if value < 0 {
-			value = -value
+
+	frameBytes := sampleBytes * channels
+	if len(raw) == 0 || len(raw)%frameBytes != 0 {
+		return nil, nil, errInvalidMedia
+	}
+
+	frames := len(raw) / frameBytes
+	bins := min(frames, 1024)
+	mixed := make([]float64, bins)
+	peaks := make([][]float64, channels)
+	for channel := range peaks {
+		peaks[channel] = make([]float64, bins)
+	}
+
+	for frame := range frames {
+		bin := frame * bins / frames
+		var sum int
+		for channel := range channels {
+			offset := frame*frameBytes + channel*sampleBytes
+			value := int(int16(binary.LittleEndian.Uint16(raw[offset : offset+sampleBytes])))
+			sum += value
+			peaks[channel][bin] = max(peaks[channel][bin], math.Abs(float64(value))/32768)
 		}
-		index := i * count / samples
-		peaks[index] = max(peaks[index], float64(value)/32768)
+		mixed[bin] = max(mixed[bin], math.Abs(float64(sum))/float64(channels*32768))
 	}
-	return peaks
+	return mixed, peaks, nil
 }
 
 func (w webMediaWorker) storeArtifact(ctx context.Context, job webMediaJob, key, path string) (webArtifact, error) {

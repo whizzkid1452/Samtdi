@@ -983,7 +983,26 @@
       "get": {
         "responses": {
           "200": {
-            "description": "Authorized audio or waveform bytes"
+            "description": "Authorized audio or waveform bytes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaveformPeaks"
+                }
+              },
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/mpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
           },
           "default": {
             "description": "Request rejected",
@@ -3941,6 +3960,36 @@
           },
           "email": {
             "type": "string"
+          }
+        }
+      },
+      "WaveformPeaks": {
+        "type": "object",
+        "required": [
+          "duration_ms",
+          "peaks"
+        ],
+        "properties": {
+          "duration_ms": {
+            "type": "integer"
+          },
+          "peaks": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "channel_peaks": {
+            "description": "One channel for mono and ordered left and right channels for stereo. Older versions can omit this property.",
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
           }
         }
       }
