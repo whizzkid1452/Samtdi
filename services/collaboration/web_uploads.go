@@ -257,7 +257,7 @@ func (s *Server) startWebUpload(w http.ResponseWriter, r *http.Request, session 
 	kind := strings.TrimPrefix(strings.ToLower(filepath.Ext(input.Filename)), ".")
 	if !uuidPattern.MatchString(item) || !webText(input.Filename, 200) ||
 		strings.ContainsAny(input.Filename, "/\\\r\n") || utf8.RuneCountInString(input.Description) > 2000 ||
-		strings.ContainsRune(input.Description, 0) || input.Bytes <= 0 || input.Bytes > webUploadLimit ||
+		strings.ContainsRune(input.Description, 0) || input.Bytes <= 0 || input.Bytes > store.objectLimit() ||
 		(kind != "wav" && kind != "mp3") {
 		problem(w, http.StatusBadRequest, "invalid_upload")
 		return

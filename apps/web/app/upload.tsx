@@ -126,8 +126,10 @@ export function UploadProvider({ accountId, children }: { accountId: string; chi
     if (request.current) return;
 
     const file = draft?.file;
-    if (!completion && (!draft || !file || !/\.(wav|mp3)$/i.test(file.name) || !file.size || file.size > 500_000_000)) {
-      setError("500 MB 이하의 WAV 또는 MP3 파일을 선택해 주세요.");
+    if (!completion && (!draft || !file || !/\.(wav|mp3)$/i.test(file.name) || !file.size || file.size > (process.env.NEXT_PUBLIC_SAMTDI_FREE_STORAGE === "1" ? 45_000_000 : 500_000_000))) {
+      setError(process.env.NEXT_PUBLIC_SAMTDI_FREE_STORAGE === "1"
+        ? "45 MB 이하의 WAV 또는 MP3 파일을 선택해 주세요. 변환 후 WAV도 45 MB 이하여야 합니다."
+        : "500 MB 이하의 WAV 또는 MP3 파일을 선택해 주세요.");
       return;
     }
 

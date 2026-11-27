@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, ApiError, describeError } from "../lib/api";
+import { clearIdentitySession } from "../lib/supabase-identity";
 import type { components } from "../lib/api-types";
 import { projectHref } from "../lib/routes";
 import { displayName, initials } from "../lib/people";
@@ -101,6 +102,7 @@ export function Workspace({ children }: { children: ReactNode }) {
     setError("");
     try {
       await api("/v1/auth/logout", { method: "POST" });
+      await clearIdentitySession().catch(() => undefined);
       setSession(null);
       setProjects([]);
       router.replace("/projects");

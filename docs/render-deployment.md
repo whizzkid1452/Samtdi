@@ -24,3 +24,13 @@ Render Free는 유휴 시 절전되고 첫 요청이 늦어질 수 있으며, �
 ## 확인 상태
 
 이 저장소의 배포 설정은 구성 준비이다. Render 컨테이너 및 실제 OIDC·PostgreSQL·S3 연결과 사용 흐름을 확인하기 전 배포 완료로 간주하지 않는다.
+
+### Supabase Free 구성 (선택 사항)
+
+- Supabase PostgreSQL 전용 `samtdi` 스키마 및 비노출 서비스 계정; 세션 pooler, TLS, `search_path=samtdi`, 낮은 연결 풀 크기.
+- Supabase OAuth 2.1 Server를 활성화하고 Site URL은 실제 Vercel origin, Authorization Path는 `/oauth/consent`, 등록된 confidential client의 콜백은 `/v1/auth/callback`으로 설정한다. 동적 클라이언트 등록을 허용하지 않는다. 검증 이메일, 서명, audience, state, nonce와 PKCE 검증을 유지한다.
+- Vercel의 공개 환경 변수: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SAMTDI_OAUTH_CLIENT_ID`, `NEXT_PUBLIC_SAMTDI_FREE_STORAGE=1`. 비밀 키는 절대 공개 변수에 저장하지 않는다.
+- Supabase 전용 비공개 버킷을 사용한다. Render의 `AYOTBI_S3_ENDPOINT`는 Supabase 대시보드에 표시된 직접 Storage S3 HTTPS 엔드포인트(`https://<project-ref>.storage.supabase.co/storage/v1/s3`), S3 region과 서버 전용 키를 설정한다. AWS checksum API 대신 업로드한 결과 객체의 바이트를 다시 읽어 SHA-256 및 크기와 메타데이터를 확인하며, 불일치하면 실패 처리한다.
+- 무료 저장소 구성에서는 원본 및 변환 산출물 각각 45 MB 제한. PCM 44.1kHz 16-bit stereo는 약 4분 15초 이하이며, 초과 파일은 자르지 않고 실패 처리한다. Supabase 전체 저장 및 전송 무료 한도를 모니터링한다.
+- 기본 SMTP는 외부 수신자 가입에 제한이 있을 수 있다. 운영 SMTP/OAuth 제공자 설정 및 실제 이메일 인증과 2계정 초대 흐름은 배포 전에 검증한다.
+- 실제 S3 presigned PUT, metadata, Range GET, worker 처리, OAuth callback, DB 권한 검증은 필수이며, 통과 전까지 기존 Vercel 프리뷰를 유지한다.

@@ -162,7 +162,7 @@ func (w webMediaWorker) prepare(ctx context.Context, job webMediaJob) (int64, [3
 		return 0, assets, err
 	}
 	defer body.Close()
-	if meta.Size != job.size || job.size < 1 || job.size > webUploadLimit {
+	if meta.Size != job.size || job.size < 1 || job.size > w.store.objectLimit() {
 		return 0, assets, errInvalidMedia
 	}
 	file, err := os.OpenFile(original, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
@@ -183,9 +183,15 @@ func (w webMediaWorker) prepare(ctx context.Context, job webMediaJob) (int64, [3
 	if err != nil {
 		return 0, assets, err
 	}
+	// Limit the output duration on the free object storage plan. Decode slightly
+	// beyond the allowed maximum so oversized media is rejected, never truncated.
+	maxSeconds := webMediaMaxSeconds
+	if w.store.supabase {
+		maxSeconds = int((w.store.objectLimit() - 4096) / int64(44100*2*channelCount))
+	}
 	cmd := exec.CommandContext(ctx, w.ffmpeg, "-nostdin", "-v", "error", "-xerror", "-threads", "1",
 		"-protocol_whitelist", "file,pipe", "-f", job.kind, "-i", original,
-		"-map", "0:a:0", "-vn", "-sn", "-dn", "-t", "1801", "-ar", "44100", "-c:a", "pcm_s16le", "-f", "wav", playback)
+		"-map", "0:a:0", "-vn", "-sn", "-dn", "-t", strconv.Itoa(maxSeconds+1), "-ar", "44100", "-c:a", "pcm_s16le", "-f", "wav", playback)
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
 			return 0, assets, ctx.Err()
@@ -195,6 +201,9 @@ func (w webMediaWorker) prepare(ctx context.Context, job webMediaJob) (int64, [3
 	duration, err := w.playbackDuration(ctx, playback)
 	if err != nil {
 		return 0, assets, err
+	}
+	if w.store.supabase && duration > int64(maxSeconds)*1000 {
+		return 0, assets, errInvalidMedia
 	}
 	encoded, err := w.webWaveform(ctx, playback, channelCount, duration)
 	if err != nil {
