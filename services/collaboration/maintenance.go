@@ -3,6 +3,7 @@ package collaboration
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -14,7 +15,7 @@ const maintenanceKey int64 = 814735203
 func AcquireMaintenance(ctx context.Context, pool *pgxpool.Pool, exclusive bool) (func(), error) {
 	conn, err := pgx.ConnectConfig(ctx, pool.Config().ConnConfig)
 	if err != nil {
-		return nil, errors.New("maintenance database connection failed")
+		return nil, maintenanceConnectionError(err)
 	}
 
 	closeConnection := func() {
@@ -34,6 +35,35 @@ func AcquireMaintenance(ctx context.Context, pool *pgxpool.Pool, exclusive bool)
 	}
 
 	return closeConnection, nil
+}
+
+// Classify startup connection failures without logging a DSN, credential, host,
+// or any raw driver/server error text.
+func maintenanceConnectionError(err error) error {
+	const prefix = "maintenance database connection failed: "
+	message := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(message, "tenant or user not found") || strings.Contains(message, "role") && strings.Contains(message, "does not exist"):
+		return errors.New(prefix + "pooler tenant or database role not found")
+	case strings.Contains(message, "28p01") || strings.Contains(message, "password authentication failed") || strings.Contains(message, "invalid password"):
+		return errors.New(prefix + "database password rejected")
+	case strings.Contains(message, "28000") || strings.Contains(message, "not permitted to log in") || strings.Contains(message, "authentication"):
+		return errors.New(prefix + "database authentication rejected")
+	case strings.Contains(message, "x509:") || strings.Contains(message, "certificate") || strings.Contains(message, "tls:"):
+		return errors.New(prefix + "TLS certificate or handshake verification failed")
+	case strings.Contains(message, "no such host") || strings.Contains(message, "lookup"):
+		return errors.New(prefix + "database DNS lookup failed")
+	case strings.Contains(message, "timeout") || strings.Contains(message, "deadline exceeded"):
+		return errors.New(prefix + "database connection timed out")
+	case strings.Contains(message, "connection refused"):
+		return errors.New(prefix + "database connection refused")
+	case strings.Contains(message, "too many connections") || strings.Contains(message, "max client connections"):
+		return errors.New(prefix + "database connection limit reached")
+	case strings.Contains(message, "server error") || strings.Contains(message, "fatal:"):
+		return errors.New(prefix + "database server rejected connection")
+	default:
+		return errors.New(prefix + "unclassified connection failure")
+	}
 }
 
 type MaintenanceConfig struct {
