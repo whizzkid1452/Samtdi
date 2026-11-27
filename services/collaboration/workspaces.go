@@ -19,6 +19,7 @@ type workspace struct {
 	CanCreate      bool   `json:"can_create"`
 	Active         bool   `json:"active"`
 	Personal       bool   `json:"personal"`
+	Guest          bool   `json:"guest"`
 }
 
 func (s *Server) workspaceRoutes() {
@@ -58,6 +59,7 @@ func (s *Server) listWorkspaces(w http.ResponseWriter, r *http.Request, session 
 			} else if member && entry.Active {
 				entry.Name, entry.Owner = organization.Name, organization.isOwner()
 				entry.CanCreate = organization.canCreateProject()
+				entry.Guest = !entry.CanCreate
 				workspaces = append(workspaces, entry)
 			} else if !entry.Active && creator == session.AccountID {
 				entry.Owner = true

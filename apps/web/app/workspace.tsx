@@ -38,6 +38,7 @@ export function useWorkspace() {
 export function Workspace({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const query = useSearchParams();
+  const isInvitation = pathname.startsWith("/invite/");
   const router = useRouter();
   const [session, setSession] = useState<Session | null>();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -52,6 +53,8 @@ export function Workspace({ children }: { children: ReactNode }) {
   const [navigationOpened, setNavigationOpened] = useState(false);
 
   useEffect(() => {
+    if (isInvitation) return;
+
     const request = new AbortController();
     async function load() {
       try {
@@ -80,7 +83,7 @@ export function Workspace({ children }: { children: ReactNode }) {
 
     void load();
     return () => request.abort();
-  }, [attempt]);
+  }, [attempt, isInvitation]);
 
   async function refreshProjects() {
     setProjects(await api<Project[]>("/v1/projects"));
@@ -107,6 +110,8 @@ export function Workspace({ children }: { children: ReactNode }) {
       setLoggingOut(false);
     }
   }
+
+  if (isInvitation) return children;
 
   if (!session) {
     const target = pathname + (query.size ? "?" + query.toString() : "");

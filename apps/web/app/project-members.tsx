@@ -59,13 +59,13 @@ export function ProjectMembers({ project }: { project: Project }) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     await change(async () => {
-      const created = await api<{ id: string; accept_url: string; expires_at: string }>(base + "/invitations", {
+      const created = await api<{ id: string; accept_url: string; expires_at: string; preview_url?: string }>(base + "/invitations", {
         method: "POST", body: JSON.stringify({ email: data.get("email"), role: data.get("role") }),
       });
       const href = new URL(created.accept_url);
       href.searchParams.set("return_to", projectHref(project.id));
 
-      setInvite({ ...created, accept_url: href.href });
+      setInvite({ ...created, accept_url: created.preview_url ?? href.href });
       setInviting(false);
       setNotice("초대 링크를 만들었습니다.");
     });

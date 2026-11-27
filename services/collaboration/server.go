@@ -209,6 +209,7 @@ func (s *Server) routes() {
 
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+	s.mux.HandleFunc("GET /v1/auth/invitations/{token}", s.webInvitationPreview)
 	s.mux.HandleFunc("GET /v1/auth/options", s.webAuthOptions)
 	s.mux.HandleFunc("GET /v1/auth/signup", s.beginLogin)
 	s.mux.HandleFunc("GET /v1/auth/login", s.beginLogin)

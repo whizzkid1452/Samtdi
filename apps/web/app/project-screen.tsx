@@ -26,6 +26,7 @@ export function ProjectIndex() {
   const router = useRouter();
   const query = useSearchParams();
   const selectedWorkspace = query.get("workspace") ?? "";
+  const guestWorkspace = teams.find(({ id }) => id === selectedWorkspace)?.guest === true;
   const [search, setSearch] = useState("");
   const showArchived = query.get("archived") === "true";
   const availableTeams = teams.filter(({ active, can_create }) => active && can_create);
@@ -63,10 +64,10 @@ export function ProjectIndex() {
 
   return <main className="main-content project-home">
     <div className="row spread wrap section-header">
-      <h1>프로젝트</h1>
-      {!creating && <Button disabled={teamsEnabled && !availableTeams.length} onClick={() => setCreating(true)}>새 프로젝트</Button>}
+      <h1>{guestWorkspace ? "초대받은 프로젝트" : "프로젝트"}</h1>
+      {!guestWorkspace && !creating && <Button disabled={teamsEnabled && !availableTeams.length} onClick={() => setCreating(true)}>새 프로젝트</Button>}
     </div>
-    {creating && <form className="panel row wrap" onSubmit={createProject}>
+    {!guestWorkspace && creating && <form className="panel row wrap" onSubmit={createProject}>
       <TextInput label="프로젝트 이름" name="title" maxLength={160} required />
       {teamsEnabled && <Select label="작업공간" name="workspace_id" searchable required allowDeselect={false}
         defaultValue={availableTeams.find(({ id }) => id === selectedWorkspace)?.id ?? availableTeams[0]?.id}
@@ -104,7 +105,7 @@ export function ProjectIndex() {
       })}
     </ul>
     {visible.length === 0 && (
-      <EmptyState message={search || showArchived ? "조건에 맞는 프로젝트가 없습니다." : "새 프로젝트를 만들어 음원을 공유하세요."} />
+      <EmptyState message={search || showArchived ? "조건에 맞는 프로젝트가 없습니다." : guestWorkspace ? "열 수 있는 프로젝트가 없습니다." : "새 프로젝트를 만들어 음원을 공유하세요."} />
     )}
     {!showArchived && <ProjectHomeTasks projects={visible} />}
   </main>;

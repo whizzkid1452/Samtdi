@@ -65,7 +65,7 @@ func (s *Server) invite(w http.ResponseWriter, r *http.Request, session Session)
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"id": id, "expires_at": expires, "accept_url": s.origin + "/v1/auth/login?invite=" + url.QueryEscape(token),
+		"id": id, "expires_at": expires, "preview_url": s.origin + "/invite/" + token, "accept_url": s.origin + "/v1/auth/login?invite=" + url.QueryEscape(token),
 	})
 }
 
@@ -110,4 +110,51 @@ func (s *Server) revokeInvite(w http.ResponseWriter, r *http.Request, session Se
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type webInvitationPreview struct {
+	Title    string `json:"title"`
+	Kind     string `json:"kind"`
+	Role     string `json:"role"`
+	ReturnTo string `json:"return_to"`
+}
+
+func (s *Server) webInvitationPreview(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	token := r.PathValue("token")
+	if !tokenPattern.MatchString(token) {
+		problem(w, http.StatusNotFound, "invitation_not_found")
+		return
+	}
+
+	var preview webInvitationPreview
+	var projectID string
+	hash := tokenHash(token)
+	err := s.pool.QueryRow(r.Context(), `SELECT p.id::text,p.title,i.role::text
+ FROM invitations i JOIN projects p ON p.id=i.project_id WHERE i.token_hash=$1 AND i.expires_at>now()
+ AND i.accepted_by IS NULL AND i.revoked_at IS NULL AND p.archived_at IS NULL`, hash).
+		Scan(&projectID, &preview.Title, &preview.Role)
+	if err == nil {
+		preview.Kind = "project"
+		preview.ReturnTo = "/projects/" + projectID + "/media"
+	} else if errors.Is(err, pgx.ErrNoRows) && s.logto != nil {
+		var workspaceID string
+		err = s.pool.QueryRow(r.Context(), `SELECT w.id::text,w.requested_name
+ FROM workspace_invitations i JOIN workspaces w ON w.id=i.workspace_id WHERE i.token_hash=$1 AND i.expires_at>now()
+ AND i.accepted_by IS NULL AND i.revoked_at IS NULL AND w.active AND NOT w.personal`, hash).
+			Scan(&workspaceID, &preview.Title)
+		preview.Kind, preview.Role = "workspace", "member"
+		preview.ReturnTo = "/projects?workspace=" + workspaceID
+	}
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem(w, http.StatusNotFound, "invitation_not_found")
+		return
+	}
+	if err != nil {
+		internal(w, "preview_invitation", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, preview)
 }
