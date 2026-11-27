@@ -25,7 +25,7 @@ Ansungtangmyun Bold (Nongshim)
 The Samtdi wordmark is rendered as vector artwork; no font file is distributed.
 Upstream and license: https://brand.nongshim.com/ansung/fonts/index
 
-Gyun Myeongjo Regular v0.1
-Copyright © 2026 이윤재
-License text: /licenses/Gyun-Font-License.md
-Upstream: https://github.com/ssayuz/gyun-fonts/releases/tag/v0.1
+Daegu Bukseongro Light and ExtraBold
+Copyright Jung-gu Office, Daegu Metropolitan City
+KOGL Type 1 (Attribution)
+Source and license: /licenses/Daegu-Bukseongro.md

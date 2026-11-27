@@ -36,6 +36,6 @@
 
 사맛디 워드마크는 농심의 안성탕면체 Bold로 제작한 벡터 그래픽입니다. 폰트 파일은 포함하지 않습니다. [공식 배포 및 라이선스](https://brand.nongshim.com/ansung/fonts/index)
 
-## 균명조
+## 대구북성로
 
-Copyright © 2026 이윤재. [균 글꼴 라이선스 1.0 전문](apps/web/public/licenses/Gyun-Font-License.md) · [v0.1 공식 배포](https://github.com/ssayuz/gyun-fonts/releases/tag/v0.1). 빌드 시 SHA-256이 검증된 Regular 원본을 사용합니다.
+대구광역시 중구청 제작. [공공누리 제1유형 출처표시 및 서체 이용 안내](apps/web/public/licenses/Daegu-Bukseongro.md). Light와 ExtraBold 웹폰트를 포함하며, 비어 있는 한글 글리프는 시스템 글꼴로 표시합니다.

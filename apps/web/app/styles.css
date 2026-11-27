@@ -1,13 +1,7 @@
+@import "./brand-fonts.css";
+
 /* Keep legacy element rules below component styles in the cascade. */
 @layer native, mantine;
-
-@font-face {
-  font-family: "Gyun Myeongjo";
-  src: url("/fonts/GyunMyeongjo-Regular.otf") format("opentype");
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-}
 
 :root {
   color-scheme: light;
@@ -17,7 +11,7 @@
   --text: #1f2328;
   --muted: #59636e;
   --accent: #1a7138;
-  --app-font-family: "Gyun Myeongjo", "Noto Serif KR", serif;
+  --app-font-family: "Daegu Bukseongro", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   font-family: var(--app-font-family);
   background: var(--bg);
   color: var(--text);
