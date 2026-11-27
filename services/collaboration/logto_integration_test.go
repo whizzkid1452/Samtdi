@@ -217,7 +217,7 @@ func TestIdentityWorkspaceSnapshotsAndLegacyFormats(t *testing.T) {
 					limit = 6
 				}
 				manifest := snapshotManifest{Version: version, CreatedAt: time.Now().UTC(), Schema: schema[:limit]}
-				for _, table := range tablesForSnapshot(version) {
+				for _, table := range tablesForSnapshot(manifest) {
 					file, err := writeSnapshotFile(root, filepath.Join("db", table+".copy"), func(output io.Writer) error {
 						_, err := tx.Conn().PgConn().CopyTo(t.Context(), output, "COPY "+snapshotCopyTable(table, manifest)+" TO STDOUT (FORMAT binary)")
 						return err

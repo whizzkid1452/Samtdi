@@ -7,6 +7,7 @@ import type { components } from "../lib/api-types";
 import { AppModal } from "./app-modal";
 import { ConfirmAction, type Confirmation } from "./confirm-action";
 import { useWorkspace, type Project, type TeamWorkspace } from "./workspace";
+import { WorkspaceInvitations } from "./workspace-invitations";
 import { InlineError } from "./request-states";
 
 type TeamMember = components["schemas"]["WorkspaceMember"];
@@ -123,6 +124,40 @@ function WorkspaceMembers({ team, close }: { team: TeamWorkspace; close: () => v
     }
   }
 
+  async function prepareRoleChange(member: TeamMember, role: "member" | "guest", trigger: HTMLButtonElement) {
+    if (busy) return;
+
+    setBusy(true);
+    setError("");
+    const path = base + "/" + encodeURIComponent(member.id) + "/role";
+    try {
+      const { projects } = await api<{ projects: string[] }>(path);
+      const label = role === "member" ? "팀원" : "프로젝트 게스트";
+      const affected = projects.length ? "참여 프로젝트 " + projects.join(", ") : "참여 프로젝트 없음";
+      setConfirmation({
+        title: label + "로 변경할까요?",
+        description: affected + ". 프로젝트 역할은 유지됩니다.",
+        label: "역할 변경",
+        trigger,
+        run: async () => {
+          try {
+            await api(path, { method: "PATCH", body: JSON.stringify({ role }) });
+            setPage(1);
+            setRevision((value) => value + 1);
+            return true;
+          } catch (cause) {
+            setError(describeError(cause));
+            return false;
+          }
+        },
+      });
+    } catch (cause) {
+      setError(describeError(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return <>
     <AppModal title={team.name + " 멤버 관리"} close={close} busy={busy} suspended={!!confirmation}>
       <p className="muted">가입한 계정을 팀에 추가합니다. 프로젝트 참여는 프로젝트 설정에서 따로 초대하세요.</p>
@@ -133,8 +168,14 @@ function WorkspaceMembers({ team, close }: { team: TeamWorkspace; close: () => v
       {error && <InlineError message={error} />}
       <ul className="clean-list member-list">{members.map((member) => {
         const owner = member.organizationRoles.some(({ name }) => name === "samtdi-owner");
+        const fullMember = member.organizationRoles.some(({ name }) => name === "samtdi-member");
+        const linkedGuest = member.organizationRoles.some(({ name }) => name === "samtdi-guest");
         return <li key={member.id} className="row spread wrap">
-          <span>{member.name || member.primaryEmail} {owner && "· 소유자"}</span>
+          <span>{member.name || member.primaryEmail} {owner ? "· 소유자" : fullMember ? "· 팀원" : linkedGuest ? "· 프로젝트 게스트" : ""}</span>
+          {!owner && (fullMember || linkedGuest) && <Button size="compact-sm" variant="subtle" disabled={busy}
+            onClick={(event) => void prepareRoleChange(member, fullMember ? "guest" : "member", event.currentTarget)}>
+            {fullMember ? "게스트로 변경" : "팀원으로 변경"}
+          </Button>}
           {!owner && <button disabled={busy} onClick={(event) => setConfirmation({
             title: "작업공간 접근 해제",
             description: (member.name || member.primaryEmail) + "의 작업공간 접근을 해제할까요?",
@@ -146,6 +187,7 @@ function WorkspaceMembers({ team, close }: { team: TeamWorkspace; close: () => v
         </li>;
       })}</ul>
       {more && <button disabled={busy || loadedPage !== page} onClick={() => setPage((value) => value + 1)}>멤버 더 보기</button>}
+      <WorkspaceInvitations workspaceId={team.id} />
     </AppModal>
     {confirmation && <ConfirmAction confirmation={confirmation} actionError={error} close={() => setConfirmation(undefined)} />}
   </>;

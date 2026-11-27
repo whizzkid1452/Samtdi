@@ -110,7 +110,7 @@ func readSnapshot(root string) (snapshotManifest, error) {
 		return snapshotManifest{}, err
 	}
 	var manifest snapshotManifest
-	if err := json.Unmarshal(data, &manifest); err != nil || (manifest.Version != 1 && manifest.Version != 2 && manifest.Version != 3) || len(manifest.Tables) != len(tablesForSnapshot(manifest.Version)) {
+	if err := json.Unmarshal(data, &manifest); err != nil || (manifest.Version != 1 && manifest.Version != 2 && manifest.Version != 3) || len(manifest.Tables) != len(tablesForSnapshot(manifest)) {
 		return snapshotManifest{}, errors.New("invalid collaboration snapshot manifest")
 	}
 
@@ -124,7 +124,7 @@ func readSnapshot(root string) (snapshotManifest, error) {
 		}
 		return nil
 	}
-	for i, table := range tablesForSnapshot(manifest.Version) {
+	for i, table := range tablesForSnapshot(manifest) {
 		if err := verify(manifest.Tables[i], filepath.Join("db", table+".copy")); err != nil {
 			return snapshotManifest{}, err
 		}

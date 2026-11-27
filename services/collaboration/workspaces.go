@@ -22,8 +22,11 @@ type workspace struct {
 }
 
 func (s *Server) workspaceRoutes() {
+	s.workspaceInvitationRoutes()
 	s.mux.HandleFunc("GET /v1/workspaces", s.withSession(s.listWorkspaces))
 	s.mux.HandleFunc("POST /v1/workspaces", s.withSession(s.createWorkspace))
+	s.mux.HandleFunc("GET /v1/workspaces/{workspace}/members/{subject}/role", s.withSession(s.workspaceMemberRole))
+	s.mux.HandleFunc("PATCH /v1/workspaces/{workspace}/members/{subject}/role", s.withSession(s.workspaceMemberRole))
 	s.mux.HandleFunc("GET /v1/workspaces/{workspace}/members", s.withSession(s.workspaceMembers))
 	s.mux.HandleFunc("POST /v1/workspaces/{workspace}/members", s.withSession(s.addWorkspaceMember))
 	s.mux.HandleFunc("DELETE /v1/workspaces/{workspace}/members/{subject}", s.withSession(s.removeWorkspaceMember))

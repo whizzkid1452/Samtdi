@@ -26,9 +26,16 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 		return "", err
 	}
 
-	var projectID string
+	var projectID, invitedOrganization string
 	var role Role
-	if inviteHash != nil {
+	if inviteHash != nil && s.logto != nil {
+		invitedOrganization, err = readInvitedWorkspace(ctx, tx, inviteHash, who.Email)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if inviteHash != nil && invitedOrganization == "" {
 		err := tx.QueryRow(ctx, `SELECT project_id::text FROM invitations WHERE token_hash=$1`, inviteHash).Scan(&projectID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", errInvitationRejected
@@ -64,7 +71,7 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 			}
 		}
 		organizationMember := false
-		if s.logto != nil && projectID == "" && !publicSignup {
+		if s.logto != nil && projectID == "" && invitedOrganization == "" && !publicSignup {
 			organizations, err := s.logto.organizations(ctx, who.Subject)
 			if err != nil {
 				return "", err
@@ -77,7 +84,7 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 				return "", err
 			}
 		}
-		if !bootstrap && projectID == "" && !organizationMember && !publicSignup {
+		if !bootstrap && projectID == "" && !organizationMember && invitedOrganization == "" && !publicSignup {
 			return "", errInvitationRequired
 		}
 
@@ -102,6 +109,18 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 	if publicSignup {
 		if _, err := tx.Exec(ctx, `INSERT INTO workspaces(id,requested_name,created_by,active,personal)
  VALUES(gen_random_uuid(),'내 작업실',$1,true,true) ON CONFLICT (created_by) WHERE personal DO NOTHING`, accountID); err != nil {
+			return "", err
+		}
+	}
+
+	if invitedOrganization != "" {
+		if err := s.logto.ensureMember(ctx, invitedOrganization, who.Subject, "samtdi-member"); err != nil {
+			return "", err
+		}
+		if err := s.logto.ensureRole(ctx, invitedOrganization, who.Subject, "samtdi-member"); err != nil {
+			return "", err
+		}
+		if _, err := tx.Exec(ctx, "UPDATE workspace_invitations SET accepted_by=$2 WHERE token_hash=$1 AND accepted_by IS NULL", inviteHash, accountID); err != nil {
 			return "", err
 		}
 	}
