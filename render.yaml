@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: samtdi-collaboration
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    autoDeployTrigger: commit
+    dockerfilePath: ./ops/render/Dockerfile
+    dockerContext: .
+    healthCheckPath: /readyz
+    envVars:
+      - key: AYOTBI_DATABASE_URL
+        sync: false
+      - key: AYOTBI_ORIGIN
+        sync: false
+      - key: AYOTBI_OIDC_ISSUER
+        sync: false
+      - key: AYOTBI_OIDC_CLIENT_ID
+        sync: false
+      - key: AYOTBI_OIDC_CLIENT_SECRET
+        sync: false
+      - key: AYOTBI_BOOTSTRAP_EMAIL
+        sync: false
+      - key: AYOTBI_S3_BUCKET
+        sync: false
+      - key: AYOTBI_S3_REGION
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_EC2_METADATA_DISABLED
+        value: "true"
