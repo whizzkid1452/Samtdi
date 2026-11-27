@@ -113,6 +113,10 @@ func TestWorkspaceRevocationCoversProjectAndAggregateEndpoints(t *testing.T) {
 			Tasks  []any `json:"tasks"`
 		}
 		response(t, browser, "GET", service.URL+"/v1/dashboard?filter=review", token, "", nil, 200, &dashboard)
+		var overview struct {
+			Versions []any `json:"versions"`
+		}
+		response(t, browser, "GET", service.URL+"/v1/dashboard/overview", token, "", nil, 200, &overview)
 		var notifications struct {
 			Unread int   `json:"unread"`
 			Items  []any `json:"items"`
@@ -122,7 +126,8 @@ func TestWorkspaceRevocationCoversProjectAndAggregateEndpoints(t *testing.T) {
 		if denied {
 			want = 0
 		}
-		if dashboard.Review != want || len(dashboard.Tasks) != want || notifications.Unread != want || len(notifications.Items) != want {
+		if dashboard.Review != want || len(dashboard.Tasks) != want || len(overview.Versions) != want ||
+			notifications.Unread != want || len(notifications.Items) != want {
 			t.Fatal("aggregate endpoint leaked an inaccessible workspace")
 		}
 	}

@@ -22,6 +22,7 @@ type webActivity struct {
 
 func (s *Server) webActivityRoutes() {
 	s.mux.HandleFunc("GET /v1/dashboard", s.withSession(s.webDashboard))
+	s.mux.HandleFunc("GET /v1/dashboard/overview", s.withSession(s.webDashboardOverview))
 	s.mux.HandleFunc("GET /v1/projects/{project}/activity", s.withSession(s.listWebActivity))
 }
 
@@ -41,7 +42,9 @@ func (s *Server) webDashboard(w http.ResponseWriter, r *http.Request, session Se
 	var assigned, review, due, late int
 	var next string
 	err := s.pool.QueryRow(r.Context(), `WITH visible AS (
- SELECT t.id,t.project_id,p.title AS project_title,t.title,t.status,t.due_on,
+ SELECT t.id,t.project_id,p.title AS project_title,t.title,t.status,t.due_on,t.start_on,t.assignee_id,
+ (SELECT count(*) FROM web_task_notes l WHERE l.task_id=t.id) AS note_count,`+webTaskSourceJSON+` AS source,
+ (SELECT jsonb_build_object('name',COALESCE(a.display_name,''),'email',a.email) FROM accounts a WHERE a.id=t.assignee_id) AS assignee,
  COALESCE(t.due_on,'infinity'::date) AS sort_date,
  t.assignee_id=$1 AS assigned,
  (t.status='review') AS review,
@@ -59,7 +62,8 @@ func (s *Server) webDashboard(w http.ResponseWriter, r *http.Request, session Se
  ORDER BY sort_date,id LIMIT 51
  ), page AS (SELECT * FROM candidates ORDER BY sort_date,id LIMIT 50)
  SELECT COALESCE((SELECT jsonb_agg(jsonb_build_object('id',id,'project_id',project_id,'project_title',project_title,
- 'title',title,'status',status,'due_on',COALESCE(due_on::text,'')) ORDER BY sort_date,id) FROM page),'[]'),
+ 'title',title,'status',status,'due_on',COALESCE(due_on::text,''),'start_on',COALESCE(start_on::text,''),
+ 'assignee_id',COALESCE(assignee_id::text,''),'assignee',assignee,'note_count',note_count,'source',source) ORDER BY sort_date,id) FROM page),'[]'),
  count(*) FILTER(WHERE assigned),count(*) FILTER(WHERE review),count(*) FILTER(WHERE due),count(*) FILTER(WHERE late),
  CASE WHEN (SELECT count(*) FROM candidates)>50 THEN (SELECT id::text FROM page ORDER BY sort_date DESC,id DESC LIMIT 1) ELSE '' END
  FROM visible`, session.AccountID, filter, after, session.organizationIDs()).Scan(&tasks, &assigned, &review, &due, &late, &next)
@@ -109,4 +113,36 @@ func (s *Server) listWebActivity(w http.ResponseWriter, r *http.Request, session
 		return
 	}
 	writeJSON(w, 200, events)
+}
+
+// webDashboardOverview gathers what is waiting for the viewer outside their task list:
+// open feedback others left on versions they uploaded, and the latest playable versions in their projects.
+func (s *Server) webDashboardOverview(w http.ResponseWriter, r *http.Request, session Session) {
+	var feedback, versions json.RawMessage
+	err := s.pool.QueryRow(r.Context(), `WITH mine AS (
+ SELECT p.id,p.title FROM projects p JOIN memberships m ON m.project_id=p.id AND m.account_id=$1 WHERE p.archived_at IS NULL
+ AND (p.workspace_id IS NULL OR EXISTS(SELECT 1 FROM workspaces w WHERE w.id=p.workspace_id AND w.active AND w.organization_id=ANY($2::text[])))
+ ), feedback AS (
+ SELECT n.id,n.created_at,jsonb_strip_nulls(jsonb_build_object('id',n.id,'project_id',mine.id,'project_title',mine.title,'item_id',i.id,
+ 'item_title',i.title,'version_id',v.id,'filename',v.filename,'start_ms',n.start_ms,'end_ms',n.end_ms,'body',n.body,
+ 'author_id',a.id,'author_name',COALESCE(a.display_name,''),'author_email',a.email,'created_at',n.created_at)) AS item
+ FROM web_notes n JOIN mine ON mine.id=n.project_id JOIN web_media_versions v ON v.id=n.version_id
+ JOIN web_uploads u ON u.id=v.id JOIN web_media_items i ON i.id=v.item_id JOIN accounts a ON a.id=n.author_id
+ WHERE u.actor_id=$1 AND n.author_id<>$1 AND NOT n.deleted AND NOT n.resolved AND i.archived_at IS NULL
+ AND n.created_at>now()-interval '14 days' ORDER BY n.created_at DESC,n.id DESC LIMIT 8
+ ), versions AS (
+ SELECT v.id,v.created_at,jsonb_build_object('id',v.id,'project_id',mine.id,'project_title',mine.title,'item_id',i.id,'item_title',i.title,
+ 'filename',v.filename,'created_at',v.created_at,'uploader_id',a.id,'uploader_name',COALESCE(a.display_name,''),'uploader_email',a.email,
+ 'open_notes',(SELECT count(*) FROM web_notes n WHERE n.version_id=v.id AND NOT n.deleted AND NOT n.resolved)) AS item
+ FROM web_media_versions v JOIN mine ON mine.id=v.project_id JOIN web_media_items i ON i.id=v.item_id
+ JOIN web_uploads u ON u.id=v.id JOIN accounts a ON a.id=u.actor_id
+ WHERE v.state='ready' AND i.archived_at IS NULL ORDER BY v.created_at DESC,v.id DESC LIMIT 6
+ )
+ SELECT COALESCE((SELECT jsonb_agg(item ORDER BY created_at DESC,id DESC) FROM feedback),'[]'),
+ COALESCE((SELECT jsonb_agg(item ORDER BY created_at DESC,id DESC) FROM versions),'[]')`, session.AccountID, session.organizationIDs()).Scan(&feedback, &versions)
+	if err != nil {
+		internal(w, "read_dashboard_overview", err)
+		return
+	}
+	writeJSON(w, 200, map[string]json.RawMessage{"feedback": feedback, "versions": versions})
 }
