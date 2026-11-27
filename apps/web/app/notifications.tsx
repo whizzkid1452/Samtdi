@@ -14,6 +14,7 @@ export function Notifications() {
   const [opened, setOpened] = useState(false);
   const [inbox, setInbox] = useState<Inbox>({ items: [], unread: 0 });
   const [error, setError] = useState("");
+  const [marking, setMarking] = useState(false);
   const [loadingPage, setLoadingPage] = useState(false);
   const pendingRefresh = useRef<AbortController | null>(null);
 
@@ -50,12 +51,18 @@ export function Notifications() {
     if (value) void refresh();
   }
 
-  async function markRead(id: string) {
+  async function markRead(id?: string) {
+    if (marking) return;
+
+    setMarking(true);
     try {
-      await api("/v1/notifications/" + id + "/read", { method: "POST" });
+      const path = id ? "/" + encodeURIComponent(id) + "/read" : "/read-all";
+      await api("/v1/notifications" + path, { method: "POST" });
       await refresh();
     } catch (cause) {
       setError(describeError(cause));
+    } finally {
+      setMarking(false);
     }
   }
 
@@ -88,6 +95,11 @@ export function Notifications() {
       </Popover.Target>
       <Popover.Dropdown className="notification-popover">
         <section aria-label="알림 목록">
+          <div className="row spread wrap notification-heading">
+            <strong>알림</strong>
+            <Button variant="subtle" size="compact-sm" disabled={inbox.unread === 0} loading={marking}
+              onClick={() => void markRead()}>모두 읽음</Button>
+          </div>
           {error && <InlineError message={error} retry={() => void refresh()} />}
           {!error && inbox.items.length === 0 && <EmptyState message="받은 알림이 없습니다." />}
           <ul className="clean-list">
@@ -96,12 +108,12 @@ export function Notifications() {
                 : taskHref(notice.project_id, notice.subject_id);
 
               return (
-                <li key={notice.id}>
+                <li key={notice.id} data-unread={!notice.read_at || undefined}>
                   <div className="row spread">
                     <Link href={href} onNavigate={() => setOpened(false)}>
                       {notice.action === "reply.created" ? "새 답글" : "작업이 배정됐습니다"}
                     </Link>
-                    {!notice.read_at && <Button variant="default" size="compact-sm" onClick={() => void markRead(notice.id)}>읽음</Button>}
+                    {!notice.read_at && <Button variant="default" size="compact-sm" disabled={marking} onClick={() => void markRead(notice.id)}>읽음</Button>}
                   </div>
                   <small className="muted">{notice.project_title}{notice.actor_name ? " · " + notice.actor_name : ""}</small>
                   {notice.title && <p>{notice.title}</p>}

@@ -2870,6 +2870,25 @@
           }
         ]
       }
+    },
+    "/v1/notifications/read-all": {
+      "post": {
+        "responses": {
+          "204": {
+            "description": "Visible notifications marked as read"
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

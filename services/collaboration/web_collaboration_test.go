@@ -107,6 +107,17 @@ func TestWebDisplayNames(t *testing.T) {
 		t.Fatalf("reply notification lacks its actor and text: %+v", inbox.Items)
 	}
 
+	team.call("owner", "POST", "/v1/notifications/read-all", nil, 204, nil)
+	team.call("editor", "GET", "/v1/notifications", nil, 200, &inbox)
+	if len(inbox.Items) != 1 || inbox.Items[0].ReadAt != nil {
+		t.Fatalf("another account marked editor notifications read: %+v", inbox.Items)
+	}
+	team.call("editor", "POST", "/v1/notifications/read-all", nil, 204, nil)
+	team.call("editor", "GET", "/v1/notifications", nil, 200, &inbox)
+	if len(inbox.Items) != 1 || inbox.Items[0].ReadAt == nil {
+		t.Fatalf("mark all failed: %+v", inbox.Items)
+	}
+
 	team.call("editor", "PATCH", "/v1/me", map[string]string{"name": ""}, 200, &session)
 	if session.Name != "" {
 		t.Fatalf("an empty name must clear the display name: %q", session.Name)

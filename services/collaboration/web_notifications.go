@@ -26,6 +26,7 @@ type webNotification struct {
 
 func (s *Server) webNotificationRoutes() {
 	s.mux.HandleFunc("GET /v1/notifications", s.withSession(s.listWebNotifications))
+	s.mux.HandleFunc("POST /v1/notifications/read-all", s.withSession(s.readAllWebNotifications))
 	s.mux.HandleFunc("POST /v1/notifications/{notification}/read", s.withSession(s.readWebNotification))
 }
 
@@ -93,4 +94,16 @@ func (s *Server) readWebNotification(w http.ResponseWriter, r *http.Request, ses
 		return
 	}
 	w.WriteHeader(204)
+}
+
+func (s *Server) readAllWebNotifications(w http.ResponseWriter, r *http.Request, session Session) {
+	_, err := s.pool.Exec(r.Context(), `UPDATE web_notifications n SET read_at=now()
+ FROM web_activity e JOIN memberships m ON m.project_id=e.project_id JOIN projects p ON p.id=e.project_id
+ WHERE n.activity_id=e.id AND n.recipient_id=$1 AND m.account_id=$1 AND n.read_at IS NULL
+ AND (p.workspace_id IS NULL OR EXISTS(SELECT 1 FROM workspaces w WHERE w.id=p.workspace_id AND w.active AND w.organization_id=ANY($2::text[])))`, session.AccountID, session.organizationIDs())
+	if err != nil {
+		internal(w, "mark_all_notifications_read", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
