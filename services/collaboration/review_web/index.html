@@ -3,18 +3,18 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Ayotbi · 프로젝트 리뷰</title>
+    <title>사맛디 · 어엿비 커밋 리뷰</title>
     <link rel="stylesheet" href="/review-assets/review.css">
     <script src="/review-assets/review.js" defer></script>
 </head>
 <body data-project="{{.Project}}" data-review="{{.Review}}">
 <header class="masthead">
-    <a class="brand" href="/review">ayotbi</a>
-    <div class="header-tools"><span>{{.Email}}</span><button id="logout" class="secondary">로그아웃</button></div>
+    <a class="brand" href="/projects">사맛디</a>
+    <div class="header-tools"><span>{{.AccountLabel}}</span><button id="logout" class="secondary">로그아웃</button></div>
 </header>
 <main>
     <nav aria-label="현재 위치"><a href="/review">프로젝트</a>{{if .Review}} <span aria-hidden="true">/</span> <a href="/review/{{.Project}}">리뷰 목록</a>{{end}}</nav>
-    <div class="heading"><div><p class="eyebrow">프로젝트 협업</p><h1 id="page-title">{{if .Review}}커밋 리뷰{{else if .Project}}제품 PR{{else}}참여 프로젝트{{end}}</h1></div><span class="badge">멤버 전용</span></div>
+    <div class="heading"><div><p class="eyebrow">어엿비 커밋 리뷰</p><h1 id="page-title">{{if .Review}}커밋 리뷰{{else if .Project}}제품 PR{{else}}참여 프로젝트{{end}}</h1></div><span class="badge">멤버 전용</span></div>
     <p id="feedback" role="status" class="feedback"></p>
     {{if .Review}}
     <section class="card summary" aria-labelledby="version-title">

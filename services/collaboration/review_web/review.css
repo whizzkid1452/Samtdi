@@ -1,12 +1,12 @@
 :root {
-    color-scheme: dark;
-    --background: #131b22;
-    --panel: #1c2731;
-    --surface: #23323d;
-    --line: #384b57;
-    --text: #edf4f6;
-    --muted: #aabdc7;
-    --accent: #6de0ca;
+    color-scheme: light;
+    --background: #f7f6f2;
+    --panel: #fffefa;
+    --surface: #eeefe7;
+    --line: #dedfd5;
+    --text: #202820;
+    --muted: #59625a;
+    --accent: #284b35;
     font-family: system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
 }
 
@@ -39,7 +39,7 @@ code { font-size: 13px; overflow-wrap: anywhere; }
 label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
 input, select, textarea { width: 100%; background: var(--background); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 9px 10px; font: inherit; }
 textarea { resize: vertical; }
-button { border-radius: 8px; padding: 8px 12px; border: 1px solid var(--accent); background: var(--accent); color: #132726; font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; }
+button { border-radius: 8px; padding: 8px 12px; border: 1px solid var(--accent); background: var(--accent); color: #fffefa; font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; }
 button.secondary { border-color: var(--line); background: var(--surface); color: var(--text); }
 button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 button:disabled { opacity: .48; cursor: default; }
@@ -50,3 +50,7 @@ summary { cursor: pointer; color: var(--accent); margin-bottom: 8px; }
 pre, .comment-body { white-space: pre-wrap; overflow-wrap: anywhere; }
 pre { background: var(--background); border-radius: 8px; padding: 10px; }
 @media (max-width: 720px) { .columns { grid-template-columns: minmax(0, 1fr); gap: 0; } .masthead { padding-inline: 16px; } main { padding-inline: 16px; } }
+
+.masthead { background: #17231d; color: #edf0e7; }
+.masthead .brand { color: #dbf79c; }
+.masthead .header-tools { color: #edf0e7; }

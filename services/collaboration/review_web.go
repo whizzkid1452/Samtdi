@@ -68,9 +68,18 @@ func (s *Server) webReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := s.loadOrganizations(r.Context(), &session); err != nil {
+		writeWebError(w, "load_review_organizations", err)
+		return
+	}
+
 	projectID, reviewID := r.PathValue("project"), r.PathValue("review")
 	var role Role
 	if projectID != "" {
+		if err := s.authorizeWorkspaceProject(r.Context(), projectID, session); err != nil {
+			writeWebError(w, "authorize_review_workspace", err)
+			return
+		}
 		role, err = readRole(r.Context(), s.pool, projectID, session.AccountID)
 		if !requireRole(w, role, err, role.valid()) {
 			return
@@ -86,7 +95,14 @@ func (s *Server) webReview(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; media-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 	_ = reviewTemplate.Execute(w, struct {
-		Project, Review, Email string
-		CanWrite, CanMerge     bool
-	}{projectID, reviewID, session.Email, role.canWrite(), role == Owner})
+		Project, Review, AccountLabel string
+		CanWrite, CanMerge            bool
+	}{projectID, reviewID, accountLabel(session), role.canWrite(), role == Owner})
+}
+
+func accountLabel(session Session) string {
+	if session.Name != "" {
+		return session.Name
+	}
+	return session.Email
 }
