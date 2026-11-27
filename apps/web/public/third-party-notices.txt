@@ -20,3 +20,12 @@ Upstream: https://github.com/mantinedev/mantine
 @ffmpeg/core 0.12.10 (browser-only mode, loaded from CDN)
 Upstream source: https://github.com/ffmpegwasm/ffmpeg.wasm/tree/main/packages/core
 License details: https://ffmpegwasm.netlify.app/docs/faq/#what-is-the-license-of-ffmpegwasm
+
+Ansungtangmyun Bold (Nongshim)
+The Samtdi wordmark is rendered as vector artwork; no font file is distributed.
+Upstream and license: https://brand.nongshim.com/ansung/fonts/index
+
+Gyun Myeongjo Regular v0.1
+Copyright © 2026 이윤재
+License text: /licenses/Gyun-Font-License.md
+Upstream: https://github.com/ssayuz/gyun-fonts/releases/tag/v0.1

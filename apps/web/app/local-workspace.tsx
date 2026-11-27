@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandWordmark } from "./brand-wordmark";
 import { Alert, Badge, Button, FileInput, TextInput } from "@mantine/core";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { processLocalAudio } from "../lib/local-audio";
@@ -108,7 +109,7 @@ export function LocalWorkspace() {
   return <div className="workspace-shell local-workspace">
     <aside className="workspace-sidebar">
       <nav className="workspace-navigation" aria-label="내 프로젝트">
-        <div className="brand"><span className="brand-mark" aria-hidden="true"><i/><i/><i/></span>사맛디</div>
+        <div className="brand"><span className="brand-mark" aria-hidden="true"><i/><i/><i/></span><BrandWordmark /></div>
         <Badge color="lime" variant="outline">개인 작업실</Badge>
         <section aria-label="프로젝트 바로가기">
           <h2>내 프로젝트</h2>
@@ -120,7 +121,7 @@ export function LocalWorkspace() {
     </aside>
     <div className="workspace-content">
       <header className="topbar">
-        <div className="row"><span className="brand">사맛디</span><Badge color="green" variant="light">브라우저 베타</Badge></div>
+        <div className="row"><span className="brand"><BrandWordmark /></span><Badge color="green" variant="light">브라우저 베타</Badge></div>
         {projects.length > 0 && <select aria-label="프로젝트 선택" value={project?.id ?? ""} disabled={!!status}
           onChange={(event) => selectProject(event.currentTarget.value)}>{projects.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select>}
       </header>

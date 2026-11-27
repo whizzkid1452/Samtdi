@@ -1,6 +1,14 @@
 /* Keep legacy element rules below component styles in the cascade. */
 @layer native, mantine;
 
+@font-face {
+  font-family: "Gyun Myeongjo";
+  src: url("/fonts/GyunMyeongjo-Regular.otf") format("opentype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   color-scheme: light;
   --bg: #ffffff;
@@ -9,7 +17,8 @@
   --text: #1f2328;
   --muted: #59636e;
   --accent: #1a7138;
-  font-family: "Geist", "Noto Sans KR", system-ui, sans-serif;
+  --app-font-family: "Gyun Myeongjo", "Noto Serif KR", serif;
+  font-family: var(--app-font-family);
   background: var(--bg);
   color: var(--text);
 }
@@ -43,6 +52,7 @@ a { color: inherit; }
 .login { min-height: 100svh; display: grid; align-items: center; padding: clamp(1.5rem, 8vw, 8rem); }
 .login-content { max-width: 41rem; }
 .brand { font-weight: 800; font-size: 1.25rem; color: var(--accent); letter-spacing: -.025em; }
+.brand-wordmark { display: inline-block; width: auto; height: 1em; vertical-align: middle; }
 .login h1 { font-size: clamp(2rem, 6vw, 4.75rem); line-height: 1.1; letter-spacing: -.065em; margin: 1rem 0; }
 .muted { color: var(--muted); }
 .login-action { margin-top: 1rem; }

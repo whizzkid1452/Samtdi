@@ -1,7 +1,8 @@
 import { createTheme } from "@mantine/core";
 
 export const theme = createTheme({
-  fontFamily: '"Geist", "Noto Sans KR", system-ui, sans-serif',
+  fontFamily: "var(--app-font-family)",
+  headings: { fontFamily: "var(--app-font-family)" },
   primaryColor: "samtdi",
   primaryShade: 8,
   defaultRadius: "sm",

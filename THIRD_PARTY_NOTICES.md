@@ -31,3 +31,11 @@
 ## FFmpeg WASM
 
 브라우저 전용 베타는 고정 버전의 [@ffmpeg/core 0.12.10](https://www.npmjs.com/package/@ffmpeg/core/v/0.12.10)을 CDN에서 실행합니다. [공식 소스](https://github.com/ffmpegwasm/ffmpeg.wasm/tree/main/packages/core), [FFmpeg 및 포함 외부 라이브러리의 라이선스 안내](https://ffmpegwasm.netlify.app/docs/faq/#what-is-the-license-of-ffmpegwasm)를 참고하세요. 코어의 원본 배포 파일은 수정하지 않습니다.
+
+## 안성탕면체
+
+사맛디 워드마크는 농심의 안성탕면체 Bold로 제작한 벡터 그래픽입니다. 폰트 파일은 포함하지 않습니다. [공식 배포 및 라이선스](https://brand.nongshim.com/ansung/fonts/index)
+
+## 균명조
+
+Copyright © 2026 이윤재. [균 글꼴 라이선스 1.0 전문](apps/web/public/licenses/Gyun-Font-License.md) · [v0.1 공식 배포](https://github.com/ssayuz/gyun-fonts/releases/tag/v0.1). 빌드 시 SHA-256이 검증된 Regular 원본을 사용합니다.
