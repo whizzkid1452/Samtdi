@@ -2889,6 +2889,34 @@
           }
         }
       }
+    },
+    "/v1/auth/options": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Public authentication options",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebAuthOptions"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/signup": {
+      "get": {
+        "responses": {
+          "303": {
+            "description": "Redirect to Logto registration"
+          },
+          "404": {
+            "description": "Public signup is disabled"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3629,6 +3657,9 @@
           },
           "active": {
             "type": "boolean"
+          },
+          "personal": {
+            "type": "boolean"
           }
         }
       },
@@ -4009,6 +4040,17 @@
                 "type": "number"
               }
             }
+          }
+        }
+      },
+      "WebAuthOptions": {
+        "type": "object",
+        "required": [
+          "public_signup"
+        ],
+        "properties": {
+          "public_signup": {
+            "type": "boolean"
           }
         }
       }

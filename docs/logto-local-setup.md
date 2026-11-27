@@ -43,3 +43,9 @@ go run ./cmd/ayotbi-collaboration link-logto-identity ACCOUNT_UUID LOGTO_USER_ID
 2026-11-18 Mac에서 실제 Logto의 웹 로그인, 기존 계정 ID 보존, 팀 생성·멤버 추가·제거, 프로젝트 연결과 두 작업공간의 접근 분리를 확인했습니다. 네이티브 PKCE 콜백·일회용 코드 교환·로그아웃과 제목만 보내는 기존 프로젝트 생성도 확인했습니다. 중단된 조직 생성의 마커 복구와 같은 UUID의 동시 생성은 하나의 조직으로 수렴했습니다.
 
 격리 DB의 Go race 테스트·vet·build와 웹 lint·typecheck·build가 통과했습니다. Go 검사는 팀원 제거 후 목록·내 작업·알림·재생 파일·반출 차단, 계정 정지와 인증 서비스 장애 시 거절, identity 연결과 스냅샷 v1/v2/v3 복원을 포함합니다. 별도 Logto DB도 pg_dump·pg_restore 후 사용자·조직·역할·앱·멤버십 개수가 일치함을 확인했습니다. 네이티브 바이너리를 요구하는 검사는 해당 실행 환경을 지정하지 않아 기존 테스트의 skip 조건을 유지했습니다.
+
+## 이메일 공개 가입
+
+Logto에 이메일 커넥터를 연결하고 로그인 경험에서 이메일 인증 가입을 켭니다. 실제 메일에서 인증 코드 발송·재발송을 확인한 뒤 사맛디 API에 `SAMTDI_PUBLIC_SIGNUP=true`를 설정합니다. 가입 버튼은 Logto의 등록 화면으로 이동합니다. 검증된 웹 로그인에서 사맛디가 계정과 개인 작업실을 PostgreSQL에 함께 저장합니다. 같은 계정으로 로그인하면 같은 작업실을 사용합니다.
+
+개인 작업실은 생성한 계정의 작업공간 선택 목록에만 나타납니다. 해당 작업실에서 만든 프로젝트를 공유하려면 프로젝트 권한을 따로 부여합니다. [Logto 이메일 커넥터](https://docs.logto.io/connectors/email-connectors)

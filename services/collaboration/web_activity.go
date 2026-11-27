@@ -53,7 +53,7 @@ func (s *Server) webDashboard(w http.ResponseWriter, r *http.Request, session Se
  FROM web_tasks t JOIN projects p ON p.id=t.project_id
  JOIN memberships m ON m.project_id=p.id AND m.account_id=$1
  WHERE NOT t.archived AND p.archived_at IS NULL AND t.status<>'done'
- AND (p.workspace_id IS NULL OR EXISTS(SELECT 1 FROM workspaces w WHERE w.id=p.workspace_id AND w.active AND w.organization_id=ANY($4::text[])))
+ AND (p.workspace_id IS NULL OR EXISTS(SELECT 1 FROM workspaces w WHERE w.id=p.workspace_id AND w.active AND (w.personal OR w.organization_id=ANY($4::text[]))))
  ), filtered AS (
  SELECT * FROM visible WHERE CASE $2 WHEN 'review' THEN review WHEN 'due' THEN due WHEN 'late' THEN late ELSE assigned END
  ), candidates AS (
@@ -121,7 +121,7 @@ func (s *Server) webDashboardOverview(w http.ResponseWriter, r *http.Request, se
 	var feedback, versions json.RawMessage
 	err := s.pool.QueryRow(r.Context(), `WITH mine AS (
  SELECT p.id,p.title FROM projects p JOIN memberships m ON m.project_id=p.id AND m.account_id=$1 WHERE p.archived_at IS NULL
- AND (p.workspace_id IS NULL OR EXISTS(SELECT 1 FROM workspaces w WHERE w.id=p.workspace_id AND w.active AND w.organization_id=ANY($2::text[])))
+ AND (p.workspace_id IS NULL OR EXISTS(SELECT 1 FROM workspaces w WHERE w.id=p.workspace_id AND w.active AND (w.personal OR w.organization_id=ANY($2::text[]))))
  ), feedback AS (
  SELECT n.id,n.created_at,jsonb_strip_nulls(jsonb_build_object('id',n.id,'project_id',mine.id,'project_title',mine.title,'item_id',i.id,
  'item_title',i.title,'version_id',v.id,'filename',v.filename,'start_ms',n.start_ms,'end_ms',n.end_ms,'body',n.body,

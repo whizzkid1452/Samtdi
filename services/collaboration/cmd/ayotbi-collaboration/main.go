@@ -160,6 +160,7 @@ func run() error {
 		Origin: os.Getenv("AYOTBI_ORIGIN"), Issuer: os.Getenv("AYOTBI_OIDC_ISSUER"),
 		ClientID: os.Getenv("AYOTBI_OIDC_CLIENT_ID"), ClientSecret: os.Getenv("AYOTBI_OIDC_CLIENT_SECRET"),
 		BootstrapEmail: os.Getenv("AYOTBI_BOOTSTRAP_EMAIL"), AllowLoopbackHTTP: storage.AllowLoopbackHTTP,
+		PublicSignup:          os.Getenv("SAMTDI_PUBLIC_SIGNUP") == "true",
 		ProjectToolPath:       os.Getenv("AYOTBI_PROJECT_TOOL"),
 		ReceiveHookExecutable: executable,
 		Renderer:              collaboration.RendererConfig{Executable: os.Getenv("AYOTBI_RENDER_WORKER"), PluginRegistry: os.Getenv("AYOTBI_RENDER_PLUGIN_REGISTRY")},

@@ -18,6 +18,7 @@ type workspace struct {
 	Owner          bool   `json:"owner"`
 	CanCreate      bool   `json:"can_create"`
 	Active         bool   `json:"active"`
+	Personal       bool   `json:"personal"`
 }
 
 func (s *Server) workspaceRoutes() {
@@ -32,8 +33,9 @@ func (s *Server) workspaceRoutes() {
 func (s *Server) listWorkspaces(w http.ResponseWriter, r *http.Request, session Session) {
 	workspaces := []workspace{}
 	if s.logto != nil {
-		rows, err := s.pool.Query(r.Context(), `SELECT id::text,requested_name,COALESCE(organization_id,''),active,created_by::text
- FROM workspaces WHERE (active AND organization_id=ANY($1::text[])) OR (NOT active AND created_by=$2) ORDER BY created_at,id`, session.organizationIDs(), session.AccountID)
+		rows, err := s.pool.Query(r.Context(), `SELECT id::text,requested_name,COALESCE(organization_id,''),active,created_by::text,personal
+ FROM workspaces WHERE (active AND organization_id=ANY($1::text[])) OR (created_by=$2 AND (personal OR NOT active))
+ ORDER BY personal DESC,created_at,id`, session.organizationIDs(), session.AccountID)
 		if err != nil {
 			internal(w, "list_workspaces", err)
 			return
@@ -42,12 +44,15 @@ func (s *Server) listWorkspaces(w http.ResponseWriter, r *http.Request, session 
 		for rows.Next() {
 			var entry workspace
 			var creator string
-			if err := rows.Scan(&entry.ID, &entry.Name, &entry.OrganizationID, &entry.Active, &creator); err != nil {
+			if err := rows.Scan(&entry.ID, &entry.Name, &entry.OrganizationID, &entry.Active, &creator, &entry.Personal); err != nil {
 				internal(w, "read_workspace", err)
 				return
 			}
 			organization, member := session.organizations[entry.OrganizationID]
-			if member && entry.Active {
+			if entry.Personal {
+				entry.Owner, entry.CanCreate = true, true
+				workspaces = append(workspaces, entry)
+			} else if member && entry.Active {
 				entry.Name, entry.Owner = organization.Name, organization.isOwner()
 				entry.CanCreate = organization.canCreateProject()
 				workspaces = append(workspaces, entry)
@@ -197,11 +202,21 @@ func (s *Server) readWorkspace(ctx context.Context, id string, session Session, 
 	}
 
 	var entry workspace
-	err := s.pool.QueryRow(ctx, "SELECT id::text,organization_id FROM workspaces WHERE id=$1 AND active", id).
-		Scan(&entry.ID, &entry.OrganizationID)
+	var creator string
+	err := s.pool.QueryRow(ctx, "SELECT id::text,requested_name,COALESCE(organization_id,''),personal,created_by::text FROM workspaces WHERE id=$1 AND active", id).
+		Scan(&entry.ID, &entry.Name, &entry.OrganizationID, &entry.Personal, &creator)
 	if err != nil {
 		return workspace{}, err
 	}
+	if entry.Personal {
+		if owner || creator != session.AccountID {
+			return workspace{}, pgx.ErrNoRows
+		}
+
+		entry.Owner, entry.Active, entry.CanCreate = true, true, true
+		return entry, nil
+	}
+
 	organization, member := session.organizations[entry.OrganizationID]
 	if !member {
 		return workspace{}, pgx.ErrNoRows

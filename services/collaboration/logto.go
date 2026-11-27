@@ -211,13 +211,13 @@ func (s *Server) authorizeWorkspaceProject(ctx context.Context, projectID string
 	}
 
 	var organization string
-	var scoped, active bool
-	err := s.pool.QueryRow(ctx, `SELECT p.workspace_id IS NOT NULL,COALESCE(w.organization_id,''),COALESCE(w.active,false) FROM projects p
- LEFT JOIN workspaces w ON w.id=p.workspace_id WHERE p.id=$1`, projectID).Scan(&scoped, &organization, &active)
+	var scoped, active, personal bool
+	err := s.pool.QueryRow(ctx, `SELECT p.workspace_id IS NOT NULL,COALESCE(w.organization_id,''),COALESCE(w.active,false),COALESCE(w.personal,false) FROM projects p
+ LEFT JOIN workspaces w ON w.id=p.workspace_id WHERE p.id=$1`, projectID).Scan(&scoped, &organization, &active, &personal)
 	if err != nil {
 		return err
 	}
-	if scoped {
+	if scoped && !personal {
 		if !active || organization == "" {
 			return webProblem{503, "workspace_not_ready"}
 		}

@@ -28,7 +28,7 @@ export function WorkspacePicker({ selected, onSelect }: { selected: string; onSe
         ]}
         onChange={(value) => onSelect(value === "all" ? "" : value ?? "")} />
       <div className="row wrap">
-        {current?.owner && <Button variant="default" onClick={() => setManaging(current)}>멤버 관리</Button>}
+        {current?.owner && !current.personal && <Button variant="default" onClick={() => setManaging(current)}>멤버 관리</Button>}
         <Button variant="default" onClick={() => setCreating({ id: crypto.randomUUID(), name: "" })}>새 작업공간</Button>
       </div>
     </div>
