@@ -2,8 +2,7 @@ import { ColorSchemeScript, MantineProvider, mantineHtmlProps } from "@mantine/c
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { theme } from "./theme";
-import { Workspace } from "./workspace";
-import { LocalWorkspace } from "./local-workspace";
+import { WorkspaceShell } from "./workspace-shell";
 import "./styles.css";
 import "@mantine/core/styles.layer.css";
 
@@ -19,7 +18,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <MantineProvider theme={theme} forceColorScheme="light">
           <Suspense fallback={<p role="status">화면을 여는 중</p>}>
-            {process.env.SAMTDI_LOCAL_MODE === "1" ? <LocalWorkspace /> : <Workspace>{children}</Workspace>}
+            <WorkspaceShell local={process.env.SAMTDI_LOCAL_MODE === "1"}>{children}</WorkspaceShell>
           </Suspense>
         </MantineProvider>
       </body>

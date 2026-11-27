@@ -2,6 +2,7 @@ package collaboration
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -39,19 +41,36 @@ type BlobStore interface {
 }
 
 type s3Store struct {
-	client *s3.Client
-	bucket string
+	client   *s3.Client
+	bucket   string
+	supabase bool
+}
+
+const supabaseObjectLimit int64 = 45_000_000
+
+func isSupabaseS3Endpoint(endpoint *url.URL) bool {
+	return endpoint.Scheme == "https" && strings.HasSuffix(endpoint.Hostname(), ".storage.supabase.co") &&
+		endpoint.Path == "/storage/v1/s3" && endpoint.Port() == ""
+}
+
+func (store *s3Store) objectLimit() int64 {
+	if store.supabase {
+		return supabaseObjectLimit
+	}
+	return webUploadLimit
 }
 
 func newS3Store(ctx context.Context, settings S3Config, allowLoopbackHTTP bool) (BlobStore, error) {
 	if settings.Bucket == "" || settings.Region == "" {
 		return nil, errors.New("object storage bucket and region are required")
 	}
+	supabase := false
 	if settings.Endpoint != "" {
 		endpoint, err := url.Parse(settings.Endpoint)
-		if err != nil || !validEndpoint(endpoint, allowLoopbackHTTP) || endpoint.Path != "" || endpoint.ForceQuery {
+		if err != nil || !validEndpoint(endpoint, allowLoopbackHTTP) || (endpoint.Path != "" && !isSupabaseS3Endpoint(endpoint)) || endpoint.ForceQuery {
 			return nil, errors.New("invalid object storage endpoint")
 		}
+		supabase = isSupabaseS3Endpoint(endpoint)
 	}
 
 	client := &http.Client{Timeout: 20 * time.Minute, CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
@@ -62,6 +81,13 @@ func newS3Store(ctx context.Context, settings S3Config, allowLoopbackHTTP bool) 
 		return nil, errors.New("object storage credential configuration failed")
 	}
 
+	if supabase {
+		// Supabase does not implement the full AWS checksum API. Verify every
+		// stored artifact by reading its bytes back instead of trusting metadata.
+		awsConfig.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+		awsConfig.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
+	}
+
 	store := s3.NewFromConfig(awsConfig, func(options *s3.Options) {
 		if settings.Endpoint != "" {
 			options.BaseEndpoint = aws.String(settings.Endpoint)
@@ -69,7 +95,7 @@ func newS3Store(ctx context.Context, settings S3Config, allowLoopbackHTTP bool) 
 		}
 	})
 
-	return &s3Store{client: store, bucket: settings.Bucket}, nil
+	return &s3Store{client: store, bucket: settings.Bucket, supabase: supabase}, nil
 }
 
 func (store *s3Store) Put(ctx context.Context, key string, metadata BlobMetadata, content io.ReadSeeker) error {
@@ -78,12 +104,43 @@ func (store *s3Store) Put(ctx context.Context, key string, metadata BlobMetadata
 		return errors.New("invalid blob checksum")
 	}
 
-	_, err = store.client.PutObject(ctx, &s3.PutObjectInput{
+	input := &s3.PutObjectInput{
 		Bucket: &store.bucket, Key: &key, Body: content, ContentLength: &metadata.Size,
-		ContentType: aws.String("application/octet-stream"), ChecksumSHA256: aws.String(base64.StdEncoding.EncodeToString(digest)),
+		ContentType: aws.String("application/octet-stream"),
 		Metadata: map[string]string{"sha256": metadata.SHA256},
-	})
-	return err
+	}
+	if !store.supabase {
+		input.ChecksumSHA256 = aws.String(base64.StdEncoding.EncodeToString(digest))
+	} else if metadata.Size < 1 || metadata.Size > store.objectLimit() {
+		return errors.New("object exceeds free storage size limit")
+	}
+	if _, err := store.client.PutObject(ctx, input); err != nil {
+		return err
+	}
+	if !store.supabase {
+		return nil
+	}
+	body, actual, err := store.Open(ctx, key)
+	if err != nil {
+		return err
+	}
+	defer body.Close()
+	if actual != metadata {
+		return errors.New("object storage metadata mismatch")
+	}
+	return verifyBlobChecksum(body, metadata)
+}
+
+func verifyBlobChecksum(body io.Reader, metadata BlobMetadata) error {
+	digest := sha256.New()
+	size, err := io.Copy(digest, io.LimitReader(body, metadata.Size+1))
+	if err != nil {
+		return err
+	}
+	if size != metadata.Size || hex.EncodeToString(digest.Sum(nil)) != metadata.SHA256 {
+		return errors.New("object storage checksum mismatch")
+	}
+	return nil
 }
 
 func (store *s3Store) Head(ctx context.Context, key string) (BlobMetadata, error) {
@@ -99,7 +156,11 @@ func (store *s3Store) Head(ctx context.Context, key string) (BlobMetadata, error
 }
 
 func (store *s3Store) Open(ctx context.Context, key string) (io.ReadCloser, BlobMetadata, error) {
-	result, err := store.client.GetObject(ctx, &s3.GetObjectInput{Bucket: &store.bucket, Key: &key, ChecksumMode: types.ChecksumModeEnabled})
+	input := &s3.GetObjectInput{Bucket: &store.bucket, Key: &key}
+	if !store.supabase {
+		input.ChecksumMode = types.ChecksumModeEnabled
+	}
+	result, err := store.client.GetObject(ctx, input)
 	if err != nil {
 		return nil, BlobMetadata{}, objectStorageError(err)
 	}
