@@ -17,6 +17,10 @@ Go 협업 서비스와 기존 데이터 마이그레이션의 이관 출처는 [
 - 모노·스테레오, 파일당 100MB 및 10분을 지원합니다. 다른 브라우저·기기와의 공유, 로그인·조직·Git 협업은 이 모드에 포함하지 않습니다. 브라우저 데이터를 지우면 저장한 데이터가 사라집니다.
 - 백엔드 모드로 돌아갈 때는 `SAMTDI_LOCAL_MODE`를 제거하고 기존 `SAMTDI_API_ORIGIN`을 설정합니다.
 
+## 협업 서버 배포
+
+저비용 Render 구성과 Vercel 연결은 [협업 서버 배포 안내](docs/render-deployment.md)를 참고하세요. 실제 인증·DB·비공개 객체 스토리지 설정과 협업 검증을 완료한 뒤 로컬 모드에서 전환합니다.
+
 ## 로컬 웹 실행
 
 Go 1.25, Node.js 22, pnpm 10.15, Docker Compose와 AWS CLI가 필요합니다. 로컬 Compose는 PostgreSQL·Versity S3 Gateway·Logto OSS를 루프백에만 게시합니다. 첫 실행 전 [Logto 설정과 기존 계정 연결](docs/logto-local-setup.md)을 완료하세요.
