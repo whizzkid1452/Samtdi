@@ -1,6 +1,7 @@
 "use client";
 
 import { Alert, Button, PasswordInput, Stack, TextInput } from "@mantine/core";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { identityClient } from "../../../lib/supabase-identity";
@@ -117,7 +118,7 @@ export default function ConsentPage() {
 
   return <main className="login">
     <div className="login-content" style={{ maxWidth: 420 }}>
-      <p className="brand">사맛디</p>
+      <p><Link href="/projects" className="brand" aria-label="사맛디 홈">사맛디</Link></p>
       <h1>{phase === "consent" ? "사맛디 로그인 확인" : "음악을 함께 완성하는 공간"}</h1>
       {message && <Alert role="status" color="gray" mb="md">{message}</Alert>}
       {phase === "loading" && <p role="status">인증 요청을 확인하는 중…</p>}

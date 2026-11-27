@@ -36,7 +36,7 @@ export function InvitationScreen({ token }: { token: string }) {
 
   return <main className="login invite-entry">
     <div className="login-content">
-      <Link href="/projects" className="brand"><BrandWordmark /></Link>
+      <Link href="/projects" className="brand" aria-label="사맛디 홈"><BrandWordmark /></Link>
       {invitation && <>
         <h1>{invitation.title}에 초대받았어요</h1>
         <p className="muted">{roleLabels[invitation.role]}로 참여합니다. 초대받은 이메일로 로그인하세요.</p>

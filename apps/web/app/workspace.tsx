@@ -122,7 +122,7 @@ export function Workspace({ children }: { children: ReactNode }) {
 
     return <main className="login">
       <div className="login-content">
-        <p className="brand"><BrandMark /><BrandWordmark /></p>
+        <p><Link href="/projects" className="brand" aria-label="사맛디 홈"><BrandMark /><BrandWordmark /></Link></p>
         <h1>음악을 함께 완성하는 공간</h1>
         <p className="muted">{publicSignup ? "이메일을 인증하고 내 작업실에서 음악을 함께 검토하세요." :
           "초대받은 프로젝트에 로그인해 작업을 이어가세요."}</p>
@@ -212,7 +212,7 @@ function WorkspaceNavigation({ pathname, projectId, projects, workspace, selectW
   )).sort((left, right) => (right.updated_at ?? "").localeCompare(left.updated_at ?? "")).slice(0, 6);
 
   return <nav className="workspace-navigation" aria-label="주 메뉴">
-    <Link href="/projects" className="brand" onClick={close}><BrandMark /><BrandWordmark /></Link>
+    <Link href="/projects" className="brand" aria-label="사맛디 홈" onClick={close}><BrandMark /><BrandWordmark /></Link>
     <WorkspacePicker selected={workspace} onSelect={selectWorkspace} />
     <Link className="workspace-link" href="/projects" aria-current={pathname === "/projects" ? "page" : undefined} onClick={close}>프로젝트</Link>
     <Link className="workspace-link" href="/work" aria-current={pathname === "/work" ? "page" : undefined} onClick={close}>내 작업</Link>

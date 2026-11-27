@@ -32,13 +32,13 @@ export function LocalWorkspace() {
   }, []);
 
   const projects = library?.projects ?? [];
-  const project = projects.find((item) => item.id === projectId) ?? projects[0];
+  const project = projects.find((item) => item.id === projectId);
   const versions = (library?.versions ?? []).filter((item) => item.projectId === project?.id)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const version = versions.find((item) => item.id === versionId) ?? versions[0];
   const notes = (library?.notes ?? []).filter((note) => note.version_id === version?.id);
 
-  function selectProject(id: string) {
+  function selectProject(id: string | undefined) {
     setProjectId(id);
     setVersionId(undefined);
     setFile(null);
@@ -109,11 +109,13 @@ export function LocalWorkspace() {
   return <div className="workspace-shell local-workspace">
     <aside className="workspace-sidebar">
       <nav className="workspace-navigation" aria-label="내 프로젝트">
-        <div className="brand"><span className="brand-mark" aria-hidden="true"><i/><i/><i/></span><BrandWordmark /></div>
+        <button type="button" className="brand" aria-label="사맛디 홈" disabled={!!status} onClick={() => selectProject(undefined)}>
+          <span className="brand-mark" aria-hidden="true"><i/><i/><i/></span><BrandWordmark />
+        </button>
         <Badge color="lime" variant="outline">개인 작업실</Badge>
         <section aria-label="프로젝트 바로가기">
           <h2>내 프로젝트</h2>
-          {projects.map((item) => <button className="workspace-link" key={item.id} aria-current={project?.id === item.id}
+          {projects.map((item) => <button className="workspace-link" key={item.id} aria-current={project?.id === item.id || undefined}
             disabled={!!status} type="button" onClick={() => selectProject(item.id)}>{item.title}</button>)}
         </section>
         <p className="local-sidebar-note">현재 작업 내용은 이 브라우저에 저장됩니다.</p>
@@ -121,9 +123,17 @@ export function LocalWorkspace() {
     </aside>
     <div className="workspace-content">
       <header className="topbar">
-        <div className="row"><span className="brand"><BrandWordmark /></span><Badge color="green" variant="light">브라우저 베타</Badge></div>
+        <div className="row">
+          <button type="button" className="brand" aria-label="사맛디 홈" disabled={!!status} onClick={() => selectProject(undefined)}>
+            <BrandWordmark />
+          </button>
+          <Badge color="green" variant="light">브라우저 베타</Badge>
+        </div>
         {projects.length > 0 && <select aria-label="프로젝트 선택" value={project?.id ?? ""} disabled={!!status}
-          onChange={(event) => selectProject(event.currentTarget.value)}>{projects.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select>}
+          onChange={(event) => selectProject(event.currentTarget.value || undefined)}>
+          <option value="">홈 / 프로젝트 선택</option>
+          {projects.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+        </select>}
       </header>
       <main className="main-content project-home">
         <div className="section-header">
