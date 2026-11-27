@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, describeError } from "../lib/api";
+import { todayInSeoul } from "../lib/task-dates";
 import { displayName } from "../lib/people";
 import type { components } from "../lib/api-types";
 import { projectHref, taskHref, versionHref, versionLink } from "../lib/routes";
@@ -13,6 +14,7 @@ import { timecode } from "../lib/timecode";
 import type { Member, Project } from "./workspace";
 import { ActionMenu } from "./action-menu";
 import { TaskStatusBadge } from "./task-status-badge";
+import { TaskTimeline } from "./task-timeline";
 import { DraggableTask, TaskLane, type TaskMove } from "./task-drag";
 import { EmptyState, InlineError, LoadingRows } from "./request-states";
 
@@ -20,10 +22,6 @@ type Counts = Record<Status, number>;
 type TaskSummary = components["schemas"]["TaskSummary"];
 type TaskSelection = { task?: Task; change?: TaskChange; returnFocusTo?: HTMLButtonElement | null };
 const pageSize = 100;
-
-export function todayInSeoul() {
-  return new Intl.DateTimeFormat("sv-SE", { dateStyle: "short", timeZone: "Asia/Seoul" }).format(new Date());
-}
 
 function taskFilters(query: URLSearchParams) {
   const params = new URLSearchParams();
@@ -38,7 +36,13 @@ function taskFilters(query: URLSearchParams) {
   if (assignee && (assignee === "unassigned" || /^[0-9a-f-]{36}$/.test(assignee))) params.set("assignee", assignee);
   if (due && ["late", "soon", "none"].includes(due)) params.set("due", due);
   if (query.get("archived") === "true") params.set("archived", "true");
-  if (view === "board" || view === "list") params.set("view", view);
+  if (view === "board" || view === "list" || view === "timeline") params.set("view", view);
+  if (view === "timeline") {
+    const start = query.get("start");
+    if (start && /^\d{4}-\d{2}-\d{2}$/.test(start) && Number.isFinite(Date.parse(start)) &&
+      new Date(start).toISOString().slice(0, 10) === start) params.set("start", start);
+    if (query.get("zoom") === "month") params.set("zoom", "month");
+  }
   return params;
 }
 
@@ -61,7 +65,8 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
   const router = useRouter();
   const query = useSearchParams();
   const filters = taskFilters(new URLSearchParams(query));
-  const board = filters.get("view") !== "list";
+  const timeline = filters.get("view") === "timeline";
+  const board = !timeline && filters.get("view") !== "list";
   const groupByAssignee = filters.get("group") === "assignee";
   const [input, setInput] = useState(filters.get("q") ?? "");
   const [selection, setSelection] = useState<TaskSelection>();
@@ -80,6 +85,8 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
   const apiFilters = new URLSearchParams(filters);
   apiFilters.delete("view");
   apiFilters.delete("group");
+  apiFilters.delete("start");
+  apiFilters.delete("zoom");
   if (!apiFilters.has("archived")) apiFilters.set("archived", "false");
   const queryString = apiFilters.toString();
 
@@ -98,7 +105,7 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
       method: "PUT",
       body: JSON.stringify({
         title: task.title, description: task.description, status, position,
-        assignee_id: task.assignee_id, due_on: task.due_on, result_version_id: task.result_version_id,
+        assignee_id: task.assignee_id, due_on: task.due_on, start_on: task.start_on, result_version_id: task.result_version_id,
         review_text: task.review_text, archived: task.archived, revision: task.revision,
         note_ids: task.notes.map(({ id }) => id), confirm_notes: [],
       }),
@@ -159,6 +166,35 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
     router.push(taskHref(project.id, id) + detailQuery);
   }
 
+  async function scheduleTask(task: Task, dates: { start_on: string; due_on: string }) {
+    if (!canWrite || task.archived || moveLockRef.current) return;
+
+    moveLockRef.current = true;
+    setMoving(true);
+    setError("");
+    setMoveNotice("");
+    try {
+      await api(base + "/tasks/" + task.id, {
+        method: "PUT",
+        body: JSON.stringify({
+          title: task.title, description: task.description, status: task.status, assignee_id: task.assignee_id,
+          result_version_id: task.result_version_id, review_text: task.review_text, archived: task.archived,
+          revision: task.revision, note_ids: task.notes.map(({ id }) => id),
+          confirm_notes: task.status === "done" ? task.notes.filter((note) => !note.resolved && !note.deleted)
+            .map(({ id, revision }) => ({ id, revision })) : [],
+          ...dates,
+        }),
+      });
+      setMoveNotice(task.title + " · 일정을 저장했습니다.");
+    } catch (cause) {
+      setError(describeError(cause));
+    } finally {
+      moveLockRef.current = false;
+      setMoving(false);
+      setRevision((value) => value + 1);
+    }
+  }
+
   function taskCard(task: Task, previous?: Task) {
     const link = taskHref(project.id, task.id) + detailQuery;
     const assignee = members.find(({ account_id }) => account_id === task.assignee_id);
@@ -202,8 +238,9 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
     </div>
     <div className="row wrap">
       <div className="segmented" aria-label="작업 보기">
-        <Button component={Link} variant="default" href={href("view", "list")} aria-current={!board ? "page" : undefined}>목록</Button>
+        <Button component={Link} variant="default" href={href("view", "list")} aria-current={!board && !timeline ? "page" : undefined}>목록</Button>
         <Button component={Link} variant="default" href={href("view", "")} aria-current={board ? "page" : undefined}>보드</Button>
+        <Button component={Link} variant="default" href={href("view", "timeline")} aria-current={timeline ? "page" : undefined}>타임라인</Button>
       </div>
       <form className="row wrap" onSubmit={(event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -225,9 +262,9 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
         onChange={(event) => router.push(href("due", event.currentTarget.value))} />
       <Checkbox label="보관된 작업" checked={filters.get("archived") === "true"}
         onChange={(event) => router.push(href("archived", event.currentTarget.checked ? "true" : ""))} />
-      {board && <Checkbox label="담당자별 그룹" checked={groupByAssignee}
+      {(board || timeline) && <Checkbox label="담당자별 그룹" checked={groupByAssignee}
         onChange={(event) => router.push(href("group", event.currentTarget.checked ? "assignee" : ""))} />}
-      {filters.size > Number(filters.has("view")) && <Link href={pathname + (board ? "" : "?view=list")}>필터 초기화</Link>}
+      {filters.size > Number(filters.has("view")) && <Link href={pathname + (timeline ? "?view=timeline" : board ? "" : "?view=list")}>필터 초기화</Link>}
     </div>
     {summary && <div className="row wrap task-summary" aria-label="작업 요약">
       <span>미완료 {summary.open}건 · 지연 {summary.late}건</span>
@@ -239,7 +276,10 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
     </div>}
     {(error || memberError) && <InlineError message={error || memberError} />}
     <p role="status" className="muted">{moving ? "작업을 이동하는 중" : moveNotice || (board && canWrite ? "카드를 끌어 순서를 바꾸거나 다른 상태로 옮기세요. 더 보기 메뉴로도 이동할 수 있습니다." : "")}</p>
-    {board ? <div className="board" aria-busy={moving}>
+    {timeline ? <TaskTimeline base={base} projectId={project.id} members={members} canWrite={canWrite && !moving}
+      apiQuery={queryString} detailQuery={detailQuery} group={groupByAssignee ? "assignee" : "status"}
+      zoom={filters.get("zoom") === "month" ? "month" : "week"} start={filters.get("start") ?? undefined}
+      refresh={revision} onMove={scheduleTask} /> : board ? <div className="board" aria-busy={moving}>
       {statuses.filter(([value]) => !filters.get("status") || filters.get("status") === value).map(([value, label]) => {
         const lane = new URLSearchParams(queryString);
         lane.set("status", value);
@@ -441,6 +481,7 @@ export function TaskDetail({ project, taskId }: { project: Project; taskId: stri
         <dl className="task-metadata">
           <dt>상태</dt><dd><div className="row wrap"><TaskStatusBadge status={task.status} />{task.archived && <Badge variant="light" color="gray" tt="none">보관됨</Badge>}</div></dd>
           <dt>담당자</dt><dd>{assignee ? displayName(assignee) : "미할당"}</dd>
+          <dt>시작일</dt><dd>{task.start_on || "시작일 없음"}</dd>
           <dt>마감일</dt><dd>{task.due_on || "마감 없음"}</dd>
         </dl>
       </div>
