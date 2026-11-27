@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -15,6 +17,7 @@ const webSessionCookie = "ayotbi_session"
 type Session struct {
 	AccountID     string `json:"account_id"`
 	Email         string `json:"email"`
+	Name          string `json:"name"`
 	Kind          string `json:"kind"`
 	tokenHash     []byte
 	subject       string
@@ -54,9 +57,9 @@ func (s *Server) authenticate(r *http.Request, allowGitBasic bool) (Session, err
 	}
 
 	session := Session{Kind: kind, tokenHash: tokenHash(token)}
-	err := s.pool.QueryRow(r.Context(), `SELECT a.id::text, a.email FROM sessions s
+	err := s.pool.QueryRow(r.Context(), `SELECT a.id::text, a.email, COALESCE(a.display_name, '') FROM sessions s
  JOIN accounts a ON a.id = s.account_id WHERE s.token_hash = $1 AND s.kind = $2 AND s.expires_at > now()`,
-		session.tokenHash, kind).Scan(&session.AccountID, &session.Email)
+		session.tokenHash, kind).Scan(&session.AccountID, &session.Email, &session.Name)
 	return session, err
 }
 
@@ -96,6 +99,39 @@ func (s *Server) withSession(handler sessionHandler) http.HandlerFunc {
 
 func (s *Server) me(w http.ResponseWriter, _ *http.Request, session Session) {
 	writeJSON(w, http.StatusOK, session)
+}
+
+func (s *Server) changeMe(w http.ResponseWriter, r *http.Request, session Session) {
+	var input struct {
+		Name *string `json:"name"`
+	}
+	if !readJSON(w, r, &input) {
+		return
+	}
+	if input.Name == nil {
+		problem(w, http.StatusBadRequest, "invalid_name")
+		return
+	}
+	name, valid := displayName(*input.Name)
+	if !valid {
+		problem(w, http.StatusBadRequest, "invalid_name")
+		return
+	}
+	if _, err := s.pool.Exec(r.Context(), `UPDATE accounts SET display_name=NULLIF($2,'') WHERE id=$1`, session.AccountID, name); err != nil {
+		internal(w, "change_name", err)
+		return
+	}
+	session.Name = name
+	writeJSON(w, http.StatusOK, session)
+}
+
+// displayName trims a person's chosen name; an empty result clears it so screens fall back to the email.
+func displayName(value string) (string, bool) {
+	name := strings.TrimSpace(value)
+	if utf8.RuneCountInString(name) > 40 || strings.IndexFunc(name, unicode.IsControl) >= 0 {
+		return "", false
+	}
+	return name, true
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request, session Session) {

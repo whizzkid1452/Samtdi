@@ -4,20 +4,11 @@ import { Badge, Button, Popover } from "@mantine/core";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, describeError } from "../lib/api";
+import type { components } from "../lib/api-types";
 import { taskHref, versionLink } from "../lib/routes";
 import { EmptyState, InlineError } from "./request-states";
 
-type Notification = {
-  id: string;
-  project_id: string;
-  project_title: string;
-  action: string;
-  subject_id: string;
-  version_id?: string;
-  note_id?: string;
-  read_at?: string;
-};
-type Inbox = { items: Notification[]; unread: number };
+type Inbox = components["schemas"]["Inbox"];
 
 export function Notifications() {
   const [opened, setOpened] = useState(false);
@@ -112,7 +103,8 @@ export function Notifications() {
                     </Link>
                     {!notice.read_at && <Button variant="default" size="compact-sm" onClick={() => void markRead(notice.id)}>읽음</Button>}
                   </div>
-                  <small className="muted">{notice.project_title}</small>
+                  <small className="muted">{notice.project_title}{notice.actor_name ? " · " + notice.actor_name : ""}</small>
+                  {notice.title && <p>{notice.title}</p>}
                 </li>
               );
             })}

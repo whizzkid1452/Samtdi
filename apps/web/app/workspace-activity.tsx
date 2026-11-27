@@ -188,7 +188,7 @@ function ActivityEntries({ projectId, type }: { projectId: string; type: string 
           return <li className="row spread wrap" key={entry.id}>
             <span>{href ? <Link href={href} className="resource-title">{label}</Link> : label}
               {typeof status === "string" && " · " + statusLabel(status)}
-              <span className="muted"> · {entry.actor}</span>
+              <span className="muted"> · {entry.actor_name || entry.actor}</span>
             </span>
             <time className="muted" dateTime={entry.created_at}>{localTime.format(new Date(entry.created_at))}</time>
           </li>;

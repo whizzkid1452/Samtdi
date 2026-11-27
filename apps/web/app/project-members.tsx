@@ -3,6 +3,7 @@
 import { Badge, Button, NativeSelect, TextInput } from "@mantine/core";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, describeError } from "../lib/api";
+import { displayName } from "../lib/people";
 import { projectHref } from "../lib/routes";
 import { AppModal } from "./app-modal";
 import { ConfirmAction, type Confirmation } from "./confirm-action";
@@ -92,7 +93,7 @@ export function ProjectMembers({ project }: { project: Project }) {
     {members?.length === 0 && <EmptyState message="표시할 팀원이 없습니다." />}
     <ul className="clean-list member-list">
       {members?.map((member) => <li className="row spread wrap" key={member.account_id}>
-        <span>{member.email}</span>
+        <span>{displayName(member)}{member.name && <span className="muted"> · {member.email}</span>}</span>
         {canManage ? <div className="row wrap">
           <NativeSelect aria-label={member.email + " 역할"} value={member.role} disabled={busy}
             data={Object.entries(roles).map(([value, label]) => ({ value, label }))}

@@ -1,17 +1,19 @@
 "use client";
 
-import { Button, Popover } from "@mantine/core";
+import { Avatar, Button, Popover } from "@mantine/core";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, ApiError, describeError } from "../lib/api";
 import type { components } from "../lib/api-types";
+import { displayName, initials } from "../lib/people";
+import { AccountProfile } from "./account-profile";
 import { Notifications } from "./notifications";
 import { UploadProvider } from "./upload";
 
 type Session = components["schemas"]["Session"];
 export type Project = components["schemas"]["Project"] & { archived_at?: string };
-export type Member = { account_id: string; email: string; role: Project["role"] };
+export type Member = { account_id: string; email: string; name?: string; role: Project["role"] };
 export type TeamWorkspace = components["schemas"]["TeamWorkspace"];
 
 type WorkspacesResponse = components["schemas"]["WorkspacesResponse"];
@@ -42,6 +44,8 @@ export function Workspace({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [accountOpened, setAccountOpened] = useState(false);
 
   useEffect(() => {
     const request = new AbortController();
@@ -124,10 +128,17 @@ export function Workspace({ children }: { children: ReactNode }) {
       </div>
       <div className="row">
         <Notifications />
-        <Popover trapFocus returnFocus position="bottom-end" width="min(19rem, calc(100vw - 2rem))" shadow="sm">
-          <Popover.Target><Button variant="subtle" size="sm">계정</Button></Popover.Target>
+        <Popover opened={accountOpened} onChange={setAccountOpened} trapFocus returnFocus position="bottom-end"
+          width="min(19rem, calc(100vw - 2rem))" shadow="sm">
+          <Popover.Target>
+            <Button variant="subtle" size="sm" aria-label="계정" onClick={() => setAccountOpened(!accountOpened)}
+              leftSection={<Avatar size={24} color="samtdi">{initials(session)}</Avatar>}>
+              {displayName(session)}
+            </Button>
+          </Popover.Target>
           <Popover.Dropdown>
             <p className="account-email muted">{session.email}</p>
+            <Button variant="subtle" onClick={() => { setAccountOpened(false); setEditingProfile(true); }}>표시 이름 변경</Button>
             <p><a href="/third-party-notices.txt">오픈소스 고지</a></p>
             <Button variant="default" loading={loggingOut} onClick={() => void logout()}>로그아웃</Button>
           </Popover.Dropdown>
@@ -135,6 +146,8 @@ export function Workspace({ children }: { children: ReactNode }) {
       </div>
     </header>
     {error && <p className="error main-content" role="alert">{error}</p>}
+    {editingProfile && <AccountProfile name={session.name ?? ""} close={() => setEditingProfile(false)}
+      saved={(updated) => { setSession(updated); setEditingProfile(false); }} />}
     {children}
     </UploadProvider>
   </WorkspaceContext.Provider>;

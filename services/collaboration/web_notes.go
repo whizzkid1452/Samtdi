@@ -12,6 +12,7 @@ type webReply struct {
 	ID       string `json:"id"`
 	AuthorID string `json:"author_id"`
 	Email    string `json:"email"`
+	Name     string `json:"name"`
 	Body     string `json:"body"`
 	Deleted  bool   `json:"deleted"`
 	Revision int    `json:"revision"`
@@ -22,6 +23,7 @@ type webNote struct {
 	VersionID string     `json:"version_id"`
 	AuthorID  string     `json:"author_id"`
 	Email     string     `json:"email"`
+	Name      string     `json:"name"`
 	StartMS   int64      `json:"start_ms"`
 	EndMS     *int64     `json:"end_ms,omitempty"`
 	Body      string     `json:"body"`
@@ -31,9 +33,9 @@ type webNote struct {
 	Replies   []webReply `json:"replies"`
 }
 
-const webNotesSelect = `SELECT n.id::text,n.version_id::text,n.author_id::text,a.email,n.start_ms,n.end_ms,
+const webNotesSelect = `SELECT n.id::text,n.version_id::text,n.author_id::text,a.email,COALESCE(a.display_name,''),n.start_ms,n.end_ms,
  CASE WHEN n.deleted THEN '' ELSE n.body END,n.resolved,n.deleted,n.revision,
- COALESCE((SELECT jsonb_agg(jsonb_build_object('id', r.id, 'author_id',r.author_id,'email',ra.email,
+ COALESCE((SELECT jsonb_agg(jsonb_build_object('id', r.id, 'author_id',r.author_id,'email',ra.email,'name',COALESCE(ra.display_name,''),
  'body',CASE WHEN r.deleted THEN '' ELSE r.body END,'deleted',r.deleted,'revision',r.revision)
  ORDER BY r.created_at,r.id)
  FROM web_note_replies r JOIN accounts ra ON ra.id=r.author_id WHERE r.note_id=n.id),'[]'::jsonb)
@@ -116,7 +118,7 @@ func (s *Server) getWebNote(w http.ResponseWriter, r *http.Request, session Sess
 
 	var value webNote
 	err := s.pool.QueryRow(r.Context(), webNotesSelect+" WHERE n.project_id=$1 AND n.version_id=$2 AND n.id=$3",
-		project, version, note).Scan(&value.ID, &value.VersionID, &value.AuthorID, &value.Email, &value.StartMS, &value.EndMS,
+		project, version, note).Scan(&value.ID, &value.VersionID, &value.AuthorID, &value.Email, &value.Name, &value.StartMS, &value.EndMS,
 		&value.Body, &value.Resolved, &value.Deleted, &value.Revision, &value.Replies)
 	if err != nil {
 		writeWebError(w, "read_web_note", err)
