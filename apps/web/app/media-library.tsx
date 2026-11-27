@@ -165,7 +165,7 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
   const { openUpload, uploadRevision } = useUpload();
   const router = useRouter();
   const [confirmation, setConfirmation] = useState<Confirmation>();
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(true);
   const historyId = useId();
   const base = "/v1/projects/" + project.id;
   const itemPath = base + "/media/" + encodeURIComponent(itemId);
@@ -249,6 +249,26 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
     }
   }
 
+  const history = version && versions.length > 0 && <div className="version-history">
+          <Button variant="default" aria-expanded={historyOpen} aria-controls={historyId}
+            onClick={() => setHistoryOpen((open) => !open)}>버전 기록</Button>
+          <Collapse id={historyId} expanded={historyOpen}>
+            <ul className="clean-list">
+              {versions.map((entry) => <li key={entry.id}>
+                <Link href={versionHref({ projectId: project.id, itemId, versionId: entry.id })}
+                  aria-current={entry.id === version.id ? "page" : undefined}>
+                  <strong>{entry.filename}</strong>
+                  <span className="muted">{uploadedAt.format(new Date(entry.created_at))}</span>
+                  <VersionStatus version={entry} />
+                  {entry.id === version.id && <Badge variant="outline" tt="none">현재 버전</Badge>}
+                </Link>
+                {entry.description && <p className="review-description muted">{entry.description}</p>}
+              </li>)}
+            </ul>
+            {more && <Button variant="default" loading={busy} onClick={() => void loadMore()}>이전 버전 더 보기</Button>}
+          </Collapse>
+        </div>;
+
   return <section aria-label="음원 상세">
     <Link href={projectHref(project.id)}>음원 목록</Link>
     {error && <InlineError message={error} retry={() => { setError(""); setRefresh((value) => value + 1); }} />}
@@ -295,28 +315,11 @@ export function MediaDetail({ project, itemId, versionId, initialNote, initialAt
           <p className="review-description"><Link href={versionHref({ projectId: project.id, itemId, versionId: item.latest.id })}>
             최신 버전 {states[item.latest.state]} 보기
           </Link></p>}
-        {versions.length > 0 && <div className="version-history">
-          <Button variant="default" aria-expanded={historyOpen} aria-controls={historyId}
-            onClick={() => setHistoryOpen((open) => !open)}>버전 기록</Button>
-          <Collapse id={historyId} expanded={historyOpen}>
-            <ul className="clean-list">
-              {versions.map((entry) => <li key={entry.id}>
-                <Link href={versionHref({ projectId: project.id, itemId, versionId: entry.id })}
-                  aria-current={entry.id === version.id ? "page" : undefined}>
-                  <strong>{entry.filename}</strong>
-                  <span className="muted">{uploadedAt.format(new Date(entry.created_at))}</span>
-                  <VersionStatus version={entry} />
-                  {entry.id === version.id && <Badge variant="outline" tt="none">현재 버전</Badge>}
-                </Link>
-                {entry.description && <p className="review-description muted">{entry.description}</p>}
-              </li>)}
-            </ul>
-            {more && <Button variant="default" loading={busy} onClick={() => void loadMore()}>이전 버전 더 보기</Button>}
-          </Collapse>
-        </div>}
+
       </div>}
       {version?.state === "ready" && <VersionReview key={version.id} base={base} version={version} initialAt={initialAt}
-        initialNote={initialNote} projectId={project.id} accountId={accountId} canEdit={canEdit} writable={!project.archived_at && !item.archived_at} />}
+        initialNote={initialNote} projectId={project.id} accountId={accountId} canEdit={canEdit} writable={!project.archived_at && !item.archived_at} history={history} />}
+      {version && version.state !== "ready" && history}
       {(version?.state === "queued" || version?.state === "processing") && <Alert color="gray" role="status">재생 준비 중입니다.</Alert>}
       {version?.state === "failed" && <InlineError
         message={version.failure === "invalid_audio"
