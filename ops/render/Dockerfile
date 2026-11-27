@@ -12,10 +12,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     useradd --system --create-home --home-dir /home/samtdi samtdi
 WORKDIR /app
 COPY --from=build /out/ayotbi-collaboration /usr/local/bin/ayotbi-collaboration
-COPY --from=proxy /usr/bin/caddy /usr/local/bin/caddy
+COPY --from=proxy /usr/bin/caddy /tmp/caddy-upstream
+# Render runs without privileged-port capabilities. Install a fresh binary inode
+# so the upstream image's file capabilities are not carried into the runtime.
+RUN install -m 0755 /tmp/caddy-upstream /usr/local/bin/caddy && rm /tmp/caddy-upstream
 COPY ops/render/Caddyfile /app/Caddyfile
 COPY ops/render/start.sh /app/start.sh
 ENV PORT=10000 AYOTBI_LISTEN=127.0.0.1:8080 GOMEMLIMIT=160MiB GOMAXPROCS=2
 USER samtdi
+# Verify the proxy is executable as the actual unprivileged runtime user.
+RUN /usr/local/bin/caddy version
 EXPOSE 10000
 ENTRYPOINT ["bash", "/app/start.sh"]
