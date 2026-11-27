@@ -107,15 +107,15 @@ export function LocalWorkspace() {
 
   return <div className="workspace-shell local-workspace">
     <aside className="workspace-sidebar">
-      <nav className="workspace-navigation" aria-label="내 로컬 프로젝트">
+      <nav className="workspace-navigation" aria-label="내 프로젝트">
         <div className="brand"><span className="brand-mark" aria-hidden="true"><i/><i/><i/></span>사맛디</div>
-        <Badge color="lime" variant="outline">로컬 작업실</Badge>
+        <Badge color="lime" variant="outline">개인 작업실</Badge>
         <section aria-label="프로젝트 바로가기">
           <h2>내 프로젝트</h2>
           {projects.map((item) => <button className="workspace-link" key={item.id} aria-current={project?.id === item.id}
             disabled={!!status} type="button" onClick={() => selectProject(item.id)}>{item.title}</button>)}
         </section>
-        <p className="local-sidebar-note">이 브라우저에만 저장됩니다. 로그인이나 서버 전송 없이 음원을 검토하세요.</p>
+        <p className="local-sidebar-note">현재 작업 내용은 이 브라우저에 저장됩니다.</p>
       </nav>
     </aside>
     <div className="workspace-content">
@@ -129,11 +129,11 @@ export function LocalWorkspace() {
           <h1>{project?.title ?? "음악을 함께 완성하는 공간"}</h1>
           <p className="muted">음원을 불러오고, 재생 위치와 구간에 피드백을 남기세요.</p>
         </div>
-        <Alert color="green" variant="light" title="서버 없는 로컬 모드">
-          FFmpeg WASM으로 음원과 파형을 브라우저에서 처리합니다. 프로젝트·음원·피드백은 현재 브라우저에 저장되며 다른 기기와 동기화되지 않습니다.
+        <Alert color="green" variant="light" title="개인 작업실 안내">
+          음원을 추가하고 원하는 구간에 피드백을 남겨보세요. 현재 체험판의 작업 내용은 이 브라우저에 저장되며, 기기 간 동기화는 협업 서버 연결 후 제공됩니다.
         </Alert>
         {error && <Alert role="alert" color="red" title="확인해 주세요">{error}</Alert>}
-        {!library && !error && <p role="status">로컬 작업실을 불러오는 중…</p>}
+        {!library && !error && <p role="status">작업실을 불러오는 중…</p>}
         <form className="panel local-project-form" onSubmit={createProject}>
           <TextInput label="새 프로젝트" placeholder="예: 새 싱글 믹스" maxLength={120} value={title} onChange={(event) => setTitle(event.currentTarget.value)} />
           <Button type="submit" disabled={!library || !title.trim() || !!status}>프로젝트 만들기</Button>
