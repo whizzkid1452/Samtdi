@@ -263,3 +263,8 @@ label { font-size: .9rem; color: var(--muted); }
 .task-card[data-drop-edge]::after { content: ""; position: absolute; left: 0; right: 0; height: 3px; background: var(--accent, #166534); border-radius: 2px; pointer-events: none; }
 .task-card[data-drop-edge="top"]::after { top: -5px; }
 .task-card[data-drop-edge="bottom"]::after { bottom: -5px; }
+
+.task-summary { margin-block: 12px; }
+.task-source-link { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.task-quick-form, .task-row-group { display: grid; gap: 8px; }
+.task-row-group h4 { margin: 8px 0 0; font-size: 0.85rem; }

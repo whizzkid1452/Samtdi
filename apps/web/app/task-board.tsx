@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { api, describeError } from "../lib/api";
 import { displayName } from "../lib/people";
 import type { components } from "../lib/api-types";
-import { projectHref, taskHref, versionLink } from "../lib/routes";
+import { projectHref, taskHref, versionHref, versionLink } from "../lib/routes";
 import { TaskEditor, statuses, statusLabel, type Status, type Task, type TaskChange, type TaskNote } from "./task-editor";
 import { timecode } from "../lib/timecode";
 import type { Member, Project } from "./workspace";
@@ -17,6 +17,7 @@ import { DraggableTask, TaskLane, type TaskMove } from "./task-drag";
 import { EmptyState, InlineError, LoadingRows } from "./request-states";
 
 type Counts = Record<Status, number>;
+type TaskSummary = components["schemas"]["TaskSummary"];
 type TaskSelection = { task?: Task; change?: TaskChange; returnFocusTo?: HTMLButtonElement | null };
 const pageSize = 100;
 
@@ -31,12 +32,13 @@ function taskFilters(query: URLSearchParams) {
   const assignee = query.get("assignee");
   const due = query.get("due");
   const view = query.get("view");
+  if (query.get("group") === "assignee") params.set("group", "assignee");
   if (search) params.set("q", search.slice(0, 200));
   if (status && statuses.some(([value]) => value === status)) params.set("status", status);
   if (assignee && (assignee === "unassigned" || /^[0-9a-f-]{36}$/.test(assignee))) params.set("assignee", assignee);
   if (due && ["late", "soon", "none"].includes(due)) params.set("due", due);
   if (query.get("archived") === "true") params.set("archived", "true");
-  if (view === "board") params.set("view", view);
+  if (view === "board" || view === "list") params.set("view", view);
   return params;
 }
 
@@ -59,12 +61,14 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
   const router = useRouter();
   const query = useSearchParams();
   const filters = taskFilters(new URLSearchParams(query));
-  const board = filters.get("view") === "board";
+  const board = filters.get("view") !== "list";
+  const groupByAssignee = filters.get("group") === "assignee";
   const [input, setInput] = useState(filters.get("q") ?? "");
   const [selection, setSelection] = useState<TaskSelection>();
   const [seedNote, setSeedNote] = useState<TaskNote>();
   const [error, setError] = useState("");
   const [counts, setCounts] = useState<Counts>();
+  const [summary, setSummary] = useState<TaskSummary>();
   const [revision, setRevision] = useState(0);
   const moveLockRef = useRef(false);
   const [moving, setMoving] = useState(false);
@@ -75,6 +79,7 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
   const detailQuery = filters.size ? "?" + filters : "";
   const apiFilters = new URLSearchParams(filters);
   apiFilters.delete("view");
+  apiFilters.delete("group");
   if (!apiFilters.has("archived")) apiFilters.set("archived", "false");
   const queryString = apiFilters.toString();
 
@@ -126,8 +131,13 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
   useEffect(() => {
     const request = new AbortController();
 
-    api<Counts>(base + "/task-counts?" + queryString, { signal: request.signal }).then((value) => {
-      if (!request.signal.aborted) setCounts(value);
+    Promise.all([
+      api<Counts>(base + "/task-counts?" + queryString, { signal: request.signal }),
+      api<TaskSummary>(base + "/task-summary?" + queryString, { signal: request.signal }),
+    ]).then(([counts, summary]) => {
+      if (request.signal.aborted) return;
+      setCounts(counts);
+      setSummary(summary);
     }).catch((cause) => { if (!request.signal.aborted) setError(describeError(cause)); });
     return () => request.abort();
   }, [base, queryString, revision]);
@@ -159,6 +169,10 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
       {!board && <TaskStatusBadge status={task.status} />}
       <span className="muted">{assignee ? displayName(assignee) : "미할당"}</span>
       <span className={late ? "error" : "muted"}>{task.due_on || "마감 없음"}{late ? " · 지연" : ""}</span>
+      {task.source && <Link className="task-source-link" href={versionHref({
+        projectId: project.id, itemId: task.source.item_id, versionId: task.source.version_id,
+        noteId: task.source.note_id, at: task.source.start_ms,
+      })}>{task.source.item_title} · {timecode(task.source.start_ms)}</Link>}
       <span className="muted">피드백 {task.notes.length}</span>
       {canWrite && <ActionMenu label="더 보기" accessibleName={task.title + " 관리"}>{(trigger) => <>
         {!task.archived && previous && (
@@ -188,8 +202,8 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
     </div>
     <div className="row wrap">
       <div className="segmented" aria-label="작업 보기">
-        <Button component={Link} variant="default" href={href("view", "")} aria-current={!board ? "page" : undefined}>목록</Button>
-        <Button component={Link} variant="default" href={href("view", "board")} aria-current={board ? "page" : undefined}>보드</Button>
+        <Button component={Link} variant="default" href={href("view", "list")} aria-current={!board ? "page" : undefined}>목록</Button>
+        <Button component={Link} variant="default" href={href("view", "")} aria-current={board ? "page" : undefined}>보드</Button>
       </div>
       <form className="row wrap" onSubmit={(event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -211,8 +225,18 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
         onChange={(event) => router.push(href("due", event.currentTarget.value))} />
       <Checkbox label="보관된 작업" checked={filters.get("archived") === "true"}
         onChange={(event) => router.push(href("archived", event.currentTarget.checked ? "true" : ""))} />
-      {filters.size > (board ? 1 : 0) && <Link href={pathname + (board ? "?view=board" : "")}>필터 초기화</Link>}
+      {board && <Checkbox label="담당자별 그룹" checked={groupByAssignee}
+        onChange={(event) => router.push(href("group", event.currentTarget.checked ? "assignee" : ""))} />}
+      {filters.size > Number(filters.has("view")) && <Link href={pathname + (board ? "" : "?view=list")}>필터 초기화</Link>}
     </div>
+    {summary && <div className="row wrap task-summary" aria-label="작업 요약">
+      <span>미완료 {summary.open}건 · 지연 {summary.late}건</span>
+      {groupByAssignee && summary.assignees.map((load) => {
+        const member = members.find(({ account_id }) => account_id === load.assignee_id);
+        const label = member ? displayName(member) : load.assignee_id ? "이전 담당자" : "미할당";
+        return <Badge key={load.assignee_id} variant="light" tt="none">{label} · 미완료 {load.open} · 지연 {load.late}</Badge>;
+      })}
+    </div>}
     {(error || memberError) && <InlineError message={error || memberError} />}
     <p role="status" className="muted">{moving ? "작업을 이동하는 중" : moveNotice || (board && canWrite ? "카드를 끌어 순서를 바꾸거나 다른 상태로 옮기세요. 더 보기 메뉴로도 이동할 수 있습니다." : "")}</p>
     {board ? <div className="board" aria-busy={moving}>
@@ -221,7 +245,14 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
         lane.set("status", value);
         return <TaskLane key={value} projectId={project.id} status={value} label={label} enabled={canWrite && !moving} onMove={moveTask}>
           <h3><TaskStatusBadge status={value} /> {counts && <span className="muted">{counts[value]}</span>}</h3>
-          <TaskRows key={lane.toString() + ":" + revision} path={base + "/tasks?" + lane} render={taskCard} />
+          {canWrite && !filters.has("archived") && (value === "todo" || value === "progress") &&
+            <QuickTask base={base} status={value} assignee={filters.get("assignee")}
+              saved={() => setRevision((value) => value + 1)} />}
+          <TaskRows key={lane.toString() + ":" + revision} path={base + "/tasks?" + lane} render={taskCard}
+            groupLabel={groupByAssignee ? (assignee) => {
+              const member = members.find(({ account_id }) => account_id === assignee);
+              return member ? displayName(member) : assignee ? "이전 담당자" : "미할당";
+            } : undefined} />
         </TaskLane>;
       })}
     </div> : <div className="task-list">
@@ -236,7 +267,62 @@ export function TaskBoard({ project, initialNote }: { project: Project; initialN
   </section>;
 }
 
-function TaskRows({ path, render }: { path: string; render: (task: Task, previous?: Task) => ReactNode }) {
+function QuickTask({ base, status, assignee, saved }: {
+  base: string; status: "todo" | "progress"; assignee: string | null; saved: () => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [title, setTitle] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const trigger = useRef<HTMLButtonElement>(null);
+
+  function close() {
+    setAdding(false);
+    setTitle("");
+    setError("");
+    trigger.current?.focus();
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!title.trim() || saving) return;
+
+    setSaving(true);
+    setError("");
+    try {
+      await api(base + "/tasks", {
+        method: "POST",
+        body: JSON.stringify({ title: title.trim(), status, assignee_id: assignee === "unassigned" ? "" : assignee ?? "" }),
+      });
+      close();
+      saved();
+    } catch (cause) {
+      setError(describeError(cause));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <>
+    <Button ref={trigger} type="button" variant="subtle" size="compact-sm" aria-expanded={adding}
+      onClick={() => { if (adding) close(); else setAdding(true); }} disabled={saving}>빠른 추가</Button>
+    {adding && <form className="task-quick-form" onSubmit={submit}>
+      <TextInput label="작업 제목" autoFocus required maxLength={160} value={title}
+        onChange={(event) => setTitle(event.currentTarget.value)} />
+      {error && <InlineError message={error} />}
+      <div className="row">
+        <Button type="submit" size="compact-sm" loading={saving}>추가</Button>
+        <Button type="button" size="compact-sm" variant="default" disabled={saving} onClick={close}>취소</Button>
+      </div>
+    </form>}
+  </>;
+}
+
+function TaskRows({ path, render, groupLabel }: {
+  path: string;
+  render: (task: Task, previous?: Task) => ReactNode;
+  groupLabel?: (assignee: string) => string;
+}) {
   const [rows, setRows] = useState<Task[]>();
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -268,16 +354,27 @@ function TaskRows({ path, render }: { path: string; render: (task: Task, previou
     }
   }
 
+  const groups = new Map<string, Task[]>();
+  for (const task of rows ?? []) {
+    const group = groupLabel ? task.assignee_id : "";
+    const tasks = groups.get(group);
+    if (tasks) tasks.push(task);
+    else groups.set(group, [task]);
+  }
+
   return <>
     {error && <InlineError message={error} retry={() => { setError(""); setAttempt((value) => value + 1); }} />}
     {!rows && !error && <LoadingRows label="작업을 불러오는 중" />}
     {rows?.length === 0 && <EmptyState message="표시할 작업이 없습니다." />}
-    {rows && rows.length > 0 && <ul className="task-rows">
-      {rows.map((task, index) => {
-        const previous = rows[index - 1];
-        return <li key={task.id}>{render(task, previous?.status === task.status ? previous : undefined)}</li>;
-      })}
-    </ul>}
+    {[...groups].map(([assignee, tasks]) => <div className="task-row-group" key={assignee}>
+      {groupLabel && <h4>{groupLabel(assignee)}</h4>}
+      <ul className="task-rows">
+        {tasks.map((task, index) => {
+          const previous = tasks[index - 1];
+          return <li key={task.id}>{render(task, previous?.status === task.status ? previous : undefined)}</li>;
+        })}
+      </ul>
+    </div>)}
     {more && <button disabled={loading} onClick={() => void loadMore()}>작업 더 보기</button>}
   </>;
 }

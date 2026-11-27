@@ -111,3 +111,62 @@ func TestWebDisplayNames(t *testing.T) {
 		t.Fatalf("an empty name must clear the display name: %q", session.Name)
 	}
 }
+
+func (team *webTeam) task(who string, body map[string]any) string {
+	team.t.Helper()
+	payload := map[string]any{"description": "", "status": "todo", "assignee_id": "", "due_on": "", "result_version_id": "",
+		"review_text": "", "archived": false, "revision": 0, "note_ids": []string{}, "confirm_notes": []any{}}
+	for key, value := range body {
+		payload[key] = value
+	}
+	var created map[string]string
+	team.call(who, "POST", "./tasks", payload, 201, &created)
+	return created["id"]
+}
+
+func TestWebTaskSourceAndSummary(t *testing.T) {
+	team := newWebTeam(t)
+	var note map[string]string
+	team.call("reviewer", "POST", "./versions/"+team.version+"/notes", map[string]any{"start_ms": 1000, "end_ms": 3000, "body": "후렴 보컬"}, 201, &note)
+	late := team.task("owner", map[string]any{"title": "보컬 낮추기", "assignee_id": team.ids["editor"], "due_on": "2020-01-01", "note_ids": []string{note["id"]}})
+	team.task("owner", map[string]any{"title": "엔딩 정리"})
+	team.task("owner", map[string]any{"title": "끝난 일", "status": "done", "assignee_id": team.ids["owner"]})
+
+	var task webTask
+	team.call("reviewer", "GET", "./tasks/"+late, nil, 200, &task)
+	source := task.Source
+	if source == nil || source.NoteID != note["id"] || source.ItemTitle != "메인 믹스" || source.Filename != "mix.wav" ||
+		source.VersionID != team.version || source.StartMS != 1000 || source.EndMS == nil || *source.EndMS != 3000 {
+		t.Fatalf("task source = %+v", source)
+	}
+	if task.CreatedAt.IsZero() || len(task.Notes) != 1 || task.Notes[0].EndMS == nil {
+		t.Fatalf("task lacks its creation time or note range: %+v", task)
+	}
+
+	var summary struct {
+		Open      int64             `json:"open"`
+		Late      int64             `json:"late"`
+		Assignees []webAssigneeLoad `json:"assignees"`
+	}
+	team.call("reviewer", "GET", "./task-summary?archived=false", nil, 200, &summary)
+	loads := map[string]webAssigneeLoad{}
+	for _, load := range summary.Assignees {
+		loads[load.AssigneeID] = load
+	}
+	if summary.Open != 2 || summary.Late != 1 || loads[team.ids["editor"]].Late != 1 || loads[""].Open != 1 || loads[team.ids["owner"]].Open != 0 {
+		t.Fatalf("summary = %+v", summary)
+	}
+	team.call("reviewer", "GET", "./task-summary?assignee="+team.ids["editor"], nil, 200, &summary)
+	if summary.Open != 1 || len(summary.Assignees) != 1 {
+		t.Fatalf("summary ignores task filters: %+v", summary)
+	}
+	team.call("reviewer", "GET", "./task-summary?due=bad", nil, 400, nil)
+
+	var current webNote
+	team.call("reviewer", "GET", "./versions/"+team.version+"/notes/"+note["id"], nil, 200, &current)
+	team.call("reviewer", "PATCH", "./versions/"+team.version+"/notes/"+note["id"], map[string]any{"revision": current.Revision, "deleted": true}, 204, nil)
+	team.call("owner", "GET", "./tasks/"+late, nil, 200, &task)
+	if task.Source != nil {
+		t.Fatalf("a deleted note must not stay the task source: %+v", task.Source)
+	}
+}

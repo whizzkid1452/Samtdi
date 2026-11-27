@@ -17,7 +17,7 @@ export type TaskNote = components["schemas"]["TaskNote"];
 export type Status = Task["status"];
 type Options = components["schemas"]["TaskOptions"];
 type VersionOption = components["schemas"]["TaskVersion"];
-export type TaskChange = { status?: Status; position?: number; archived?: boolean };
+export type TaskChange = { status?: Status; position?: number; archived?: boolean; assignee_id?: string };
 
 export const statuses: [Status, string][] = [
   ["todo", "할 일"], ["progress", "진행 중"], ["review", "검토 요청"], ["done", "완료"],
@@ -61,7 +61,7 @@ export function TaskEditor({ base, members, task, seedNote, change, close, saved
   const [latest, setLatest] = useState(task);
   const [title, setTitle] = useState(restored?.title ?? task?.title ?? seedNote?.body.slice(0, 160) ?? "");
   const [description, setDescription] = useState(restored?.description ?? task?.description ?? "");
-  const [assignee, setAssignee] = useState(restored?.assignee ?? task?.assignee_id ?? "");
+  const [assignee, setAssignee] = useState(restored?.assignee ?? change?.assignee_id ?? task?.assignee_id ?? "");
   const [due, setDue] = useState(restored?.due ?? task?.due_on ?? "");
   const [status, setStatus] = useState<Status>(restored?.status ?? change?.status ?? task?.status ?? "todo");
   const [review, setReview] = useState(restored?.review ?? task?.review_text ?? "");

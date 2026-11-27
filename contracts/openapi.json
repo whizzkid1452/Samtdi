@@ -2550,6 +2550,103 @@
           }
         ]
       }
+    },
+    "/v1/projects/{project}/task-summary": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Open work by assignee for the same filters as task counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskSummary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "note",
+            "in": "query",
+            "description": "Return tasks linked to this feedback in the project.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "todo",
+                "progress",
+                "review",
+                "done"
+              ]
+            }
+          },
+          {
+            "name": "archived",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "due",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "late",
+                "soon",
+                "none"
+              ]
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "assignee",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -2848,6 +2945,9 @@
           },
           "revision": {
             "type": "integer"
+          },
+          "end_ms": {
+            "type": "integer"
           }
         }
       },
@@ -2865,7 +2965,9 @@
           "position",
           "archived",
           "revision",
-          "notes"
+          "notes",
+          "created_at",
+          "source"
         ],
         "properties": {
           "id": {
@@ -2906,6 +3008,20 @@
             "items": {
               "$ref": "#/components/schemas/TaskNote"
             }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "source": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -3279,6 +3395,81 @@
                   "type": "string"
                 }
               }
+            }
+          }
+        }
+      },
+      "TaskSource": {
+        "type": "object",
+        "required": [
+          "note_id",
+          "item_id",
+          "item_title",
+          "version_id",
+          "filename",
+          "start_ms"
+        ],
+        "properties": {
+          "note_id": {
+            "type": "string"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "item_title": {
+            "type": "string"
+          },
+          "version_id": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "start_ms": {
+            "type": "integer"
+          },
+          "end_ms": {
+            "type": "integer"
+          }
+        }
+      },
+      "AssigneeLoad": {
+        "type": "object",
+        "required": [
+          "assignee_id",
+          "open",
+          "late"
+        ],
+        "properties": {
+          "assignee_id": {
+            "type": "string"
+          },
+          "open": {
+            "type": "integer"
+          },
+          "late": {
+            "type": "integer"
+          }
+        }
+      },
+      "TaskSummary": {
+        "type": "object",
+        "required": [
+          "open",
+          "late",
+          "assignees"
+        ],
+        "properties": {
+          "open": {
+            "type": "integer"
+          },
+          "late": {
+            "type": "integer"
+          },
+          "assignees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssigneeLoad"
             }
           }
         }
