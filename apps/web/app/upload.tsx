@@ -221,7 +221,21 @@ export function UploadProvider({ accountId, children }: { accountId: string; chi
         {transferProgress}
         <div className="row wrap">
           <Button type="submit" loading={!!stage} disabled={!completion && !draft?.file}>{completion ? "등록 계속하기" : "파일 업로드"}</Button>
-          {stage === "transfer" && <Button type="button" variant="default" onClick={() => request.current?.abort()}>전송 취소</Button>}
+          {stage && <Button type="button" variant="default" onClick={() => setVisible(false)}>백그라운드에서 계속</Button>}
+          {stage === "transfer" && <Button type="button" variant="default" onClick={(event) => {
+            const transfer = request.current;
+            if (!transfer) return;
+
+            setConfirmation({
+              title: "파일 전송 취소",
+              description: "전송을 중단할까요? 선택한 파일과 입력 내용은 유지됩니다.",
+              label: "전송 취소",
+              trigger: event.currentTarget,
+              run: () => {
+                if (request.current === transfer) transfer.abort();
+              },
+            });
+          }}>전송 취소</Button>}
           {!stage && <Button type="button" variant="default" onClick={(event) => {
             if (!draft?.file && !completion) {
               discardUpload();

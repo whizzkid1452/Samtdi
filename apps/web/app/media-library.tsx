@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert, Badge, Button, Checkbox, Collapse, Menu, Table, TextInput } from "@mantine/core";
+import { Alert, Badge, Button, Collapse, Menu, Table, TextInput } from "@mantine/core";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useState, type FormEvent } from "react";
@@ -19,7 +19,7 @@ export type MediaVersion = components["schemas"]["MediaVersion"];
 
 const states: Record<MediaVersion["state"], string> = { queued: "처리 대기", processing: "처리 중", ready: "재생 가능", failed: "처리 실패" };
 const stateColors: Record<MediaVersion["state"], string> = { queued: "gray", processing: "blue", ready: "samtdi", failed: "red" };
-const uploadedAt = new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short" });
+const uploadedAt = new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Seoul" });
 const pageSize = 100;
 
 function VersionStatus({ version }: { version: MediaVersion }) {
@@ -42,7 +42,7 @@ export function MediaLibrary({ project }: { project: Project }) {
     router.push(pathname + (params.size ? "?" + params : ""));
   }
 
-  return <section aria-label="음원 목록" onDragOver={canEdit ? (event) => {
+  return <section className="media-library" aria-label="음원 목록" onDragOver={canEdit ? (event) => {
     if (event.dataTransfer.types.includes("Files")) event.preventDefault();
   } : undefined} onDrop={canEdit ? (event) => {
     if (!event.dataTransfer.files.length) return;
@@ -59,8 +59,12 @@ export function MediaLibrary({ project }: { project: Project }) {
     }}>
       <TextInput type="search" aria-label="음원 검색" placeholder="음원 검색" maxLength={200} value={search} onChange={(event) => setSearch(event.currentTarget.value)} />
       <Button type="submit" variant="default">검색</Button>
-      <Checkbox label="보관된 음원" checked={archived}
-        onChange={(event) => filter(query.get("q") ?? "", event.currentTarget.checked)} />
+      <div className="row" role="group" aria-label="음원 상태">
+        <Button type="button" variant={archived ? "default" : "light"} aria-pressed={!archived}
+          onClick={() => filter(search, false)}>활성</Button>
+        <Button type="button" variant={archived ? "light" : "default"} aria-pressed={archived}
+          onClick={() => filter(search, true)}>보관</Button>
+      </div>
     </form>
     <MediaRows key={query.toString()} projectId={project.id} search={query.get("q") ?? ""} archived={archived} />
   </section>;
