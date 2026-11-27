@@ -8,6 +8,15 @@ Go 협업 서비스와 기존 데이터 마이그레이션의 이관 출처는 [
 
 리뷰 렌더는 Ayotbi의 `render.json` 형식 v1과 v2를 지원합니다. v2는 `sourceDocumentHash`가 리뷰 대상 커밋의 `project.json` SHA-256과 일치해야 저장됩니다.
 
+## 브라우저 전용 베타
+
+백엔드가 없는 Vercel 환경은 프로젝트의 빌드 및 실행 환경 변수 `SAMTDI_LOCAL_MODE=1`로 구성합니다. Node.js 22와 기존 의존성을 사용하며, Go·PostgreSQL·Logto 없이 실행합니다.
+
+- FFmpeg WASM 단일 스레드 Worker로 음원을 MP3 미리듣기와 채널별 파형으로 변환합니다. 처음 처리할 때 고정 버전의 FFmpeg 코어를 CDN에서 내려받습니다.
+- 프로젝트, 원본 음원, 변환된 음원, 타임코드·구간 피드백을 IndexedDB에 저장합니다. 파일은 서버에 업로드하지 않습니다.
+- 모노·스테레오, 파일당 100MB 및 10분을 지원합니다. 다른 브라우저·기기와의 공유, 로그인·조직·Git 협업은 이 모드에 포함하지 않습니다. 브라우저 데이터를 지우면 저장한 데이터가 사라집니다.
+- 백엔드 모드로 돌아갈 때는 `SAMTDI_LOCAL_MODE`를 제거하고 기존 `SAMTDI_API_ORIGIN`을 설정합니다.
+
 ## 로컬 웹 실행
 
 Go 1.25, Node.js 22, pnpm 10.15, Docker Compose와 AWS CLI가 필요합니다. 로컬 Compose는 PostgreSQL·Versity S3 Gateway·Logto OSS를 루프백에만 게시합니다. 첫 실행 전 [Logto 설정과 기존 계정 연결](docs/logto-local-setup.md)을 완료하세요.

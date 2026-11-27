@@ -16,3 +16,7 @@ Copyright (c) 2021 Vitaly Rtishchev
 MIT License
 License text: /licenses/Mantine-MIT.txt
 Upstream: https://github.com/mantinedev/mantine
+
+@ffmpeg/core 0.12.10 (browser-only mode, loaded from CDN)
+Upstream source: https://github.com/ffmpegwasm/ffmpeg.wasm/tree/main/packages/core
+License details: https://ffmpegwasm.netlify.app/docs/faq/#what-is-the-license-of-ffmpegwasm

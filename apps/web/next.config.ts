@@ -5,6 +5,8 @@ const config: NextConfig = {
   poweredByHeader: false,
   devIndicators: false,
   async rewrites() {
+    if (process.env.SAMTDI_LOCAL_MODE === "1") return [];
+
     return [
       { source: "/v1/:path*", destination: `${apiOrigin}/v1/:path*` },
       { source: "/review/:path*", destination: `${apiOrigin}/review/:path*` },

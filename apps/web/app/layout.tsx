@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { theme } from "./theme";
 import { Workspace } from "./workspace";
+import { LocalWorkspace } from "./local-workspace";
 import "./styles.css";
 import "@mantine/core/styles.layer.css";
 
@@ -18,7 +19,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <MantineProvider theme={theme} forceColorScheme="light">
           <Suspense fallback={<p role="status">화면을 여는 중</p>}>
-            <Workspace>{children}</Workspace>
+            {process.env.SAMTDI_LOCAL_MODE === "1" ? <LocalWorkspace /> : <Workspace>{children}</Workspace>}
           </Suspense>
         </MantineProvider>
       </body>

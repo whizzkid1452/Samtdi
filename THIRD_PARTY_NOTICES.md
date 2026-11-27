@@ -27,3 +27,7 @@
 - Copyright (c) 2021 Vitaly Rtishchev
 - [원본](https://github.com/mantinedev/mantine)
 - MIT License. [라이선스 전문](apps/web/public/licenses/Mantine-MIT.txt)
+
+## FFmpeg WASM
+
+브라우저 전용 베타는 고정 버전의 [@ffmpeg/core 0.12.10](https://www.npmjs.com/package/@ffmpeg/core/v/0.12.10)을 CDN에서 실행합니다. [공식 소스](https://github.com/ffmpegwasm/ffmpeg.wasm/tree/main/packages/core), [FFmpeg 및 포함 외부 라이브러리의 라이선스 안내](https://ffmpegwasm.netlify.app/docs/faq/#what-is-the-license-of-ffmpegwasm)를 참고하세요. 코어의 원본 배포 파일은 수정하지 않습니다.
