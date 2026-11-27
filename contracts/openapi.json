@@ -3119,6 +3119,60 @@
           }
         }
       }
+    },
+    "/v1/workspaces/join": {
+      "post": {
+        "summary": "Redeem a one-time team invitation code as the signed-in invitee",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Team joined",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "workspace_id"
+                  ],
+                  "properties": {
+                    "workspace_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid code format"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Invitation unavailable for this verified account"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3894,6 +3948,10 @@
             "items": {
               "$ref": "#/components/schemas/TeamWorkspace"
             }
+          },
+          "join_by_code": {
+            "type": "boolean",
+            "description": "The configured workspace mode accepts signed-in team invitation codes."
           }
         }
       },
@@ -4304,6 +4362,10 @@
           },
           "expired": {
             "type": "boolean"
+          },
+          "code": {
+            "type": "string",
+            "description": "One-time code returned only on creation; tied to the invitee's verified email."
           }
         }
       },

@@ -13,9 +13,10 @@ import { InlineError } from "./request-states";
 type TeamMember = components["schemas"]["WorkspaceMember"];
 
 export function WorkspacePicker({ selected, onSelect }: { selected: string; onSelect: (id: string) => void }) {
-  const { teams, teamsEnabled, refreshTeams } = useWorkspace();
+  const { teams, teamsEnabled, joinByCode, refreshTeams } = useWorkspace();
   const [creating, setCreating] = useState<{ id: string; name: string }>();
   const [managing, setManaging] = useState<TeamWorkspace>();
+  const [joining, setJoining] = useState(false);
   const current = teams.find(({ id }) => id === selected);
   if (!teamsEnabled) return null;
 
@@ -30,6 +31,7 @@ export function WorkspacePicker({ selected, onSelect }: { selected: string; onSe
         onChange={(value) => onSelect(value === "all" ? "" : value ?? "")} />
       <div className="row wrap">
         {current?.owner && !current.personal && <Button variant="default" onClick={() => setManaging(current)}>멤버 관리</Button>}
+        {joinByCode && <Button variant="default" onClick={() => setJoining(true)}>팀 참여</Button>}
         <Button variant="default" onClick={() => setCreating({ id: crypto.randomUUID(), name: "" })}>새 작업공간</Button>
       </div>
     </div>
@@ -42,7 +44,12 @@ export function WorkspacePicker({ selected, onSelect }: { selected: string; onSe
       setCreating(undefined);
       onSelect(id);
     }} />}
-    {managing && <WorkspaceMembers team={managing} close={() => setManaging(undefined)} />}
+    {managing && <WorkspaceMembers team={managing} codeOnly={joinByCode} close={() => setManaging(undefined)} />}
+    {joining && <JoinWorkspace close={() => setJoining(false)} joined={async (id) => {
+      await refreshTeams();
+      setJoining(false);
+      onSelect(id);
+    }} />}
   </section>;
 }
 
@@ -80,7 +87,47 @@ function CreateWorkspace({ initial, close, saved }: {
   </AppModal>;
 }
 
-function WorkspaceMembers({ team, close }: { team: TeamWorkspace; close: () => void }) {
+function JoinWorkspace({ close, joined }: { close: () => void; joined: (id: string) => Promise<void> }) {
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [joinedId, setJoinedId] = useState("");
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      let id = joinedId;
+      if (!id) {
+        const result = await api<{ workspace_id: string }>("/v1/workspaces/join", {
+          method: "POST", body: JSON.stringify({ code: code.trim() }),
+        });
+        id = result.workspace_id;
+        setJoinedId(id);
+      }
+      await joined(id);
+    } catch (cause) {
+      setError(describeError(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <AppModal title="초대 코드로 팀 참여" close={close} busy={busy}>
+    <form onSubmit={submit}>
+      <p className="muted">팀 소유자에게 받은 코드를 입력하세요. 초대받은 이메일로 로그인해야 합니다.</p>
+      <TextInput label="초대 코드" required data-autofocus autoComplete="off" autoCapitalize="none"
+        spellCheck={false} maxLength={128} value={code} disabled={busy || !!joinedId}
+        onChange={(event) => setCode(event.currentTarget.value)} />
+      {error && <InlineError message={error} />}
+      <Button mt="sm" type="submit" loading={busy}>{joinedId ? "작업공간 다시 불러오기" : "팀에 참여하기"}</Button>
+    </form>
+  </AppModal>;
+}
+
+function WorkspaceMembers({ team, codeOnly, close }: { team: TeamWorkspace; codeOnly: boolean; close: () => void }) {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [page, setPage] = useState(1);
   const [loadedPage, setLoadedPage] = useState(0);
@@ -160,11 +207,11 @@ function WorkspaceMembers({ team, close }: { team: TeamWorkspace; close: () => v
 
   return <>
     <AppModal title={team.name + " 멤버 관리"} close={close} busy={busy} suspended={!!confirmation}>
-      <p className="muted">가입한 계정을 팀에 추가합니다. 프로젝트 참여는 프로젝트 설정에서 따로 초대하세요.</p>
-      <form className="row wrap" onSubmit={(event) => { event.preventDefault(); void changeMember(); }}>
+      <p className="muted">{codeOnly ? "초대 코드로만 팀에 참여할 수 있습니다. 프로젝트 권한은 별도로 초대하세요." : "가입한 계정을 팀에 추가합니다. 프로젝트 참여는 프로젝트 설정에서 따로 초대하세요."}</p>
+      {!codeOnly && <form className="row wrap" onSubmit={(event) => { event.preventDefault(); void changeMember(); }}>
         <TextInput label="계정 이메일" ref={emailInput} data-autofocus type="email" required value={email} onChange={(event) => setEmail(event.currentTarget.value)} />
         <Button type="submit" loading={busy}>팀원 추가</Button>
-      </form>
+      </form>}
       {error && <InlineError message={error} />}
       <ul className="clean-list member-list">{members.map((member) => {
         const owner = member.organizationRoles.some(({ name }) => name === "samtdi-owner");
@@ -172,7 +219,7 @@ function WorkspaceMembers({ team, close }: { team: TeamWorkspace; close: () => v
         const linkedGuest = member.organizationRoles.some(({ name }) => name === "samtdi-guest");
         return <li key={member.id} className="row spread wrap">
           <span>{member.name || member.primaryEmail} {owner ? "· 소유자" : fullMember ? "· 팀원" : linkedGuest ? "· 프로젝트 게스트" : ""}</span>
-          {!owner && (fullMember || linkedGuest) && <Button size="compact-sm" variant="subtle" disabled={busy}
+          {!codeOnly && !owner && (fullMember || linkedGuest) && <Button size="compact-sm" variant="subtle" disabled={busy}
             onClick={(event) => void prepareRoleChange(member, fullMember ? "guest" : "member", event.currentTarget)}>
             {fullMember ? "게스트로 변경" : "팀원으로 변경"}
           </Button>}
@@ -187,7 +234,7 @@ function WorkspaceMembers({ team, close }: { team: TeamWorkspace; close: () => v
         </li>;
       })}</ul>
       {more && <button disabled={busy || loadedPage !== page} onClick={() => setPage((value) => value + 1)}>멤버 더 보기</button>}
-      <WorkspaceInvitations workspaceId={team.id} />
+      <WorkspaceInvitations workspaceId={team.id} showCode={codeOnly} />
     </AppModal>
     {confirmation && <ConfirmAction confirmation={confirmation} actionError={error} close={() => setConfirmation(undefined)} />}
   </>;

@@ -10,7 +10,7 @@ type WorkspaceInvitation = components["schemas"]["WorkspaceInvitation"];
 
 const expiryDate = new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeZone: "Asia/Seoul" });
 
-export function WorkspaceInvitations({ workspaceId }: { workspaceId: string }) {
+export function WorkspaceInvitations({ workspaceId, showCode }: { workspaceId: string; showCode: boolean }) {
   const base = "/v1/workspaces/" + workspaceId + "/invitations";
   const [rows, setRows] = useState<WorkspaceInvitation[]>();
   const [email, setEmail] = useState("");
@@ -65,12 +65,18 @@ export function WorkspaceInvitations({ workspaceId }: { workspaceId: string }) {
 
   return <section className="workspace-invitations" aria-label="팀 초대">
     <h3>팀 초대</h3>
-    <p className="muted">이메일로 초대 링크를 만들 수 있습니다. 팀에 참여한 뒤 프로젝트별 권한을 받을 수 있습니다.</p>
+    <p className="muted">{showCode ? "초대할 이메일에 연결된 일회용 코드를 발급합니다. 가입과 개인 작업실 이용에는 코드가 필요하지 않습니다." : "이메일로 초대 링크를 만들 수 있습니다. 팀에 참여한 뒤 프로젝트별 권한을 받을 수 있습니다."}</p>
     <form className="row wrap" onSubmit={invite}>
       <TextInput label="초대할 이메일" type="email" required value={email} disabled={busy}
         onChange={(event) => setEmail(event.currentTarget.value)} />
-      <Button type="submit" loading={busy}>팀 초대 링크 만들기</Button>
+      <Button type="submit" loading={busy}>{showCode ? "팀 초대 코드 만들기" : "팀 초대 링크 만들기"}</Button>
     </form>
+    {showCode && issued?.code && <div className="row wrap">
+      <TextInput label="팀 초대 코드" value={issued.code} readOnly />
+      <CopyButton value={issued.code}>
+        {({ copied, copy }) => <Button variant="default" onClick={copy}>{copied ? "복사됨" : "코드 복사"}</Button>}
+      </CopyButton>
+    </div>}
     {issued?.accept_url && <div className="row wrap">
       <TextInput label="팀 초대 링크" value={issued.accept_url} readOnly />
       <CopyButton value={issued.accept_url}>

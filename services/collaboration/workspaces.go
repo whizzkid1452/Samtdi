@@ -35,6 +35,10 @@ func (s *Server) workspaceRoutes() {
 }
 
 func (s *Server) listWorkspaces(w http.ResponseWriter, r *http.Request, session Session) {
+	if s.nativeWorkspaces() {
+		s.listNativeWorkspaces(w, r, session)
+		return
+	}
 	workspaces := []workspace{}
 	if s.logto != nil {
 		rows, err := s.pool.Query(r.Context(), `SELECT id::text,requested_name,COALESCE(organization_id,''),active,created_by::text,personal
@@ -83,8 +87,12 @@ func (s *Server) createWorkspace(w http.ResponseWriter, r *http.Request, session
 		return
 	}
 	input.Name = strings.TrimSpace(input.Name)
-	if s.logto == nil || !uuidPattern.MatchString(input.ID) || !webText(input.Name, 100) {
+	if !s.workspacesEnabled() || !uuidPattern.MatchString(input.ID) || !webText(input.Name, 100) {
 		problem(w, 400, "invalid_workspace")
+		return
+	}
+	if s.nativeWorkspaces() {
+		s.createNativeWorkspace(w, r, session, input.ID, input.Name)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
@@ -202,10 +210,13 @@ func (s *Server) findWorkspaceOrganization(ctx context.Context, name, id, accoun
 }
 
 func (s *Server) readWorkspace(ctx context.Context, id string, session Session, owner bool) (workspace, error) {
-	if s.logto == nil || !uuidPattern.MatchString(id) {
+	if !s.workspacesEnabled() || !uuidPattern.MatchString(id) {
 		return workspace{}, pgx.ErrNoRows
 	}
 
+	if s.nativeWorkspaces() {
+		return s.readNativeWorkspace(ctx, id, session, owner)
+	}
 	var entry workspace
 	var creator string
 	err := s.pool.QueryRow(ctx, "SELECT id::text,requested_name,COALESCE(organization_id,''),personal,created_by::text FROM workspaces WHERE id=$1 AND active", id).
@@ -227,6 +238,7 @@ func (s *Server) readWorkspace(ctx context.Context, id string, session Session, 
 		return workspace{}, pgx.ErrNoRows
 	}
 	entry.Name, entry.Owner, entry.Active = organization.Name, organization.isOwner(), true
+	entry.CanCreate = organization.canCreateProject()
 	if owner && !entry.Owner {
 		return workspace{}, webProblem{403, "workspace_owner_required"}
 	}
@@ -249,6 +261,10 @@ func (s *Server) workspaceMembers(w http.ResponseWriter, r *http.Request, sessio
 		return
 	}
 
+	if s.nativeWorkspaces() {
+		s.listNativeWorkspaceMembers(w, r, entry, page)
+		return
+	}
 	var members []logtoUser
 	err = s.logto.call(r.Context(), "GET", "/organizations/"+url.PathEscape(entry.OrganizationID)+"/users?page="+strconv.Itoa(page)+"&page_size=100", nil, &members)
 	if err != nil {
@@ -278,6 +294,10 @@ func (s *Server) addWorkspaceMember(w http.ResponseWriter, r *http.Request, sess
 		return
 	}
 
+	if s.nativeWorkspaces() {
+		problem(w, 403, "workspace_invitation_required")
+		return
+	}
 	var users []logtoUser
 	if err := s.logto.call(r.Context(), "GET", "/users?"+url.Values{"search.primaryEmail": {email}, "page_size": {"100"}}.Encode(), nil, &users); err != nil {
 		writeWebError(w, "find_workspace_member", err)
@@ -303,6 +323,10 @@ func (s *Server) removeWorkspaceMember(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 	subject := r.PathValue("subject")
+	if s.nativeWorkspaces() {
+		s.removeNativeWorkspaceMember(w, r, entry, subject)
+		return
+	}
 	if !logtoID.MatchString(subject) || subject == session.subject {
 		problem(w, 409, "workspace_owner_cannot_leave")
 		return
@@ -354,40 +378,54 @@ func (s *Server) attachProjectWorkspace(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	// A project move must not silently revoke any existing collaborator's access.
-	rows, err := tx.Query(ctx, `SELECT a.id::text,COALESCE(i.subject,CASE WHEN a.issuer=$2 THEN a.subject ELSE '' END)
- FROM memberships m JOIN accounts a ON a.id=m.account_id
- LEFT JOIN account_identities i ON i.account_id=a.id AND i.issuer=$2 WHERE m.project_id=$1`, project, s.logto.issuer)
-	if err != nil {
-		internal(w, "read_project_identities", err)
-		return
-	}
-	type accountIdentity struct{ Account, Subject string }
-	members, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (accountIdentity, error) {
-		var identity accountIdentity
-		err := row.Scan(&identity.Account, &identity.Subject)
-		return identity, err
-	})
-	if err != nil {
-		internal(w, "read_project_identities", err)
-		return
-	}
-	for _, member := range members {
-		if member.Subject == "" {
-			problem(w, 409, "project_member_identity_link_required")
-			return
-		}
-		organizations, err := s.logto.organizations(ctx, member.Subject)
+	if s.nativeWorkspaces() {
+		var missing bool
+		err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM memberships m WHERE m.project_id=$1 AND NOT EXISTS
+ (SELECT 1 FROM workspace_members wm WHERE wm.workspace_id=$2 AND wm.account_id=m.account_id))`, project, entry.ID).Scan(&missing)
 		if err != nil {
-			writeWebError(w, "read_member_organizations", err)
+			internal(w, "read_project_workspace_members", err)
 			return
 		}
-		found := false
-		for _, organization := range organizations {
-			found = found || organization.ID == entry.OrganizationID
-		}
-		if !found {
+		if missing {
 			problem(w, 409, "project_member_workspace_required")
 			return
+		}
+	} else {
+		rows, err := tx.Query(ctx, `SELECT a.id::text,COALESCE(i.subject,CASE WHEN a.issuer=$2 THEN a.subject ELSE '' END)
+ FROM memberships m JOIN accounts a ON a.id=m.account_id
+ LEFT JOIN account_identities i ON i.account_id=a.id AND i.issuer=$2 WHERE m.project_id=$1`, project, s.logto.issuer)
+		if err != nil {
+			internal(w, "read_project_identities", err)
+			return
+		}
+		type accountIdentity struct{ Account, Subject string }
+		members, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (accountIdentity, error) {
+			var identity accountIdentity
+			err := row.Scan(&identity.Account, &identity.Subject)
+			return identity, err
+		})
+		if err != nil {
+			internal(w, "read_project_identities", err)
+			return
+		}
+		for _, member := range members {
+			if member.Subject == "" {
+				problem(w, 409, "project_member_identity_link_required")
+				return
+			}
+			organizations, err := s.logto.organizations(ctx, member.Subject)
+			if err != nil {
+				writeWebError(w, "read_member_organizations", err)
+				return
+			}
+			found := false
+			for _, organization := range organizations {
+				found = found || organization.ID == entry.OrganizationID
+			}
+			if !found {
+				problem(w, 409, "project_member_workspace_required")
+				return
+			}
 		}
 	}
 	if _, err := tx.Exec(ctx, "UPDATE projects SET workspace_id=$2 WHERE id=$1", project, entry.ID); err != nil {

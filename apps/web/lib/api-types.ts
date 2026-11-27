@@ -2742,6 +2742,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/join": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Redeem a one-time team invitation code as the signed-in invitee */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        code: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Team joined */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            workspace_id: string;
+                        };
+                    };
+                };
+                /** @description Invalid code format */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invitation unavailable for this verified account */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2946,6 +3012,8 @@ export interface components {
         WorkspacesResponse: {
             enabled: boolean;
             workspaces: components["schemas"]["TeamWorkspace"][];
+            /** @description The configured workspace mode accepts signed-in team invitation codes. */
+            join_by_code?: boolean;
         };
         WorkspaceMember: {
             id: string;
@@ -3054,6 +3122,8 @@ export interface components {
             /** Format: uri */
             accept_url?: string;
             expired: boolean;
+            /** @description One-time code returned only on creation; tied to the invitee's verified email. */
+            code?: string;
         };
         InvitationPreview: {
             title: string;

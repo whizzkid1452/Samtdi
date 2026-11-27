@@ -107,9 +107,6 @@ func NewServer(ctx context.Context, pool *pgxpool.Pool, config Config) (*Server,
 	if err != nil {
 		return nil, err
 	}
-	if config.PublicSignup && server.logto == nil {
-		return nil, errors.New("public signup requires Logto")
-	}
 	if config.ProjectToolPath != "" {
 		server.projectTool, err = NewProjectTool(config.ProjectToolPath)
 		if err != nil {

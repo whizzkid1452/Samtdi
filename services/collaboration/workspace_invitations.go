@@ -16,10 +16,12 @@ type workspaceInvitation struct {
 	Accepted  bool      `json:"accepted"`
 	Expired   bool      `json:"expired"`
 	Revoked   bool      `json:"revoked"`
+	Code      string    `json:"code,omitempty"`
 	AcceptURL string    `json:"accept_url,omitempty"`
 }
 
 func (s *Server) workspaceInvitationRoutes() {
+	s.mux.HandleFunc("POST /v1/workspaces/join", s.withSession(s.joinNativeWorkspace))
 	const base = "/v1/workspaces/{workspace}/invitations"
 	s.mux.HandleFunc("GET "+base, s.withSession(s.listWorkspaceInvitations))
 	s.mux.HandleFunc("POST "+base, s.withSession(s.createWorkspaceInvitation))
@@ -72,7 +74,7 @@ func (s *Server) createWorkspaceInvitation(w http.ResponseWriter, r *http.Reques
 	}
 
 	token := randomToken()
-	invite := workspaceInvitation{Email: email, AcceptURL: s.origin + "/invite/" + token}
+	invite := workspaceInvitation{Email: email, Code: token, AcceptURL: s.origin + "/invite/" + token}
 	err = s.pool.QueryRow(r.Context(), `INSERT INTO workspace_invitations(workspace_id,token_hash,email,expires_at)
  VALUES($1,$2,$3,now()+interval '7 days') RETURNING id::text,expires_at`, entry.ID, tokenHash(token), email).
 		Scan(&invite.ID, &invite.ExpiresAt)
