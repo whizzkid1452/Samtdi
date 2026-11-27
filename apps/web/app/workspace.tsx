@@ -49,7 +49,7 @@ export function Workspace({ children }: { children: ReactNode }) {
   const [teamsEnabled, setTeamsEnabled] = useState(false);
   const [joinByCode, setJoinByCode] = useState(false);
   const [error, setError] = useState("");
-  const [attempt, setAttempt] = useState(0);
+  const [sessionLoadAttempt, setSessionLoadAttempt] = useState(0);
   const [publicSignup, setPublicSignup] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
@@ -75,20 +75,21 @@ export function Workspace({ children }: { children: ReactNode }) {
       } catch (cause) {
         if (request.signal.aborted) return;
         if (cause instanceof ApiError && cause.status === 401) {
-          setSession(null);
           try {
             const options = await api<components["schemas"]["WebAuthOptions"]>("/v1/auth/options", { signal: request.signal });
             if (!request.signal.aborted) setPublicSignup(options.public_signup);
           } catch (error) {
             if (!request.signal.aborted) setError(describeError(error));
           }
+
+          if (!request.signal.aborted) setSession(null);
         } else setError(describeError(cause));
       }
     }
 
     void load();
     return () => request.abort();
-  }, [attempt, isInvitation]);
+  }, [sessionLoadAttempt, isInvitation]);
 
   async function refreshProjects() {
     setProjects(await api<Project[]>("/v1/projects"));
@@ -108,8 +109,11 @@ export function Workspace({ children }: { children: ReactNode }) {
     try {
       await api("/v1/auth/logout", { method: "POST" });
       await clearIdentitySession().catch(() => undefined);
-      setSession(null);
+
       setProjects([]);
+      setPublicSignup(false);
+      setSession(undefined);
+      setSessionLoadAttempt((value) => value + 1);
       router.replace("/projects");
     } catch (cause) {
       setError(describeError(cause));
@@ -134,7 +138,7 @@ export function Workspace({ children }: { children: ReactNode }) {
           if (window.location.hash) event.currentTarget.href = "/v1/auth/login?" + new URLSearchParams({ return_to: target + window.location.hash });
         }}>로그인</Button> : error ? <>
           <p role="alert">{error}</p>
-          <button onClick={() => { setError(""); setAttempt((value) => value + 1); }}>다시 시도</button>
+          <button onClick={() => { setError(""); setSessionLoadAttempt((value) => value + 1); }}>다시 시도</button>
         </> : <p role="status">로그인 상태 확인 중</p>}
         {session === null && error && <p role="alert">{error}</p>}
         {session === null && publicSignup && <p><a href="/v1/auth/signup?return_to=%2Fprojects" onClick={() => { sessionStorage.setItem("samtdi:signup-intent", "1"); }}>사맛디 계정 만들기</a></p>}
