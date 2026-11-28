@@ -38,7 +38,7 @@ export function useWorkspace() {
   return context;
 }
 
-export function Workspace({ children }: { children: ReactNode }) {
+export function Workspace({ children, guideHref }: { children: ReactNode; guideHref?: string }) {
   const pathname = usePathname();
   const query = useSearchParams();
   const isInvitation = pathname.startsWith("/invite/");
@@ -142,6 +142,7 @@ export function Workspace({ children }: { children: ReactNode }) {
         </> : <p role="status">로그인 상태 확인 중</p>}
         {session === null && error && <p role="alert">{error}</p>}
         {session === null && publicSignup && <p><a href="/v1/auth/signup?return_to=%2Fprojects" onClick={() => { sessionStorage.setItem("samtdi:signup-intent", "1"); }}>사맛디 계정 만들기</a></p>}
+        {guideHref && <p><Link href={guideHref}>음원 피드백 가이드</Link></p>}
       </div>
       <div className="login-art" aria-hidden="true"><BrandMark /></div>
     </main>;

@@ -32,13 +32,18 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const guideUrl = URL.parse(process.env.SAMTDI_GUIDE_URL ?? "");
+  const guideHref = guideUrl?.protocol === "https:" ? guideUrl.href : undefined;
+
   return (
     <html lang="ko" {...mantineHtmlProps}>
       <head><ColorSchemeScript forceColorScheme="light" /></head>
       <body>
         <MantineProvider theme={theme} forceColorScheme="light">
           <Suspense fallback={<p role="status">화면을 여는 중</p>}>
-            <WorkspaceShell local={process.env.SAMTDI_LOCAL_MODE === "1"}>{children}</WorkspaceShell>
+            <WorkspaceShell local={process.env.SAMTDI_LOCAL_MODE === "1"} guideHref={guideHref}>
+              {children}
+            </WorkspaceShell>
           </Suspense>
         </MantineProvider>
       </body>
