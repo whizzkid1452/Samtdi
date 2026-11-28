@@ -21,15 +21,6 @@ Go 협업 서비스와 기존 데이터 마이그레이션의 이관 출처는 [
 
 저비용 Render 구성과 Vercel 연결은 [협업 서버 배포 안내](docs/render-deployment.md)를 참고하세요. 실제 인증·DB·비공개 객체 스토리지 설정과 협업 검증을 완료한 뒤 로컬 모드에서 전환합니다.
 
-## 공개 가이드 광고
-
-`apps/guides`의 음원 피드백 가이드는 로그인 없이 읽을 수 있는 정적 사이트입니다. Cloudflare Pages의 무료 정적 호스팅에서 배포하며, Vercel 작업공간의 `SAMTDI_GUIDE_URL`에 게시된 HTTPS 주소를 설정하면 로그인 화면과 브라우저 베타에서 가이드로 이동할 수 있습니다.
-
-1. `SAMTDI_ADSENSE_PUBLISHER_ID`에 게시자 ID(`ca-pub-…`)를 설정하고 저장소 루트에서 `node apps/guides/build.mjs`를 실행합니다. 출력된 임시 디렉터리에 HTML, CSS와 `ads.txt`가 생성됩니다.
-2. 해당 디렉터리만 Cloudflare Pages에 직접 업로드합니다. 실제 운영 주소를 AdSense Sites에 등록하고 운영 주소의 `/ads.txt`로 소유권을 확인해 심사를 요청합니다. [정적 파일 배포](https://developers.cloudflare.com/pages/get-started/direct-upload/) · [사이트 연결](https://support.google.com/adsense/answer/7584263)
-3. 사이트가 `Ready`가 되면 수동 반응형 디스플레이 광고 단위를 만들고 Auto ads를 끕니다. Privacy & messaging에서 해당 지역의 동의 메시지를 게시하고 운영 주소의 `/privacy/`를 연결합니다. [광고 단위 만들기](https://support.google.com/adsense/answer/9274025) · [동의 메시지 설정](https://support.google.com/adsense/answer/10960768)
-4. `SAMTDI_ADSENSE_SLOT_ID`에 광고 단위 ID를 넣고 `SAMTDI_ADSENSE_ENABLED=1`로 빌드해 재배포합니다. 광고는 가이드 글 아래에 한 개 나옵니다. 게재를 중단할 때는 활성화 환경 변수를 제거하고 다시 빌드해 배포합니다.
-
 ## 로컬 웹 실행
 
 Go 1.25, Node.js 22, pnpm 10.15, Docker Compose와 AWS CLI가 필요합니다. 로컬 Compose는 PostgreSQL·Versity S3 Gateway·Logto OSS를 루프백에만 게시합니다. 첫 실행 전 [Logto 설정과 기존 계정 연결](docs/logto-local-setup.md)을 완료하세요.

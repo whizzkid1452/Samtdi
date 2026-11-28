@@ -2,7 +2,6 @@
 
 import { BrandWordmark } from "./brand-wordmark";
 import { Alert, Badge, Button, FileInput, TextInput } from "@mantine/core";
-import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { processLocalAudio } from "../lib/local-audio";
 import { readLocalLibrary, saveLocalNote, saveLocalProject, saveLocalVersion, type LocalLibrary, type LocalNote } from "../lib/local-review-store";
@@ -10,7 +9,7 @@ import { timecode } from "../lib/timecode";
 import { LocalReview } from "./local-review";
 import "./local-workspace.css";
 
-export function LocalWorkspace({ guideHref }: { guideHref?: string }) {
+export function LocalWorkspace() {
   const [library, setLibrary] = useState<LocalLibrary | null>(null);
   const [projectId, setProjectId] = useState<string>();
   const [versionId, setVersionId] = useState<string>();
@@ -140,7 +139,6 @@ export function LocalWorkspace({ guideHref }: { guideHref?: string }) {
         <div className="section-header">
           <h1>{project?.title ?? "음악을 함께 완성하는 공간"}</h1>
           <p className="muted">음원을 불러오고, 재생 위치와 구간에 피드백을 남기세요.</p>
-          {!project && guideHref && <Link href={guideHref}>음원 피드백 가이드</Link>}
         </div>
         <Alert color="green" variant="light" title="개인 작업실 안내">
           음원을 추가하고 원하는 구간에 피드백을 남겨보세요. 현재 체험판의 작업 내용은 이 브라우저에 저장되며, 기기 간 동기화는 협업 서버 연결 후 제공됩니다.
