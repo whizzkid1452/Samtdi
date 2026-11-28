@@ -111,21 +111,21 @@ func (s *Server) revokeWorkspaceInvitation(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func readInvitedWorkspace(ctx context.Context, tx pgx.Tx, hash []byte, email string) (string, error) {
-	var organization string
+func readInvitedWorkspace(ctx context.Context, tx pgx.Tx, hash []byte, email string) (string, string, error) {
+	var workspaceID, organization string
 	var eligible bool
-	err := tx.QueryRow(ctx, `SELECT COALESCE(w.organization_id,''),i.email=$2 AND w.active AND NOT w.personal AND i.revoked_at IS NULL
+	err := tx.QueryRow(ctx, `SELECT w.id::text,COALESCE(w.organization_id,''),i.email=$2 AND w.active AND NOT w.personal AND i.revoked_at IS NULL
  AND i.expires_at>now() AND i.accepted_by IS NULL
  FROM workspace_invitations i JOIN workspaces w ON w.id=i.workspace_id WHERE i.token_hash=$1 FOR UPDATE OF i`, hash, email).
-		Scan(&organization, &eligible)
+		Scan(&workspaceID, &organization, &eligible)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil
+		return "", "", nil
 	}
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if !eligible || organization == "" {
-		return "", errInvitationRejected
+		return "", "", errInvitationRejected
 	}
-	return organization, nil
+	return workspaceID, organization, nil
 }

@@ -129,23 +129,20 @@ func (s *Server) webInvitationPreview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var preview webInvitationPreview
-	var projectID string
+	var grant invitationGrant
 	hash := tokenHash(token)
 	err := s.pool.QueryRow(r.Context(), `SELECT p.id::text,p.title,i.role::text
  FROM invitations i JOIN projects p ON p.id=i.project_id WHERE i.token_hash=$1 AND i.expires_at>now()
  AND i.accepted_by IS NULL AND i.revoked_at IS NULL AND p.archived_at IS NULL`, hash).
-		Scan(&projectID, &preview.Title, &preview.Role)
+		Scan(&grant.projectID, &preview.Title, &preview.Role)
 	if err == nil {
 		preview.Kind = "project"
-		preview.ReturnTo = "/projects/" + projectID + "/media"
 	} else if errors.Is(err, pgx.ErrNoRows) && s.workspacesEnabled() {
-		var workspaceID string
 		err = s.pool.QueryRow(r.Context(), `SELECT w.id::text,w.requested_name
  FROM workspace_invitations i JOIN workspaces w ON w.id=i.workspace_id WHERE i.token_hash=$1 AND i.expires_at>now()
  AND i.accepted_by IS NULL AND i.revoked_at IS NULL AND w.active AND NOT w.personal`, hash).
-			Scan(&workspaceID, &preview.Title)
+			Scan(&grant.workspaceID, &preview.Title)
 		preview.Kind, preview.Role = "workspace", "member"
-		preview.ReturnTo = "/projects?workspace=" + workspaceID
 	}
 
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -156,5 +153,42 @@ func (s *Server) webInvitationPreview(w http.ResponseWriter, r *http.Request) {
 		internal(w, "preview_invitation", err)
 		return
 	}
+
+	preview.ReturnTo = grant.returnTo()
 	writeJSON(w, http.StatusOK, preview)
+}
+
+func (s *Server) acceptWebInvitation(w http.ResponseWriter, r *http.Request, session Session) {
+	token := r.PathValue("token")
+	if !tokenPattern.MatchString(token) {
+		problem(w, http.StatusNotFound, "invitation_not_found")
+		return
+	}
+
+	ctx := r.Context()
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		internal(w, "begin_invitation_redemption", err)
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	hash := tokenHash(token)
+	grant, err := s.lockInvitation(ctx, tx, hash, session.Email)
+	if err == nil {
+		err = s.redeemInvitation(ctx, tx, hash, grant, session.AccountID, session.subject)
+	}
+	if errors.Is(err, errInvitationRejected) {
+		problem(w, http.StatusForbidden, "invitation_rejected")
+		return
+	}
+	if err == nil {
+		err = tx.Commit(ctx)
+	}
+	if err != nil {
+		writeWebError(w, "accept_invitation", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"return_to": grant.returnTo()})
 }

@@ -26,42 +26,9 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 		return "", err
 	}
 
-	var projectID, invitedOrganization, invitedNativeWorkspace string
-	var role Role
-	if inviteHash != nil && s.logto != nil {
-		invitedOrganization, err = readInvitedWorkspace(ctx, tx, inviteHash, who.Email)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	if inviteHash != nil && s.nativeWorkspaces() {
-		invitedNativeWorkspace, err = readNativeWorkspaceInvitation(ctx, tx, inviteHash, who.Email)
-		if err != nil {
-			return "", err
-		}
-	}
-	if inviteHash != nil && invitedOrganization == "" && invitedNativeWorkspace == "" {
-		err := tx.QueryRow(ctx, `SELECT project_id::text FROM invitations WHERE token_hash=$1`, inviteHash).Scan(&projectID)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return "", errInvitationRejected
-		}
-		if err != nil {
-			return "", err
-		}
-		if err := lockProject(ctx, tx, projectID); err != nil {
-			return "", err
-		}
-		err = tx.QueryRow(ctx, `SELECT role FROM invitations
-  WHERE token_hash=$1 AND email=$2 AND expires_at>now() AND accepted_by IS NULL AND revoked_at IS NULL
-  AND EXISTS (SELECT 1 FROM projects p WHERE p.id=invitations.project_id AND p.archived_at IS NULL)
-  FOR UPDATE`, inviteHash, who.Email).Scan(&role)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return "", errInvitationRejected
-		}
-		if err != nil {
-			return "", err
-		}
+	invitation, err := s.lockInvitation(ctx, tx, inviteHash, who.Email)
+	if err != nil {
+		return "", err
 	}
 
 	var accountID string
@@ -77,7 +44,7 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 			}
 		}
 		organizationMember := false
-		if s.logto != nil && projectID == "" && invitedOrganization == "" && invitedNativeWorkspace == "" && !publicSignup {
+		if s.logto != nil && invitation.empty() && !publicSignup {
 			organizations, err := s.logto.organizations(ctx, who.Subject)
 			if err != nil {
 				return "", err
@@ -90,7 +57,7 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 				return "", err
 			}
 		}
-		if !bootstrap && projectID == "" && !organizationMember && invitedOrganization == "" && invitedNativeWorkspace == "" && !publicSignup {
+		if !bootstrap && invitation.empty() && !organizationMember && !publicSignup {
 			return "", errInvitationRequired
 		}
 
@@ -119,59 +86,8 @@ func (s *Server) admitAccount(ctx context.Context, who identity, inviteHash []by
 		}
 	}
 
-	if invitedOrganization != "" {
-		if err := s.logto.ensureMember(ctx, invitedOrganization, who.Subject, "samtdi-member"); err != nil {
-			return "", err
-		}
-		if err := s.logto.ensureRole(ctx, invitedOrganization, who.Subject, "samtdi-member"); err != nil {
-			return "", err
-		}
-		if _, err := tx.Exec(ctx, "UPDATE workspace_invitations SET accepted_by=$2 WHERE token_hash=$1 AND accepted_by IS NULL", inviteHash, accountID); err != nil {
-			return "", err
-		}
-	}
-
-	if invitedNativeWorkspace != "" {
-		if err := acceptNativeWorkspaceInvitation(ctx, tx, inviteHash, invitedNativeWorkspace, accountID); err != nil {
-			return "", err
-		}
-	}
-	if projectID != "" {
-		if s.nativeWorkspaces() {
-			var allowed bool
-			err := tx.QueryRow(ctx, `SELECT p.workspace_id IS NULL OR w.personal OR (w.active AND w.organization_id IS NULL AND EXISTS
- (SELECT 1 FROM workspace_members wm WHERE wm.workspace_id=w.id AND wm.account_id=$2))
- FROM projects p LEFT JOIN workspaces w ON w.id=p.workspace_id WHERE p.id=$1`, projectID, accountID).Scan(&allowed)
-			if err != nil {
-				return "", err
-			}
-			if !allowed {
-				return "", errInvitationRejected
-			}
-		}
-
-		if s.logto != nil {
-			var organization string
-			if err := tx.QueryRow(ctx, `SELECT COALESCE(w.organization_id,'') FROM projects p
- LEFT JOIN workspaces w ON w.id=p.workspace_id WHERE p.id=$1`, projectID).Scan(&organization); err != nil {
-				return "", err
-			}
-			if organization != "" {
-				if err := s.logto.ensureMember(ctx, organization, who.Subject, "samtdi-guest"); err != nil {
-					return "", err
-				}
-			}
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO memberships (project_id, account_id, role) VALUES ($1, $2, $3)
-  ON CONFLICT (project_id, account_id) DO NOTHING`, projectID, accountID, role); err != nil {
-			return "", err
-		}
-		if _, err := tx.Exec(ctx, `UPDATE invitations SET accepted_by = $2 WHERE token_hash = $1`, inviteHash, accountID); err != nil {
-			return "", err
-		}
-		if err := appendWebActivity(ctx, tx, projectID, accountID, "invitation.accepted", accountID, nil); err != nil {
-			return "", err
-		}
+	if err := s.redeemInvitation(ctx, tx, inviteHash, invitation, accountID, who.Subject); err != nil {
+		return "", err
 	}
 
 	return accountID, tx.Commit(ctx)

@@ -67,7 +67,7 @@
         ],
         "responses": {
           "303": {
-            "description": "Redirect to the identity provider"
+            "description": "Redirect to the identity provider or to the invitation page for an existing web session"
           },
           "400": {
             "description": "Invalid invitation or return URL"
@@ -3118,6 +3118,30 @@
             "description": "Invitation is unavailable"
           }
         }
+      },
+      "post": {
+        "summary": "Accept a one-time invitation as the signed-in invitee",
+        "responses": {
+          "200": {
+            "description": "Invitation accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptedInvitation"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "The invitation cannot be accepted or the request origin is invalid"
+          },
+          "404": {
+            "description": "Invitation is unavailable"
+          }
+        }
       }
     },
     "/v1/workspaces/join": {
@@ -4401,6 +4425,17 @@
           "role",
           "return_to"
         ]
+      },
+      "AcceptedInvitation": {
+        "type": "object",
+        "required": [
+          "return_to"
+        ],
+        "properties": {
+          "return_to": {
+            "type": "string"
+          }
+        }
       },
       "RenderSource": {
         "type": "object",

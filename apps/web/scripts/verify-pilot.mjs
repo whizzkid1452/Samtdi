@@ -506,8 +506,10 @@ try {
   await editor.getByRole("heading", { name: "프로젝트를 열 수 없습니다" }).waitFor();
 
   const reviewerInvite = await createInvitation(owner, { email: reviewerEmail, role: "reviewer" });
-  const reviewer = await other.newPage();
-  await login(reviewer, { email: reviewerEmail, url: reviewerInvite, target: media });
+  const reviewer = editor;
+  await reviewer.goto(reviewerInvite);
+  await button(reviewer, "초대 수락").click();
+  await reviewer.waitForURL(media);
   await link(reviewer, "mix-v1").waitFor();
   assert.equal(await button(reviewer, "음원 업로드").count(), 0);
   await reviewer.goto(tasks);

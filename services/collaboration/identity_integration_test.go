@@ -298,8 +298,14 @@ func TestSharedIdentityAndNativeExchange(t *testing.T) {
 	identity(editorIdentity)
 	login = loginThroughProvider(t, guest, inviteURL)
 	response(t, guest, "GET", login, "", "", nil, 303, nil)
-	login = loginThroughProvider(t, guest, inviteURL)
-	response(t, guest, "GET", login, "", "", nil, 403, nil)
+	previewURL := strings.TrimPrefix(invitation["preview_url"].(string), origin)
+	if target := response(t, guest, "GET", inviteURL, "", "", nil, 303, nil); target != previewURL {
+		t.Fatalf("signed-in browser was sent to %q instead of the invitation page", target)
+	}
+	response(t, guest, "GET", origin+"/v1/auth/invitations/"+strings.TrimPrefix(previewURL, "/invite/"), "", "", nil, 404, nil)
+	signedOut := newBrowser(t)
+	login = loginThroughProvider(t, signedOut, inviteURL)
+	response(t, signedOut, "GET", login, "", "", nil, 403, nil)
 
 	var webEditor Session
 	response(t, guest, "GET", origin+"/v1/me", "", "", nil, 200, &webEditor)
@@ -313,8 +319,8 @@ func TestSharedIdentityAndNativeExchange(t *testing.T) {
 	revoked := newInvite("revoke@example.test", "reviewer")
 	response(t, owner, "DELETE", projectURL+"/invitations/"+revoked["id"].(string), "", origin, nil, 204, nil)
 	identity(testIdentity{"revoked", "revoke@example.test", true})
-	login = loginThroughProvider(t, guest, revoked["accept_url"].(string))
-	response(t, guest, "GET", login, "", "", nil, 403, nil)
+	login = loginThroughProvider(t, signedOut, revoked["accept_url"].(string))
+	response(t, signedOut, "GET", login, "", "", nil, 403, nil)
 
 	identity(editorIdentity)
 	redirect := "http://127.0.0.1:53091" + nativeCallback

@@ -97,6 +97,17 @@ func (s *Server) beginLogin(w http.ResponseWriter, r *http.Request) {
 			problem(w, http.StatusBadRequest, "invalid_invitation")
 			return
 		}
+		if r.URL.Path == "/v1/auth/login" {
+			session, err := s.authenticate(r, false)
+			if err == nil && session.Kind == "web" {
+				http.Redirect(w, r, "/invite/"+invite, http.StatusSeeOther)
+				return
+			}
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				internal(w, "authenticate_invitation_login", err)
+				return
+			}
+		}
 		attempt.InviteHash = tokenHash(invite)
 	}
 

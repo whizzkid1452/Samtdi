@@ -115,7 +115,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Redirect to the identity provider */
+                /** @description Redirect to the identity provider or to the invitation page for an existing web session */
                 303: {
                     headers: {
                         [name: string]: unknown;
@@ -2735,7 +2735,50 @@ export interface paths {
             };
         };
         put?: never;
-        post?: never;
+        /** Accept a one-time invitation as the signed-in invitee */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Invitation accepted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AcceptedInvitation"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The invitation cannot be accepted or the request origin is invalid */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invitation is unavailable */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -3131,6 +3174,9 @@ export interface components {
             kind: "project" | "workspace";
             /** @enum {string} */
             role: "owner" | "editor" | "reviewer" | "member";
+            return_to: string;
+        };
+        AcceptedInvitation: {
             return_to: string;
         };
         RenderSource: {

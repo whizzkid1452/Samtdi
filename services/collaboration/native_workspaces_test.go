@@ -3,6 +3,7 @@ package collaboration
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -71,6 +72,44 @@ func TestPublicWebSignupAndCodeOnlyTeamAdmission(t *testing.T) {
 	projectURL := origin + "/v1/projects/" + created.ID
 	response(t, outsider, "GET", projectURL+"/members", "", "", nil, 404, nil)
 	response(t, invitee, "GET", projectURL+"/members", "", "", nil, 200, nil)
+
+	var projectInvite struct {
+		PreviewURL string `json:"preview_url"`
+	}
+	response(t, invitee, "POST", projectURL+"/invitations", "", origin, map[string]string{"email": "outsider@example.test", "role": "reviewer"}, 201, &projectInvite)
+	projectLink := origin + "/v1/auth/invitations/" + strings.TrimPrefix(projectInvite.PreviewURL, origin+"/invite/")
+	response(t, newBrowser(t), "POST", projectLink, "", origin, nil, 401, nil)
+	response(t, invitee, "POST", projectLink, "", origin, nil, 403, nil)
+	response(t, outsider, "POST", projectLink, "", origin, nil, 403, nil)
+	response(t, outsider, "GET", projectURL+"/members", "", "", nil, 404, nil)
+
+	var teamInvite workspaceInvitation
+	response(t, owner, "POST", teamURL+"/invitations", "", origin, map[string]string{"email": "outsider@example.test"}, 201, &teamInvite)
+	teamLink := origin + "/v1/auth/invitations/" + teamInvite.Code
+	response(t, owner, "POST", teamLink, "", origin, nil, 403, nil)
+	response(t, outsider, "POST", teamLink, "", "https://foreign.example", nil, 403, nil)
+	var accepted struct {
+		ReturnTo string `json:"return_to"`
+	}
+	response(t, outsider, "POST", teamLink, "", origin, nil, 200, &accepted)
+	if accepted.ReturnTo != "/projects?workspace="+team {
+		t.Fatalf("team invite accepted with wrong destination: %q", accepted.ReturnTo)
+	}
+	response(t, outsider, "GET", teamLink, "", "", nil, 404, nil)
+	response(t, outsider, "POST", teamLink, "", origin, nil, 403, nil)
+	response(t, outsider, "GET", projectURL+"/members", "", "", nil, 404, nil)
+
+	response(t, outsider, "POST", projectLink, "", origin, nil, 200, &accepted)
+	if accepted.ReturnTo != "/projects/"+created.ID+"/media" {
+		t.Fatalf("project invite accepted with wrong destination: %q", accepted.ReturnTo)
+	}
+	response(t, outsider, "POST", projectLink, "", origin, nil, 403, nil)
+	var projects []project
+	response(t, outsider, "GET", origin+"/v1/projects", "", "", nil, 200, &projects)
+	if len(projects) != 1 || projects[0].ID != created.ID || projects[0].Role != Reviewer {
+		t.Fatalf("signed-in invitee did not receive the invited project role: %+v", projects)
+	}
+
 	var inviteeSession Session
 	response(t, invitee, "GET", origin+"/v1/me", "", "", nil, 200, &inviteeSession)
 	response(t, owner, "DELETE", teamURL+"/members/"+inviteeSession.AccountID, "", origin, nil, 204, nil)
@@ -80,4 +119,5 @@ func TestPublicWebSignupAndCodeOnlyTeamAdmission(t *testing.T) {
 	response(t, owner, "POST", teamURL+"/invitations", "", origin, map[string]string{"email": "outsider@example.test"}, 201, &revoked)
 	response(t, owner, "DELETE", teamURL+"/invitations/"+revoked.ID, "", origin, nil, 204, nil)
 	response(t, outsider, "POST", join, "", origin, map[string]string{"code": revoked.Code}, 404, nil)
+	response(t, outsider, "POST", origin+"/v1/auth/invitations/"+revoked.Code, "", origin, nil, 403, nil)
 }
